@@ -90,6 +90,13 @@ export default async function ReclaimsPage({
       getQueuedTransactions(),
     ]);
 
+  // A flagged transaction may be older than the 50 most recent expenses
+  // shown in the picker — make sure it's always selectable regardless.
+  const transactionOptions = [
+    ...queuedTransactions,
+    ...transactions.filter((t) => !queuedTransactions.some((q) => q.id === t.id)),
+  ];
+
   const people = peopleWithGroups.map((p) => {
     const group = Array.isArray(p.person_groups) ? p.person_groups[0] : p.person_groups;
     return { id: p.id, name: p.name, groupName: group?.name ?? null, isSelf: p.is_self };
@@ -172,7 +179,8 @@ export default async function ReclaimsPage({
           Nieuwe terugvordering
         </h2>
         <SplitReclaimForm
-          transactions={transactions}
+          key={transactionId ?? "default"}
+          transactions={transactionOptions}
           people={people}
           initialTransactionId={transactionId}
         />
