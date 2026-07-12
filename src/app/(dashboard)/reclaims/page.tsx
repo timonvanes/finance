@@ -98,6 +98,22 @@ export default async function ReclaimsPage() {
 
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-700">
+              Hoe komt dit terug?
+            </label>
+            <select
+              name="settlementMethod"
+              defaultValue="bank"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="bank">Bankoverschrijving / Tikkie (automatisch te herkennen)</option>
+              <option value="external_app">
+                Andere app (WieBetaaltWat, Splitwise, etc.) — handmatig afvinken
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-700">
               Betaalverzoek-link of notitie (optioneel)
             </label>
             <input
@@ -180,7 +196,13 @@ export default async function ReclaimsPage() {
                       reclaimId={r.id}
                       computedAmount={r.computed_amount}
                       incomingTransactions={incomingTransactions}
+                      showAutoMatch={r.settlement_method === "bank"}
                     />
+                  )}
+                  {r.status !== "paid" && r.settlement_method === "external_app" && (
+                    <p className="text-xs text-gray-400">
+                      Via WieBetaaltWat/andere app — wordt niet automatisch herkend.
+                    </p>
                   )}
                 </li>
               );

@@ -109,7 +109,8 @@ export async function autoMatchIncomingTransactions(
   const { data: openReclaims } = await supabase
     .from("reclaims")
     .select("id, person_name, computed_amount, reference_code")
-    .eq("status", "requested");
+    .eq("status", "requested")
+    .eq("settlement_method", "bank");
   if (!openReclaims || openReclaims.length === 0) return;
 
   for (const tx of transactions) {
