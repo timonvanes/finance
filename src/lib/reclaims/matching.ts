@@ -46,6 +46,7 @@ interface CandidateTransaction {
 
 interface CandidateReclaim {
   id: string;
+  person_id: string;
   person_name: string;
   computed_amount: number;
   reference_code: string | null;
@@ -68,13 +69,13 @@ async function findMatch(
 
   const { data: aliases } = await supabase
     .from("person_aliases")
-    .select("person_name, counterparty_name");
+    .select("person_id, counterparty_name");
   if (aliases && aliases.length > 0 && tx.counterparty_name) {
     const counterparty = tx.counterparty_name.toLowerCase().trim();
     const matchingAliases = openReclaims.filter((r) =>
       aliases.some(
         (a) =>
-          a.person_name === r.person_name &&
+          a.person_id === r.person_id &&
           a.counterparty_name.toLowerCase().trim() === counterparty &&
           Math.abs(r.computed_amount - tx.amount) < AMOUNT_TOLERANCE
       )
@@ -92,6 +93,25 @@ async function findMatch(
   return null;
 }
 
+async function getOpenReclaims(supabase: SupabaseClient) {
+  const { data } = await supabase
+    .from("reclaims")
+    .select("id, person_id, computed_amount, reference_code, people(name)")
+    .eq("status", "requested")
+    .eq("settlement_method", "bank");
+
+  return (data ?? []).map((r) => {
+    const person = Array.isArray(r.people) ? r.people[0] : r.people;
+    return {
+      id: r.id,
+      person_id: r.person_id,
+      person_name: person?.name ?? "",
+      computed_amount: r.computed_amount,
+      reference_code: r.reference_code,
+    } as CandidateReclaim;
+  });
+}
+
 // Called from the sync job for freshly-synced incoming transactions.
 export async function autoMatchIncomingTransactions(
   supabase: SupabaseClient,
@@ -106,12 +126,8 @@ export async function autoMatchIncomingTransactions(
     .gt("amount", 0);
   if (!transactions || transactions.length === 0) return;
 
-  const { data: openReclaims } = await supabase
-    .from("reclaims")
-    .select("id, person_name, computed_amount, reference_code")
-    .eq("status", "requested")
-    .eq("settlement_method", "bank");
-  if (!openReclaims || openReclaims.length === 0) return;
+  const openReclaims = await getOpenReclaims(supabase);
+  if (openReclaims.length === 0) return;
 
   for (const tx of transactions) {
     const match = await findMatch(supabase, tx, openReclaims);
@@ -123,12 +139,21 @@ export async function autoMatchIncomingTransactions(
 // transactions that already exist (the payback may have arrived before the
 // reclaim was logged in the app).
 export async function autoMatchNewReclaim(supabase: SupabaseClient, reclaimId: string) {
-  const { data: reclaim } = await supabase
+  const { data: reclaimRow } = await supabase
     .from("reclaims")
-    .select("id, person_name, computed_amount, reference_code")
+    .select("id, person_id, computed_amount, reference_code, people(name)")
     .eq("id", reclaimId)
     .single();
-  if (!reclaim) return;
+  if (!reclaimRow) return;
+
+  const person = Array.isArray(reclaimRow.people) ? reclaimRow.people[0] : reclaimRow.people;
+  const reclaim: CandidateReclaim = {
+    id: reclaimRow.id,
+    person_id: reclaimRow.person_id,
+    person_name: person?.name ?? "",
+    computed_amount: reclaimRow.computed_amount,
+    reference_code: reclaimRow.reference_code,
+  };
 
   const { data: alreadyLinked } = await supabase
     .from("reclaims")
@@ -161,12 +186,12 @@ export async function autoMatchNewReclaim(supabase: SupabaseClient, reclaimId: s
 // exact amount or the reference code.
 export async function learnPersonAlias(
   supabase: SupabaseClient,
-  personName: string,
+  personId: string,
   counterpartyName: string | null
 ) {
   if (!counterpartyName) return;
   await supabase.from("person_aliases").upsert(
-    { person_name: personName, counterparty_name: counterpartyName },
-    { onConflict: "user_id,person_name,counterparty_name", ignoreDuplicates: true }
+    { person_id: personId, counterparty_name: counterpartyName },
+    { onConflict: "user_id,person_id,counterparty_name", ignoreDuplicates: true }
   );
 }

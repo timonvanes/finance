@@ -57,7 +57,8 @@ export async function getReclaims() {
   const { data, error } = await supabase
     .from("reclaims")
     .select(
-      `id, person_name, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method,
+      `id, person_id, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method,
+      people(name),
       transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount),
       settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
@@ -66,82 +67,71 @@ export async function getReclaims() {
   return data;
 }
 
-export async function createReclaim(formData: FormData) {
+// Create one reclaim per selected person for the same transaction — e.g.
+// split a €50 dinner among 10 people at €5 each, all in one go.
+export async function createSplitReclaim(formData: FormData) {
   const transactionId = formData.get("transactionId") as string;
-  const personName = formData.get("personName") as string;
-  const amountType = formData.get("amountType") as "fraction" | "fixed";
-  const amountValue = Number(formData.get("amountValue"));
-  const tikkieLink = (formData.get("tikkieLink") as string) || null;
   const settlementMethod =
     (formData.get("settlementMethod") as string) === "external_app"
       ? "external_app"
       : "bank";
+  const tikkieLink = (formData.get("tikkieLink") as string) || null;
+  const personIds = formData.getAll("personId") as string[];
+  if (personIds.length === 0) return;
 
   const supabase = await createClient();
+  const createdIds: string[] = [];
 
-  const { data: tx, error: txError } = await supabase
-    .from("transactions")
-    .select("amount")
-    .eq("id", transactionId)
-    .single();
-  if (txError) throw txError;
+  for (const personId of personIds) {
+    const amountValue = Number(formData.get(`amount_${personId}`));
+    if (!amountValue || amountValue <= 0) continue;
 
-  const computedAmount =
-    amountType === "fraction"
-      ? Math.abs(tx.amount) * amountValue
-      : amountValue;
-
-  // A reference code only makes sense for bank/Tikkie paybacks that show up
-  // as a matchable transaction — an app like WieBetaaltWat settles balances
-  // differently, so there's nothing to auto-match there. Postgres allows
-  // multiple NULLs under a unique constraint, so external_app rows just
-  // don't get one.
-  let reclaim: { id: string } | null = null;
-  if (settlementMethod === "external_app") {
-    const { data, error } = await supabase
-      .from("reclaims")
-      .insert({
-        transaction_id: transactionId,
-        person_name: personName,
-        amount_type: amountType,
-        amount_value: amountValue,
-        computed_amount: computedAmount,
-        tikkie_link: tikkieLink,
-        settlement_method: settlementMethod,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    reclaim = data;
-  } else {
-    // Reference codes are unique; a random collision is astronomically
-    // unlikely at personal scale, but retry a couple of times just in case.
-    for (let attempt = 0; attempt < 3 && !reclaim; attempt++) {
+    if (settlementMethod === "external_app") {
       const { data, error } = await supabase
         .from("reclaims")
         .insert({
           transaction_id: transactionId,
-          person_name: personName,
-          amount_type: amountType,
+          person_id: personId,
+          amount_type: "fixed",
           amount_value: amountValue,
-          computed_amount: computedAmount,
+          computed_amount: amountValue,
           tikkie_link: tikkieLink,
           settlement_method: settlementMethod,
-          reference_code: generateReferenceCode(),
         })
         .select("id")
         .single();
-      if (error && error.code !== "23505") throw error; // 23505 = unique_violation
-      if (data) reclaim = data;
+      if (error) throw error;
+      createdIds.push(data.id);
+    } else {
+      // Reference codes are unique; retry on the rare collision.
+      let inserted: { id: string } | null = null;
+      for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
+        const { data, error } = await supabase
+          .from("reclaims")
+          .insert({
+            transaction_id: transactionId,
+            person_id: personId,
+            amount_type: "fixed",
+            amount_value: amountValue,
+            computed_amount: amountValue,
+            tikkie_link: tikkieLink,
+            settlement_method: settlementMethod,
+            reference_code: generateReferenceCode(),
+          })
+          .select("id")
+          .single();
+        if (error && error.code !== "23505") throw error;
+        if (data) inserted = data;
+      }
+      if (inserted) createdIds.push(inserted.id);
     }
   }
-  if (!reclaim) throw new Error("Kon geen unieke referentiecode genereren");
 
-  // The payback may already have arrived before this reclaim was logged —
-  // check immediately instead of waiting for the next sync. Not relevant
-  // for external_app reclaims, which never settle via a bank transaction.
+  // The payback may already have arrived before this reclaim was logged.
   if (settlementMethod === "bank") {
-    await autoMatchNewReclaim(supabase, reclaim.id);
+    for (const id of createdIds) {
+      await autoMatchNewReclaim(supabase, id);
+    }
   }
 }
 
@@ -151,6 +141,12 @@ export async function markReclaimPaid(reclaimId: string) {
     .from("reclaims")
     .update({ status: "paid", paid_at: new Date().toISOString() })
     .eq("id", reclaimId);
+  if (error) throw error;
+}
+
+export async function deleteReclaim(reclaimId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("reclaims").delete().eq("id", reclaimId);
   if (error) throw error;
 }
 
@@ -170,7 +166,7 @@ export async function linkReclaimToTransaction(
         .select("booking_date, counterparty_name")
         .eq("id", transactionId)
         .single(),
-      supabase.from("reclaims").select("person_name").eq("id", reclaimId).single(),
+      supabase.from("reclaims").select("person_id").eq("id", reclaimId).single(),
     ]);
   if (txError) throw txError;
   if (reclaimError) throw reclaimError;
@@ -186,7 +182,7 @@ export async function linkReclaimToTransaction(
   if (error) throw error;
 
   // A manual link is a confirmed ground truth — learn it for next time.
-  await learnPersonAlias(supabase, reclaim.person_name, tx.counterparty_name);
+  await learnPersonAlias(supabase, reclaim.person_id, tx.counterparty_name);
 }
 
 export async function unlinkReclaim(reclaimId: string) {

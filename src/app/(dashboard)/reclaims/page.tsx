@@ -1,17 +1,19 @@
 import {
-  createReclaim,
   getRecentExpenseTransactions,
   getReclaims,
   getUnlinkedIncomingTransactions,
 } from "@/actions/reclaims";
-import { LinkTransaction, UnlinkButton } from "./link-transaction";
+import { getPeople } from "@/actions/people";
+import { LinkTransaction, UnlinkButton, DeleteButton } from "./link-transaction";
 import { ReferenceCode } from "./reference-code";
+import { SplitReclaimForm } from "./split-form";
 
 export default async function ReclaimsPage() {
-  const [transactions, reclaims, incomingTransactions] = await Promise.all([
+  const [transactions, reclaims, incomingTransactions, people] = await Promise.all([
     getRecentExpenseTransactions(),
     getReclaims(),
     getUnlinkedIncomingTransactions(),
+    getPeople(),
   ]);
 
   const outstandingTotal = reclaims
@@ -31,106 +33,7 @@ export default async function ReclaimsPage() {
         <h2 className="mb-2 text-sm font-medium text-gray-700">
           Nieuwe terugvordering
         </h2>
-        <form
-          action={createReclaim}
-          className="space-y-3 rounded-md border border-gray-200 bg-white p-4"
-        >
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
-              Transactie (afschrijving)
-            </label>
-            <select
-              name="transactionId"
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {transactions.map((tx) => (
-                <option key={tx.id} value={tx.id}>
-                  {new Date(tx.booking_date).toLocaleDateString("nl-NL")} ·{" "}
-                  {tx.counterparty_name ?? "Onbekend"} · €
-                  {Math.abs(tx.amount).toFixed(2)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
-              Van wie krijg je geld terug?
-            </label>
-            <input
-              type="text"
-              name="personName"
-              required
-              placeholder="Naam"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-gray-700">
-                Type
-              </label>
-              <select
-                name="amountType"
-                defaultValue="fixed"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              >
-                <option value="fixed">Vast bedrag (€)</option>
-                <option value="fraction">Deel van het bedrag (bv. 0.33 voor 1/3)</option>
-              </select>
-            </div>
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-gray-700">
-                Waarde
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                name="amountValue"
-                required
-                placeholder="bv. 15 of 0.33"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
-              Hoe komt dit terug?
-            </label>
-            <select
-              name="settlementMethod"
-              defaultValue="bank"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="bank">Bankoverschrijving / Tikkie (automatisch te herkennen)</option>
-              <option value="external_app">
-                Andere app (WieBetaaltWat, Splitwise, etc.) — handmatig afvinken
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
-              Betaalverzoek-link of notitie (optioneel)
-            </label>
-            <input
-              type="text"
-              name="tikkieLink"
-              placeholder="Tikkie-link, of een notitie zoals 'betaalverzoek via ING'"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-          >
-            Toevoegen
-          </button>
-        </form>
+        <SplitReclaimForm transactions={transactions} people={people} />
       </section>
 
       <section>
@@ -149,12 +52,13 @@ export default async function ReclaimsPage() {
               const settledTx = Array.isArray(r.settled_transaction)
                 ? r.settled_transaction[0]
                 : r.settled_transaction;
+              const person = Array.isArray(r.people) ? r.people[0] : r.people;
               return (
                 <li key={r.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-2 truncate font-medium text-gray-900">
-                        {r.person_name} · €{r.computed_amount.toFixed(2)}
+                        {person?.name ?? "Onbekend"} · €{r.computed_amount.toFixed(2)}
                         {r.status !== "paid" && r.reference_code && (
                           <ReferenceCode code={r.reference_code} />
                         )}
@@ -182,6 +86,7 @@ export default async function ReclaimsPage() {
                         {r.status === "paid" ? "Ontvangen" : "Nog niet ontvangen"}
                       </span>
                       {r.status === "paid" && <UnlinkButton reclaimId={r.id} />}
+                      <DeleteButton reclaimId={r.id} />
                     </div>
                   </div>
                   {r.status === "paid" && settledTx && (

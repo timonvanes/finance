@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  deleteReclaim,
   linkReclaimToTransaction,
   markReclaimPaid,
   unlinkReclaim,
@@ -99,6 +100,28 @@ export function UnlinkButton({ reclaimId }: { reclaimId: string }) {
       className="text-xs text-gray-400 underline hover:text-gray-600 disabled:opacity-50"
     >
       Ongedaan maken
+    </button>
+  );
+}
+
+export function DeleteButton({ reclaimId }: { reclaimId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  return (
+    <button
+      type="button"
+      disabled={isPending}
+      onClick={() => {
+        if (!confirm("Deze terugvordering verwijderen?")) return;
+        startTransition(async () => {
+          await deleteReclaim(reclaimId);
+          router.refresh();
+        });
+      }}
+      className="text-xs text-red-400 underline hover:text-red-600 disabled:opacity-50"
+    >
+      Verwijderen
     </button>
   );
 }
