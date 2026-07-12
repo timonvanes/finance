@@ -124,6 +124,9 @@ export default async function ReclaimsPage() {
               const relatedTx = Array.isArray(r.transactions)
                 ? r.transactions[0]
                 : r.transactions;
+              const settledTx = Array.isArray(r.settled_transaction)
+                ? r.settled_transaction[0]
+                : r.settled_transaction;
               return (
                 <li key={r.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
@@ -156,6 +159,13 @@ export default async function ReclaimsPage() {
                       {r.status === "paid" && <UnlinkButton reclaimId={r.id} />}
                     </div>
                   </div>
+                  {r.status === "paid" && settledTx && (
+                    <p className="text-xs text-gray-400">
+                      Gekoppeld aan betaling van {settledTx.counterparty_name ?? "onbekend"} op{" "}
+                      {new Date(settledTx.booking_date).toLocaleDateString("nl-NL")} (€
+                      {settledTx.amount.toFixed(2)})
+                    </p>
+                  )}
                   {r.status !== "paid" && (
                     <LinkTransaction
                       reclaimId={r.id}

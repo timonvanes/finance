@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { autoMatchNewReclaim } from "@/lib/reclaims/matching";
 
 export async function getRecentExpenseTransactions() {
   const supabase = await createClient();
@@ -46,7 +47,9 @@ export async function getReclaims() {
   const { data, error } = await supabase
     .from("reclaims")
     .select(
-      "id, person_name, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id, transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount)"
+      `id, person_name, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id,
+      transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount),
+      settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -74,15 +77,23 @@ export async function createReclaim(formData: FormData) {
       ? Math.abs(tx.amount) * amountValue
       : amountValue;
 
-  const { error } = await supabase.from("reclaims").insert({
-    transaction_id: transactionId,
-    person_name: personName,
-    amount_type: amountType,
-    amount_value: amountValue,
-    computed_amount: computedAmount,
-    tikkie_link: tikkieLink,
-  });
+  const { data: reclaim, error } = await supabase
+    .from("reclaims")
+    .insert({
+      transaction_id: transactionId,
+      person_name: personName,
+      amount_type: amountType,
+      amount_value: amountValue,
+      computed_amount: computedAmount,
+      tikkie_link: tikkieLink,
+    })
+    .select("id")
+    .single();
   if (error) throw error;
+
+  // The payback may already have arrived before this reclaim was logged —
+  // check immediately instead of waiting for the next sync.
+  await autoMatchNewReclaim(supabase, reclaim.id);
 }
 
 export async function markReclaimPaid(reclaimId: string) {

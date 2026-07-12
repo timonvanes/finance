@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enableBankingFetch } from "./client";
 import { applyCategoryRules } from "@/lib/categorization/engine";
+import { autoMatchIncomingTransactions } from "@/lib/reclaims/matching";
 
 interface EnableBankingTransaction {
   transaction_id?: string;
@@ -101,11 +102,10 @@ export async function syncBankConnection(
       syncedCount += rows.length;
 
       // ignoreDuplicates means only genuinely new rows come back here —
-      // safe to run the rule matcher on exactly those.
-      await applyCategoryRules(
-        supabase,
-        (inserted ?? []).map((row) => row.id)
-      );
+      // safe to run the rule matcher / reclaim auto-linker on exactly those.
+      const insertedIds = (inserted ?? []).map((row) => row.id);
+      await applyCategoryRules(supabase, insertedIds);
+      await autoMatchIncomingTransactions(supabase, insertedIds);
     }
   }
 
