@@ -30,18 +30,24 @@ function counterpartyName(tx: EnableBankingTransaction): string | null {
   return name ?? null;
 }
 
+const HISTORY_DAYS = 90;
+
 async function fetchAllTransactions(
   accountUid: string
 ): Promise<EnableBankingTransaction[]> {
   const all: EnableBankingTransaction[] = [];
   let continuationKey: string | undefined;
 
+  const dateFrom = new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
   do {
-    const query = continuationKey
-      ? `?continuation_key=${encodeURIComponent(continuationKey)}`
-      : "";
+    const params = new URLSearchParams({ date_from: dateFrom });
+    if (continuationKey) params.set("continuation_key", continuationKey);
+
     const page = await enableBankingFetch<TransactionsResponse>(
-      `/accounts/${accountUid}/transactions${query}`
+      `/accounts/${accountUid}/transactions?${params.toString()}`
     );
     all.push(...page.transactions);
     continuationKey = page.continuation_key;
