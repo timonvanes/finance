@@ -1,20 +1,30 @@
+import Link from "next/link";
 import {
+  getQueuedTransactions,
   getRecentExpenseTransactions,
   getReclaims,
   getUnlinkedIncomingTransactions,
+  unflagTransactionForReclaim,
 } from "@/actions/reclaims";
 import { getPeople } from "@/actions/people";
 import { LinkTransaction, UnlinkButton, DeleteButton } from "./link-transaction";
 import { ReferenceCode } from "./reference-code";
 import { SplitReclaimForm } from "./split-form";
 
-export default async function ReclaimsPage() {
-  const [transactions, reclaims, incomingTransactions, people] = await Promise.all([
-    getRecentExpenseTransactions(),
-    getReclaims(),
-    getUnlinkedIncomingTransactions(),
-    getPeople(),
-  ]);
+export default async function ReclaimsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ transactionId?: string }>;
+}) {
+  const { transactionId } = await searchParams;
+  const [transactions, reclaims, incomingTransactions, people, queuedTransactions] =
+    await Promise.all([
+      getRecentExpenseTransactions(),
+      getReclaims(),
+      getUnlinkedIncomingTransactions(),
+      getPeople(),
+      getQueuedTransactions(),
+    ]);
 
   const outstandingTotal = reclaims
     .filter((r) => r.status !== "paid")
@@ -29,11 +39,54 @@ export default async function ReclaimsPage() {
         </p>
       </div>
 
-      <section>
+      {queuedTransactions.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-medium text-gray-700">
+            Te verdelen ({queuedTransactions.length})
+          </h2>
+          <ul className="divide-y divide-gray-200 rounded-md border border-amber-200 bg-amber-50">
+            {queuedTransactions.map((tx) => (
+              <li key={tx.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-gray-900">
+                    {tx.counterparty_name ?? "Onbekend"} · €{Math.abs(tx.amount).toFixed(2)}
+                  </p>
+                  <p className="truncate text-gray-500">
+                    {new Date(tx.booking_date).toLocaleDateString("nl-NL")}
+                    {tx.raw_description ? ` · ${tx.raw_description}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Link
+                    href={`/reclaims?transactionId=${tx.id}#split-form`}
+                    className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+                  >
+                    Verdelen
+                  </Link>
+                  <form action={unflagTransactionForReclaim.bind(null, tx.id)}>
+                    <button
+                      type="submit"
+                      className="text-xs text-gray-400 underline hover:text-gray-600"
+                    >
+                      Verwijderen uit wachtrij
+                    </button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section id="split-form">
         <h2 className="mb-2 text-sm font-medium text-gray-700">
           Nieuwe terugvordering
         </h2>
-        <SplitReclaimForm transactions={transactions} people={people} />
+        <SplitReclaimForm
+          transactions={transactions}
+          people={people}
+          initialTransactionId={transactionId}
+        />
       </section>
 
       <section>

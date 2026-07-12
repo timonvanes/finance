@@ -18,13 +18,16 @@ interface TransactionOption {
 export function SplitReclaimForm({
   transactions,
   people,
+  initialTransactionId,
 }: {
   transactions: TransactionOption[];
   people: Person[];
+  initialTransactionId?: string;
 }) {
-  const [txAmount, setTxAmount] = useState(
-    transactions[0] ? Math.abs(transactions[0].amount) : 0
-  );
+  const initialTx =
+    (initialTransactionId && transactions.find((t) => t.id === initialTransactionId)) ||
+    transactions[0];
+  const [txAmount, setTxAmount] = useState(initialTx ? Math.abs(initialTx.amount) : 0);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
 
@@ -55,6 +58,7 @@ export function SplitReclaimForm({
         <select
           name="transactionId"
           required
+          defaultValue={initialTx?.id}
           onChange={(e) => {
             const opt = transactions.find((t) => t.id === e.target.value);
             const amount = opt ? Math.abs(opt.amount) : 0;

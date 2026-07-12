@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
 
@@ -17,12 +18,45 @@ export async function getRecentExpenseTransactions() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("transactions")
-    .select("id, booking_date, amount, counterparty_name")
+    .select("id, booking_date, amount, counterparty_name, raw_description")
     .lt("amount", 0)
     .order("booking_date", { ascending: false })
     .limit(50);
   if (error) throw error;
   return data;
+}
+
+// Transactions flagged from the transactions list as "still needs to be
+// split into reclaim(s)" — the queue shown at the top of this page.
+export async function getQueuedTransactions() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id, booking_date, amount, counterparty_name, raw_description")
+    .eq("flagged_for_reclaim", true)
+    .order("booking_date", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function flagTransactionForReclaim(formData: FormData) {
+  const transactionId = formData.get("transactionId") as string;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transactions")
+    .update({ flagged_for_reclaim: true })
+    .eq("id", transactionId);
+  if (error) throw error;
+  redirect("/reclaims");
+}
+
+export async function unflagTransactionForReclaim(transactionId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transactions")
+    .update({ flagged_for_reclaim: false })
+    .eq("id", transactionId);
+  if (error) throw error;
 }
 
 // Incoming transactions not yet used to settle another reclaim — candidates
@@ -126,6 +160,12 @@ export async function createSplitReclaim(formData: FormData) {
       if (inserted) createdIds.push(inserted.id);
     }
   }
+
+  // No longer needs to sit in the "still to split" queue.
+  await supabase
+    .from("transactions")
+    .update({ flagged_for_reclaim: false })
+    .eq("id", transactionId);
 
   // The payback may already have arrived before this reclaim was logged.
   if (settlementMethod === "bank") {

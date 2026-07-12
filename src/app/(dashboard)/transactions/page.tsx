@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ensureDefaultCategories, getCategories } from "@/actions/transactions";
+import { flagTransactionForReclaim } from "@/actions/reclaims";
 import { CategorySelect } from "./category-select";
 
 const FILTERS = [
@@ -24,7 +25,7 @@ export default async function TransactionsPage({
   let query = supabase
     .from("transactions")
     .select(
-      "id, booking_date, amount, currency, counterparty_name, raw_description, category_id"
+      "id, booking_date, amount, currency, counterparty_name, raw_description, category_id, flagged_for_reclaim"
     )
     .order("booking_date", { ascending: false })
     .limit(100);
@@ -61,34 +62,62 @@ export default async function TransactionsPage({
       {transactions && transactions.length > 0 ? (
         <ul className="mt-4 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
           {transactions.map((tx) => (
-            <li key={tx.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-gray-900">
-                  {tx.counterparty_name ?? "Onbekend"}
-                </p>
-                <p className="truncate text-gray-500">
-                  {new Date(tx.booking_date).toLocaleDateString("nl-NL")}
-                  {tx.raw_description ? ` · ${tx.raw_description}` : ""}
-                </p>
+            <li key={tx.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-gray-900">
+                    {tx.counterparty_name ?? "Onbekend"}
+                  </p>
+                  <p className="text-gray-500">
+                    {new Date(tx.booking_date).toLocaleDateString("nl-NL")}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <CategorySelect
+                    transactionId={tx.id}
+                    categoryId={tx.category_id}
+                    categories={categories}
+                  />
+                  <span
+                    className={
+                      tx.amount < 0
+                        ? "w-20 text-right font-medium text-gray-900"
+                        : "w-20 text-right font-medium text-green-700"
+                    }
+                  >
+                    {tx.amount < 0 ? "-" : "+"}
+                    {"€"}
+                    {Math.abs(tx.amount).toFixed(2)}
+                  </span>
+                </div>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <CategorySelect
-                  transactionId={tx.id}
-                  categoryId={tx.category_id}
-                  categories={categories}
-                />
-                <span
-                  className={
-                    tx.amount < 0
-                      ? "w-20 text-right font-medium text-gray-900"
-                      : "w-20 text-right font-medium text-green-700"
-                  }
-                >
-                  {tx.amount < 0 ? "-" : "+"}
-                  {"€"}
-                  {Math.abs(tx.amount).toFixed(2)}
-                </span>
-              </div>
+              {tx.raw_description && (
+                <p className="whitespace-pre-wrap break-words text-xs text-gray-500">
+                  {tx.raw_description}
+                </p>
+              )}
+              {tx.amount < 0 && (
+                <div>
+                  {tx.flagged_for_reclaim ? (
+                    <Link
+                      href="/reclaims"
+                      className="text-xs font-medium text-amber-700 underline"
+                    >
+                      In wachtrij om te verdelen — bekijk
+                    </Link>
+                  ) : (
+                    <form action={flagTransactionForReclaim}>
+                      <input type="hidden" name="transactionId" value={tx.id} />
+                      <button
+                        type="submit"
+                        className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Terugvorderen
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
