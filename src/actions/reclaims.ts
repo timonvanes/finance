@@ -14,12 +14,39 @@ export async function getRecentExpenseTransactions() {
   return data;
 }
 
+// Incoming transactions not yet used to settle another reclaim — candidates
+// for "link this payment to that reclaim".
+export async function getUnlinkedIncomingTransactions() {
+  const supabase = await createClient();
+
+  const { data: alreadyLinked } = await supabase
+    .from("reclaims")
+    .select("settled_transaction_id")
+    .not("settled_transaction_id", "is", null);
+  const usedIds = (alreadyLinked ?? []).map((r) => r.settled_transaction_id);
+
+  let query = supabase
+    .from("transactions")
+    .select("id, booking_date, amount, counterparty_name")
+    .gt("amount", 0)
+    .order("booking_date", { ascending: false })
+    .limit(100);
+
+  if (usedIds.length > 0) {
+    query = query.not("id", "in", `(${usedIds.join(",")})`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
 export async function getReclaims() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("reclaims")
     .select(
-      "id, person_name, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, transactions(booking_date, counterparty_name, amount)"
+      "id, person_name, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id, transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount)"
     )
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -63,6 +90,42 @@ export async function markReclaimPaid(reclaimId: string) {
   const { error } = await supabase
     .from("reclaims")
     .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", reclaimId);
+  if (error) throw error;
+}
+
+// Link an incoming transaction (the actual payback) to a reclaim, and mark
+// it settled — this is how we know money has genuinely arrived rather than
+// just trusting a manual "paid" click.
+export async function linkReclaimToTransaction(
+  reclaimId: string,
+  transactionId: string
+) {
+  const supabase = await createClient();
+
+  const { data: tx, error: txError } = await supabase
+    .from("transactions")
+    .select("booking_date")
+    .eq("id", transactionId)
+    .single();
+  if (txError) throw txError;
+
+  const { error } = await supabase
+    .from("reclaims")
+    .update({
+      settled_transaction_id: transactionId,
+      status: "paid",
+      paid_at: tx.booking_date,
+    })
+    .eq("id", reclaimId);
+  if (error) throw error;
+}
+
+export async function unlinkReclaim(reclaimId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("reclaims")
+    .update({ settled_transaction_id: null, status: "requested", paid_at: null })
     .eq("id", reclaimId);
   if (error) throw error;
 }

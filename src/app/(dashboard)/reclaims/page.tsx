@@ -2,18 +2,29 @@ import {
   createReclaim,
   getRecentExpenseTransactions,
   getReclaims,
+  getUnlinkedIncomingTransactions,
 } from "@/actions/reclaims";
-import { MarkPaidButton } from "./mark-paid-button";
+import { LinkTransaction, UnlinkButton } from "./link-transaction";
 
 export default async function ReclaimsPage() {
-  const [transactions, reclaims] = await Promise.all([
+  const [transactions, reclaims, incomingTransactions] = await Promise.all([
     getRecentExpenseTransactions(),
     getReclaims(),
+    getUnlinkedIncomingTransactions(),
   ]);
+
+  const outstandingTotal = reclaims
+    .filter((r) => r.status !== "paid")
+    .reduce((sum, r) => sum + r.computed_amount, 0);
 
   return (
     <div className="space-y-8">
-      <h1 className="text-lg font-semibold text-gray-900">Terugvorderingen</h1>
+      <div>
+        <h1 className="text-lg font-semibold text-gray-900">Terugvorderingen</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Nog openstaand: <span className="font-medium text-gray-900">€{outstandingTotal.toFixed(2)}</span>
+        </p>
+      </div>
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-gray-700">
@@ -25,7 +36,7 @@ export default async function ReclaimsPage() {
         >
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-700">
-              Transactie
+              Transactie (afschrijving)
             </label>
             <select
               name="transactionId"
@@ -86,12 +97,12 @@ export default async function ReclaimsPage() {
 
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-700">
-              Tikkie-link (optioneel)
+              Betaalverzoek-link of notitie (optioneel)
             </label>
             <input
-              type="url"
+              type="text"
               name="tikkieLink"
-              placeholder="https://tikkie.me/..."
+              placeholder="Tikkie-link, of een notitie zoals 'betaalverzoek via ING'"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
@@ -114,38 +125,45 @@ export default async function ReclaimsPage() {
                 ? r.transactions[0]
                 : r.transactions;
               return (
-              <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-gray-900">
-                    {r.person_name} · €{r.computed_amount.toFixed(2)}
-                  </p>
-                  <p className="truncate text-gray-500">
-                    {relatedTx?.counterparty_name ?? "Onbekend"} ·{" "}
-                    {relatedTx?.booking_date &&
-                      new Date(relatedTx.booking_date).toLocaleDateString("nl-NL")}
-                    {r.tikkie_link && (
-                      <>
-                        {" · "}
-                        <a href={r.tikkie_link} target="_blank" className="underline">
-                          Tikkie
-                        </a>
-                      </>
-                    )}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span
-                    className={
-                      r.status === "paid"
-                        ? "rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700"
-                        : "rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700"
-                    }
-                  >
-                    {r.status === "paid" ? "Ontvangen" : "Nog niet ontvangen"}
-                  </span>
-                  {r.status !== "paid" && <MarkPaidButton reclaimId={r.id} />}
-                </div>
-              </li>
+                <li key={r.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900">
+                        {r.person_name} · €{r.computed_amount.toFixed(2)}
+                      </p>
+                      <p className="truncate text-gray-500">
+                        {relatedTx?.counterparty_name ?? "Onbekend"} ·{" "}
+                        {relatedTx?.booking_date &&
+                          new Date(relatedTx.booking_date).toLocaleDateString("nl-NL")}
+                        {r.tikkie_link && (
+                          <>
+                            {" · "}
+                            <span className="italic">{r.tikkie_link}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={
+                          r.status === "paid"
+                            ? "rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700"
+                            : "rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700"
+                        }
+                      >
+                        {r.status === "paid" ? "Ontvangen" : "Nog niet ontvangen"}
+                      </span>
+                      {r.status === "paid" && <UnlinkButton reclaimId={r.id} />}
+                    </div>
+                  </div>
+                  {r.status !== "paid" && (
+                    <LinkTransaction
+                      reclaimId={r.id}
+                      computedAmount={r.computed_amount}
+                      incomingTransactions={incomingTransactions}
+                    />
+                  )}
+                </li>
               );
             })}
           </ul>
