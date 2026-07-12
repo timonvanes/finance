@@ -4,13 +4,17 @@ export interface Aspsp {
   name: string;
   country: string;
   logo?: string;
+  psu_types: string[];
 }
 
 export async function listAspsps(country: string): Promise<Aspsp[]> {
   const data = await enableBankingFetch<{ aspsps: Aspsp[] }>(
     `/aspsps?country=${encodeURIComponent(country)}`
   );
-  return data.aspsps;
+  // This app only ever requests psu_type "personal" — hide ASPSPs that
+  // don't support it (e.g. business-only entities like "ING Wholesale
+  // Banking") so they can't be picked and fail with a confusing API error.
+  return data.aspsps.filter((aspsp) => aspsp.psu_types?.includes("personal"));
 }
 
 export interface StartAuthorizationParams {
