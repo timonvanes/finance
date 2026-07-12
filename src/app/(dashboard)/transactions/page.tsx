@@ -1,13 +1,22 @@
 import { createClient } from "@/lib/supabase/server";
+import { ensureDefaultCategories, getCategories } from "@/actions/transactions";
+import { CategorySelect } from "./category-select";
 
 export default async function TransactionsPage() {
+  await ensureDefaultCategories();
+
   const supabase = await createClient();
 
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("id, booking_date, amount, currency, counterparty_name, raw_description")
-    .order("booking_date", { ascending: false })
-    .limit(100);
+  const [{ data: transactions }, categories] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select(
+        "id, booking_date, amount, currency, counterparty_name, raw_description, category_id"
+      )
+      .order("booking_date", { ascending: false })
+      .limit(100),
+    getCategories(),
+  ]);
 
   return (
     <div>
@@ -16,25 +25,34 @@ export default async function TransactionsPage() {
       {transactions && transactions.length > 0 ? (
         <ul className="mt-4 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
           {transactions.map((tx) => (
-            <li key={tx.id} className="flex items-center justify-between px-4 py-3 text-sm">
-              <div>
-                <p className="font-medium text-gray-900">
+            <li key={tx.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-gray-900">
                   {tx.counterparty_name ?? "Onbekend"}
                 </p>
-                <p className="text-gray-500">
+                <p className="truncate text-gray-500">
                   {new Date(tx.booking_date).toLocaleDateString("nl-NL")}
                   {tx.raw_description ? ` · ${tx.raw_description}` : ""}
                 </p>
               </div>
-              <span
-                className={
-                  tx.amount < 0 ? "font-medium text-gray-900" : "font-medium text-green-700"
-                }
-              >
-                {tx.amount < 0 ? "-" : "+"}
-                {"€"}
-                {Math.abs(tx.amount).toFixed(2)}
-              </span>
+              <div className="flex shrink-0 items-center gap-3">
+                <CategorySelect
+                  transactionId={tx.id}
+                  categoryId={tx.category_id}
+                  categories={categories}
+                />
+                <span
+                  className={
+                    tx.amount < 0
+                      ? "w-20 text-right font-medium text-gray-900"
+                      : "w-20 text-right font-medium text-green-700"
+                  }
+                >
+                  {tx.amount < 0 ? "-" : "+"}
+                  {"€"}
+                  {Math.abs(tx.amount).toFixed(2)}
+                </span>
+              </div>
             </li>
           ))}
         </ul>

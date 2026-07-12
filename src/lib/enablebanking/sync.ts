@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enableBankingFetch } from "./client";
+import { applyCategoryRules } from "@/lib/categorization/engine";
 
 interface EnableBankingTransaction {
   transaction_id?: string;
@@ -89,14 +90,22 @@ export async function syncBankConnection(
       .filter((row): row is NonNullable<typeof row> => row !== null);
 
     if (rows.length > 0) {
-      const { error: upsertError } = await supabase
+      const { data: inserted, error: upsertError } = await supabase
         .from("transactions")
         .upsert(rows, {
           onConflict: "bank_account_id,external_transaction_id",
           ignoreDuplicates: true,
-        });
+        })
+        .select("id");
       if (upsertError) throw upsertError;
       syncedCount += rows.length;
+
+      // ignoreDuplicates means only genuinely new rows come back here —
+      // safe to run the rule matcher on exactly those.
+      await applyCategoryRules(
+        supabase,
+        (inserted ?? []).map((row) => row.id)
+      );
     }
   }
 
