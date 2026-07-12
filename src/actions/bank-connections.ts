@@ -64,3 +64,15 @@ export async function syncNow(bankConnectionId: string) {
   const count = await syncBankConnection(supabase, bankConnectionId);
   return count;
 }
+
+// Removes a bank connection — used both for cleaning up a link attempt that
+// never completed (stuck on "pending") and for removing a linked bank
+// entirely (cascades to its accounts and their transactions).
+export async function deleteBankConnection(bankConnectionId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("bank_connections")
+    .delete()
+    .eq("id", bankConnectionId);
+  if (error) throw error;
+}

@@ -30,7 +30,7 @@ export default async function LoginPage({
             name="email"
             type="email"
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 text-base"
           />
         </div>
 
@@ -46,13 +46,13 @@ export default async function LoginPage({
             name="password"
             type="password"
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 text-base"
           />
         </div>
 
         <button
           type="submit"
-          className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+          className="min-h-[44px] w-full rounded-md bg-gray-900 px-3 py-2 text-base font-medium text-white hover:bg-gray-800"
         >
           Inloggen
         </button>

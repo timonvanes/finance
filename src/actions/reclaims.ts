@@ -43,7 +43,7 @@ export async function flagTransactionForReclaim(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("transactions")
-    .update({ flagged_for_reclaim: true })
+    .update({ flagged_for_reclaim: true, reviewed: true })
     .eq("id", transactionId);
   if (error) throw error;
 }
@@ -52,7 +52,28 @@ export async function unflagTransactionForReclaim(transactionId: string) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("transactions")
-    .update({ flagged_for_reclaim: false })
+    .update({ flagged_for_reclaim: false, reviewed: false })
+    .eq("id", transactionId);
+  if (error) throw error;
+}
+
+// The other half of the triage: this expense is the user's own, nothing to
+// reclaim — just mark it reviewed so it drops off the to-do list.
+export async function markOwnExpense(formData: FormData) {
+  const transactionId = formData.get("transactionId") as string;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transactions")
+    .update({ reviewed: true })
+    .eq("id", transactionId);
+  if (error) throw error;
+}
+
+export async function unreviewTransaction(transactionId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transactions")
+    .update({ reviewed: false })
     .eq("id", transactionId);
   if (error) throw error;
 }

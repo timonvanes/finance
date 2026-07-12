@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAvailableBanks, startBankLink } from "@/actions/bank-connections";
 import { SyncButton } from "./sync-button";
+import { DeleteConnectionButton } from "./delete-button";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Bezig met koppelen…",
@@ -62,7 +63,10 @@ export default async function BankConnectionsPage({
                       ).toLocaleString("nl-NL")}`}
                   </p>
                 </div>
-                {c.consent_status === "linked" && <SyncButton bankConnectionId={c.id} />}
+                <div className="flex items-center gap-3">
+                  {c.consent_status === "linked" && <SyncButton bankConnectionId={c.id} />}
+                  <DeleteConnectionButton bankConnectionId={c.id} />
+                </div>
               </li>
             ))}
           </ul>
