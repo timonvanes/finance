@@ -65,6 +65,30 @@ export async function syncNow(bankConnectionId: string) {
   return count;
 }
 
+const AUTO_SYNC_STALE_MS = 60 * 60 * 1000; // 1 hour
+
+// Called (via next/server's `after`) when the dashboard loads, so banks stay
+// fresh without needing a manual "Sync now" click every time — throttled so
+// opening the app repeatedly doesn't burn through the daily API quota.
+export async function autoSyncStaleConnections() {
+  const supabase = await createClient();
+  const staleBefore = new Date(Date.now() - AUTO_SYNC_STALE_MS).toISOString();
+
+  const { data: connections } = await supabase
+    .from("bank_connections")
+    .select("id, last_synced_at")
+    .eq("consent_status", "linked")
+    .or(`last_synced_at.is.null,last_synced_at.lt.${staleBefore}`);
+
+  for (const connection of connections ?? []) {
+    try {
+      await syncBankConnection(supabase, connection.id);
+    } catch (err) {
+      console.error("auto-sync failed for connection", connection.id, err);
+    }
+  }
+}
+
 // Removes a bank connection — used both for cleaning up a link attempt that
 // never completed (stuck on "pending") and for removing a linked bank
 // entirely (cascades to its accounts and their transactions).

@@ -1,10 +1,119 @@
-export default function DashboardPage() {
+import Link from "next/link";
+import { after } from "next/server";
+import {
+  getDashboardSummary,
+  getMonthlySpendByCategory,
+  getRecurringPayments,
+} from "@/actions/dashboard";
+import { autoSyncStaleConnections } from "@/actions/bank-connections";
+
+const MONTH_NAMES = [
+  "januari", "februari", "maart", "april", "mei", "juni",
+  "juli", "augustus", "september", "oktober", "november", "december",
+];
+
+export default async function DashboardPage() {
+  // Keeps bank data fresh without blocking the page — runs after the
+  // response is sent, throttled to once per hour per connection.
+  after(() => autoSyncStaleConnections());
+
+  const [summary, categorySpend, recurring] = await Promise.all([
+    getDashboardSummary(),
+    getMonthlySpendByCategory(),
+    getRecurringPayments(),
+  ]);
+
+  const monthLabel = MONTH_NAMES[new Date().getMonth()];
+  const maxCategoryTotal = Math.max(1, ...categorySpend.map((c) => c.total));
+
   return (
-    <div>
+    <div className="space-y-8">
       <h1 className="text-lg font-semibold text-gray-900">Overzicht</h1>
-      <p className="mt-2 text-sm text-gray-500">
-        Dashboard met maandoverzicht komt in een latere fase.
-      </p>
+
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-gray-700">Te doen</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Link
+            href="/transactions"
+            className="min-h-[64px] rounded-md border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50"
+          >
+            <p className="text-2xl font-semibold text-gray-900">{summary.unreviewedCount}</p>
+            <p className="text-sm text-gray-500">nog te controleren</p>
+          </Link>
+          <Link
+            href="/reclaims"
+            className="min-h-[64px] rounded-md border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50"
+          >
+            <p className="text-2xl font-semibold text-gray-900">
+              €{summary.outstandingReclaimsTotal.toFixed(2)}
+            </p>
+            <p className="text-sm text-gray-500">nog openstaand (terugvorderingen)</p>
+          </Link>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-gray-700">Deze maand ({monthLabel})</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xl font-semibold text-green-700">€{summary.monthIncome.toFixed(2)}</p>
+            <p className="text-sm text-gray-500">binnengekomen</p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xl font-semibold text-gray-900">€{summary.monthExpense.toFixed(2)}</p>
+            <p className="text-sm text-gray-500">uitgegeven</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-gray-700">
+          Uitgaven per categorie ({monthLabel})
+        </h2>
+        {categorySpend.length > 0 ? (
+          <ul className="space-y-2 rounded-md border border-gray-200 bg-white p-4">
+            {categorySpend.map((c) => (
+              <li key={c.name}>
+                <div className="mb-1 flex items-center justify-between text-sm">
+                  <span className="text-gray-900">{c.name}</span>
+                  <span className="font-medium text-gray-900">€{c.total.toFixed(2)}</span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-100">
+                  <div
+                    className="h-2 rounded-full bg-gray-900"
+                    style={{ width: `${(c.total / maxCategoryTotal) * 100}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-500">Nog geen uitgaven deze maand.</p>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-gray-700">Vaste lasten (herkend)</h2>
+        {recurring.length > 0 ? (
+          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+            {recurring.map((r) => (
+              <li key={r.counterpartyName} className="flex items-center justify-between px-4 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-gray-900">{r.counterpartyName}</p>
+                  <p className="text-gray-500">{r.occurrences}x in de laatste 90 dagen</p>
+                </div>
+                <span className="font-medium text-gray-900">
+                  ~€{r.averageAmount.toFixed(2)}/keer
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-500">
+            Nog geen vaste lasten herkend — dit werkt beter zodra er meer historie is.
+          </p>
+        )}
+      </section>
     </div>
   );
 }
