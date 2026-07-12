@@ -10,6 +10,14 @@ import { syncBankConnection } from "@/lib/enablebanking/sync";
 const CONSENT_DAYS = 90;
 
 async function getSiteUrl() {
+  // Prefer the fixed, registered site URL — Vercel's per-deployment hash
+  // domains (e.g. finance-xxxxx-timonvanes-projects.vercel.app) are NOT the
+  // redirect URI registered with Enable Banking, so deriving this from
+  // request headers would break whenever the app is visited via one of
+  // those instead of the stable production domain.
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = headersList.get("x-forwarded-proto") ?? "https";
