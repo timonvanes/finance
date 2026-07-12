@@ -194,6 +194,7 @@ export function SplitReclaimForm({
                       </span>
                       <input
                         type="number"
+                        inputMode="numeric"
                         min="1"
                         step="1"
                         title="Aantal (bv. 2x een broodje)"
@@ -209,6 +210,7 @@ export function SplitReclaimForm({
                       <span className="text-xs text-gray-400">x</span>
                       <input
                         type="number"
+                        inputMode="decimal"
                         step="0.01"
                         name={`amount_${person.id}`}
                         disabled={!checked[person.id]}
