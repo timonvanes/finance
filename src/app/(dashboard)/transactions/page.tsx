@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ensureDefaultCategories, getCategories } from "@/actions/transactions";
-import { flagTransactionForReclaim } from "@/actions/reclaims";
 import { CategorySelect } from "./category-select";
+import { FlagReclaimButton } from "./flag-reclaim-button";
 
 const FILTERS = [
   { value: "all", label: "Alles" },
@@ -106,15 +106,7 @@ export default async function TransactionsPage({
                       In wachtrij om te verdelen — bekijk
                     </Link>
                   ) : (
-                    <form action={flagTransactionForReclaim}>
-                      <input type="hidden" name="transactionId" value={tx.id} />
-                      <button
-                        type="submit"
-                        className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        Terugvorderen
-                      </button>
-                    </form>
+                    <FlagReclaimButton transactionId={tx.id} />
                   )}
                 </div>
               )}

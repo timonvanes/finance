@@ -6,7 +6,7 @@ import {
   getUnlinkedIncomingTransactions,
   unflagTransactionForReclaim,
 } from "@/actions/reclaims";
-import { getPeople } from "@/actions/people";
+import { getPeopleWithGroups } from "@/actions/people";
 import { LinkTransaction, UnlinkButton, DeleteButton } from "./link-transaction";
 import { ReferenceCode } from "./reference-code";
 import { SplitReclaimForm } from "./split-form";
@@ -81,14 +81,19 @@ export default async function ReclaimsPage({
   searchParams: Promise<{ transactionId?: string }>;
 }) {
   const { transactionId } = await searchParams;
-  const [transactions, reclaims, incomingTransactions, people, queuedTransactions] =
+  const [transactions, reclaims, incomingTransactions, peopleWithGroups, queuedTransactions] =
     await Promise.all([
       getRecentExpenseTransactions(),
       getReclaims(),
       getUnlinkedIncomingTransactions(),
-      getPeople(),
+      getPeopleWithGroups(),
       getQueuedTransactions(),
     ]);
+
+  const people = peopleWithGroups.map((p) => {
+    const group = Array.isArray(p.person_groups) ? p.person_groups[0] : p.person_groups;
+    return { id: p.id, name: p.name, groupName: group?.name ?? null };
+  });
 
   const openReclaims = reclaims.filter((r) => r.status !== "paid");
   const paidReclaims = reclaims.filter((r) => r.status === "paid");

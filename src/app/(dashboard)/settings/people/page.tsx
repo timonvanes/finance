@@ -96,9 +96,13 @@ export default async function PeoplePage() {
         {people.length > 0 ? (
           <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
             {people.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
-                <span className="text-gray-900">{p.name}</span>
-                <PersonRow personId={p.id} personGroupId={p.person_group_id} groups={groups} />
+              <li key={p.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                <PersonRow
+                  personId={p.id}
+                  name={p.name}
+                  personGroupId={p.person_group_id}
+                  groups={groups}
+                />
               </li>
             ))}
           </ul>

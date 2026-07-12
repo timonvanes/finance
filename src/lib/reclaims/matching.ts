@@ -62,10 +62,27 @@ async function findMatch(
   openReclaims: CandidateReclaim[]
 ): Promise<CandidateReclaim | null> {
   const description = (tx.raw_description ?? "").toUpperCase();
-  const byCode = openReclaims.find(
+
+  // A code can intentionally be shared across a group (one betaalverzoek,
+  // one code, several people) — narrow down with amount, then name, before
+  // giving up as ambiguous.
+  const byCode = openReclaims.filter(
     (r) => r.reference_code && description.includes(r.reference_code)
   );
-  if (byCode) return byCode;
+  if (byCode.length === 1) return byCode[0];
+  if (byCode.length > 1) {
+    const byCodeAndAmount = byCode.filter(
+      (r) => Math.abs(r.computed_amount - tx.amount) < AMOUNT_TOLERANCE
+    );
+    if (byCodeAndAmount.length === 1) return byCodeAndAmount[0];
+    if (byCodeAndAmount.length > 1) {
+      const byCodeAmountAndName = byCodeAndAmount.filter((r) =>
+        namesCorrelate(r.person_name, tx.counterparty_name, tx.raw_description)
+      );
+      if (byCodeAmountAndName.length === 1) return byCodeAmountAndName[0];
+    }
+    return null; // ambiguous — leave for the manual dropdown
+  }
 
   const { data: aliases } = await supabase
     .from("person_aliases")

@@ -111,6 +111,11 @@ export async function createSplitReclaim(formData: FormData) {
   const personIds = formData.getAll("personId") as string[];
   if (personIds.length === 0) return;
 
+  // One shared betaalverzoek to the whole group only needs one code — the
+  // matcher disambiguates by amount/name if several reclaims share it.
+  const useSharedCode = formData.get("sharedCode") === "on";
+  const sharedCode = useSharedCode ? generateReferenceCode() : null;
+
   const supabase = await createClient();
   const createdIds: string[] = [];
 
@@ -118,45 +123,23 @@ export async function createSplitReclaim(formData: FormData) {
     const amountValue = Number(formData.get(`amount_${personId}`));
     if (!amountValue || amountValue <= 0) continue;
 
-    if (settlementMethod === "external_app") {
-      const { data, error } = await supabase
-        .from("reclaims")
-        .insert({
-          transaction_id: transactionId,
-          person_id: personId,
-          amount_type: "fixed",
-          amount_value: amountValue,
-          computed_amount: amountValue,
-          tikkie_link: tikkieLink,
-          settlement_method: settlementMethod,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      createdIds.push(data.id);
-    } else {
-      // Reference codes are unique; retry on the rare collision.
-      let inserted: { id: string } | null = null;
-      for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
-        const { data, error } = await supabase
-          .from("reclaims")
-          .insert({
-            transaction_id: transactionId,
-            person_id: personId,
-            amount_type: "fixed",
-            amount_value: amountValue,
-            computed_amount: amountValue,
-            tikkie_link: tikkieLink,
-            settlement_method: settlementMethod,
-            reference_code: generateReferenceCode(),
-          })
-          .select("id")
-          .single();
-        if (error && error.code !== "23505") throw error;
-        if (data) inserted = data;
-      }
-      if (inserted) createdIds.push(inserted.id);
-    }
+    const { data, error } = await supabase
+      .from("reclaims")
+      .insert({
+        transaction_id: transactionId,
+        person_id: personId,
+        amount_type: "fixed",
+        amount_value: amountValue,
+        computed_amount: amountValue,
+        tikkie_link: tikkieLink,
+        settlement_method: settlementMethod,
+        reference_code:
+          settlementMethod === "bank" ? sharedCode ?? generateReferenceCode() : null,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    createdIds.push(data.id);
   }
 
   // No longer needs to sit in the "still to split" queue.

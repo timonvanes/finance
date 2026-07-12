@@ -53,6 +53,17 @@ export async function createPerson(formData: FormData) {
   if (error) throw error;
 }
 
+export async function updatePersonName(personId: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("people")
+    .update({ name: trimmed })
+    .eq("id", personId);
+  if (error) throw error;
+}
+
 export async function updatePersonGroup(personId: string, personGroupId: string | null) {
   const supabase = await createClient();
   const { error } = await supabase

@@ -7,6 +7,7 @@ import { createSplitReclaim } from "@/actions/reclaims";
 interface Person {
   id: string;
   name: string;
+  groupName: string | null;
 }
 
 interface TransactionOption {
@@ -15,6 +16,8 @@ interface TransactionOption {
   amount: number;
   counterparty_name: string | null;
 }
+
+const UNGROUPED_LABEL = "Overig";
 
 export function SplitReclaimForm({
   transactions,
@@ -30,19 +33,29 @@ export function SplitReclaimForm({
     transactions[0];
   const [txAmount, setTxAmount] = useState(initialTx ? Math.abs(initialTx.amount) : 0);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  function recalcEqualSplit(nextChecked: Record<string, boolean>, amount: number) {
+  // Amounts are weighted by quantity (WieBetaaltWat-style: 2x someone's
+  // share counts double), but stay a plain editable € amount afterwards for
+  // one-off custom splits.
+  function recalcWeightedSplit(
+    nextChecked: Record<string, boolean>,
+    nextQuantities: Record<string, string>,
+    amount: number
+  ) {
     const ids = Object.keys(nextChecked).filter((id) => nextChecked[id]);
     if (ids.length === 0) return;
-    const share = (amount / ids.length).toFixed(2);
+    const totalShares = ids.reduce((sum, id) => sum + (Number(nextQuantities[id]) || 1), 0);
+    if (totalShares <= 0) return;
     setAmounts((prev) => {
       const next = { ...prev };
       ids.forEach((id) => {
-        next[id] = share;
+        const share = Number(nextQuantities[id]) || 1;
+        next[id] = ((amount * share) / totalShares).toFixed(2);
       });
       return next;
     });
@@ -50,15 +63,36 @@ export function SplitReclaimForm({
 
   const checkedCount = Object.values(checked).filter(Boolean).length;
 
+  const groups = new Map<string, Person[]>();
+  for (const person of people) {
+    const key = person.groupName ?? UNGROUPED_LABEL;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(person);
+  }
+
+  function toggleGroup(groupPeople: Person[], select: boolean) {
+    const nextChecked = { ...checked };
+    groupPeople.forEach((p) => {
+      nextChecked[p.id] = select;
+    });
+    setChecked(nextChecked);
+    recalcWeightedSplit(nextChecked, quantities, txAmount);
+  }
+
+  function resetForm() {
+    formRef.current?.reset();
+    setChecked({});
+    setQuantities({});
+    setAmounts({});
+    setTxAmount(initialTx ? Math.abs(initialTx.amount) : 0);
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
       await createSplitReclaim(formData);
-      formRef.current?.reset();
-      setChecked({});
-      setAmounts({});
-      setTxAmount(initialTx ? Math.abs(initialTx.amount) : 0);
+      resetForm();
       router.refresh();
     });
   }
@@ -81,7 +115,7 @@ export function SplitReclaimForm({
             const opt = transactions.find((t) => t.id === e.target.value);
             const amount = opt ? Math.abs(opt.amount) : 0;
             setTxAmount(amount);
-            recalcEqualSplit(checked, amount);
+            recalcWeightedSplit(checked, quantities, amount);
           }}
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
         >
@@ -96,7 +130,9 @@ export function SplitReclaimForm({
 
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-700">
-          Van wie krijg je geld terug? {checkedCount > 1 && "(bedrag wordt gelijk verdeeld, pas zelf aan indien nodig)"}
+          Van wie krijg je geld terug?{" "}
+          {checkedCount > 1 &&
+            "(bedrag wordt verdeeld o.b.v. aantal, pas zelf aan indien nodig)"}
         </label>
         {people.length === 0 ? (
           <p className="text-xs text-gray-500">
@@ -107,33 +143,80 @@ export function SplitReclaimForm({
             .
           </p>
         ) : (
-          <div className="space-y-1 rounded-md border border-gray-200 p-2">
-            {people.map((person) => (
-              <div key={person.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="personId"
-                  value={person.id}
-                  checked={!!checked[person.id]}
-                  onChange={(e) => {
-                    const next = { ...checked, [person.id]: e.target.checked };
-                    setChecked(next);
-                    recalcEqualSplit(next, txAmount);
-                  }}
-                />
-                <span className="w-32 shrink-0 text-sm text-gray-900">{person.name}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  name={`amount_${person.id}`}
-                  disabled={!checked[person.id]}
-                  value={amounts[person.id] ?? ""}
-                  onChange={(e) =>
-                    setAmounts((prev) => ({ ...prev, [person.id]: e.target.value }))
-                  }
-                  placeholder="€"
-                  className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-400"
-                />
+          <div className="space-y-3 rounded-md border border-gray-200 p-2">
+            {[...groups.entries()].map(([groupName, groupPeople]) => (
+              <div key={groupName}>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500">{groupName}</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(groupPeople, true)}
+                      className="text-xs text-gray-600 underline hover:text-gray-900"
+                    >
+                      Selecteer alles
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(groupPeople, false)}
+                      className="text-xs text-gray-600 underline hover:text-gray-900"
+                    >
+                      Deselecteer alles
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {groupPeople.map((person) => (
+                    <div key={person.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="personId"
+                        value={person.id}
+                        checked={!!checked[person.id]}
+                        onChange={(e) => {
+                          const nextChecked = { ...checked, [person.id]: e.target.checked };
+                          const nextQuantities = {
+                            ...quantities,
+                            [person.id]: quantities[person.id] ?? "1",
+                          };
+                          setChecked(nextChecked);
+                          setQuantities(nextQuantities);
+                          recalcWeightedSplit(nextChecked, nextQuantities, txAmount);
+                        }}
+                      />
+                      <span className="w-28 shrink-0 truncate text-sm text-gray-900">
+                        {person.name}
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        title="Aantal (bv. 2x een broodje)"
+                        disabled={!checked[person.id]}
+                        value={quantities[person.id] ?? "1"}
+                        onChange={(e) => {
+                          const nextQuantities = { ...quantities, [person.id]: e.target.value };
+                          setQuantities(nextQuantities);
+                          recalcWeightedSplit(checked, nextQuantities, txAmount);
+                        }}
+                        className="w-14 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                      />
+                      <span className="text-xs text-gray-400">x</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        name={`amount_${person.id}`}
+                        disabled={!checked[person.id]}
+                        value={amounts[person.id] ?? ""}
+                        onChange={(e) =>
+                          setAmounts((prev) => ({ ...prev, [person.id]: e.target.value }))
+                        }
+                        placeholder="€"
+                        className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -155,6 +238,13 @@ export function SplitReclaimForm({
           </option>
         </select>
       </div>
+
+      {checkedCount > 1 && (
+        <label className="flex items-center gap-2 text-xs text-gray-700">
+          <input type="checkbox" name="sharedCode" />
+          Zelfde referentiecode voor iedereen (handig bij één gedeeld betaalverzoek)
+        </label>
+      )}
 
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-700">
