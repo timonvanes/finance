@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createSplitReclaim } from "@/actions/reclaims";
 
 interface Person {
@@ -30,6 +31,9 @@ export function SplitReclaimForm({
   const [txAmount, setTxAmount] = useState(initialTx ? Math.abs(initialTx.amount) : 0);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function recalcEqualSplit(nextChecked: Record<string, boolean>, amount: number) {
     const ids = Object.keys(nextChecked).filter((id) => nextChecked[id]);
@@ -46,9 +50,23 @@ export function SplitReclaimForm({
 
   const checkedCount = Object.values(checked).filter(Boolean).length;
 
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      await createSplitReclaim(formData);
+      formRef.current?.reset();
+      setChecked({});
+      setAmounts({});
+      setTxAmount(initialTx ? Math.abs(initialTx.amount) : 0);
+      router.refresh();
+    });
+  }
+
   return (
     <form
-      action={createSplitReclaim}
+      ref={formRef}
+      onSubmit={handleSubmit}
       className="space-y-3 rounded-md border border-gray-200 bg-white p-4"
     >
       <div>
@@ -152,10 +170,10 @@ export function SplitReclaimForm({
 
       <button
         type="submit"
-        disabled={people.length === 0}
+        disabled={people.length === 0 || isPending}
         className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
       >
-        Toevoegen
+        {isPending ? "Bezig…" : "Toevoegen"}
       </button>
     </form>
   );

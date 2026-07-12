@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
 
@@ -47,7 +46,6 @@ export async function flagTransactionForReclaim(formData: FormData) {
     .update({ flagged_for_reclaim: true })
     .eq("id", transactionId);
   if (error) throw error;
-  redirect("/reclaims");
 }
 
 export async function unflagTransactionForReclaim(transactionId: string) {
