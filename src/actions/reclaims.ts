@@ -19,6 +19,7 @@ export async function getRecentExpenseTransactions() {
     .from("transactions")
     .select("id, booking_date, amount, counterparty_name, raw_description")
     .lt("amount", 0)
+    .eq("is_transfer", false)
     .order("booking_date", { ascending: false })
     .limit(50);
   if (error) throw error;
@@ -93,6 +94,7 @@ export async function getUnlinkedIncomingTransactions() {
     .from("transactions")
     .select("id, booking_date, amount, counterparty_name")
     .gt("amount", 0)
+    .eq("is_transfer", false)
     .order("booking_date", { ascending: false })
     .limit(100);
 
@@ -140,7 +142,17 @@ export async function createSplitReclaim(formData: FormData) {
   const supabase = await createClient();
   const createdIds: string[] = [];
 
+  const { data: selfPerson } = await supabase
+    .from("people")
+    .select("id")
+    .eq("is_self", true)
+    .maybeSingle();
+
   for (const personId of personIds) {
+    // Your own share of the bill isn't a reclaim — it's just accounted for
+    // in the split math so everyone else's amount comes out right.
+    if (selfPerson && personId === selfPerson.id) continue;
+
     const amountValue = Number(formData.get(`amount_${personId}`));
     if (!amountValue || amountValue <= 0) continue;
 

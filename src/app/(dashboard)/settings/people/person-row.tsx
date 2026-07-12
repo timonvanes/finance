@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deletePerson, updatePersonGroup, updatePersonName } from "@/actions/people";
+import {
+  deletePerson,
+  setSelfPerson,
+  unsetSelfPerson,
+  updatePersonGroup,
+  updatePersonName,
+} from "@/actions/people";
 
 interface Group {
   id: string;
@@ -13,11 +19,13 @@ export function PersonRow({
   personId,
   name,
   personGroupId,
+  isSelf,
   groups,
 }: {
   personId: string;
   name: string;
   personGroupId: string | null;
+  isSelf: boolean;
   groups: Group[];
 }) {
   const [isPending, startTransition] = useTransition();
@@ -65,8 +73,28 @@ export function PersonRow({
 
   return (
     <div className="flex flex-1 items-center justify-between gap-2">
-      <span className="text-gray-900">{name}</span>
+      <span className="text-gray-900">
+        {name}
+        {isSelf && (
+          <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+            Dit ben ik
+          </span>
+        )}
+      </span>
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => {
+            startTransition(async () => {
+              await (isSelf ? unsetSelfPerson(personId) : setSelfPerson(personId));
+              router.refresh();
+            });
+          }}
+          className="text-xs text-gray-500 underline hover:text-gray-700 disabled:opacity-50"
+        >
+          {isSelf ? "Niet meer ik" : "Dit ben ik"}
+        </button>
         <button
           type="button"
           onClick={() => setIsEditing(true)}

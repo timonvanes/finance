@@ -26,7 +26,7 @@ export default async function TransactionsPage({
   let query = supabase
     .from("transactions")
     .select(
-      `id, booking_date, amount, currency, counterparty_name, raw_description, category_id, flagged_for_reclaim, reviewed,
+      `id, booking_date, amount, currency, counterparty_name, raw_description, category_id, flagged_for_reclaim, reviewed, is_transfer,
       bank_accounts(bank_connections(institution_name))`
     )
     .order("booking_date", { ascending: false })
@@ -88,6 +88,11 @@ export default async function TransactionsPage({
                           {bankConnection.institution_name}
                         </span>
                       )}
+                      {tx.is_transfer && (
+                        <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                          Verschuiving eigen rekening
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
@@ -114,7 +119,7 @@ export default async function TransactionsPage({
                     {tx.raw_description}
                   </p>
                 )}
-                {tx.amount < 0 && (
+                {tx.amount < 0 && !tx.is_transfer && (
                   <ReviewActions
                     transactionId={tx.id}
                     reviewed={tx.reviewed}

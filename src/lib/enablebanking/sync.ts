@@ -3,6 +3,11 @@ import { enableBankingFetch } from "./client";
 import { applyCategoryRules } from "@/lib/categorization/engine";
 import { autoMatchIncomingTransactions } from "@/lib/reclaims/matching";
 
+interface AccountIdentification {
+  identification?: string;
+  scheme_name?: string;
+}
+
 interface EnableBankingTransaction {
   transaction_id?: string;
   entry_reference?: string;
@@ -11,6 +16,8 @@ interface EnableBankingTransaction {
   credit_debit_indicator: "CRDT" | "DBIT";
   creditor?: { name?: string };
   debtor?: { name?: string };
+  creditor_account?: AccountIdentification;
+  debtor_account?: AccountIdentification;
   remittance_information?: string[];
 }
 
@@ -30,6 +37,15 @@ function counterpartyName(tx: EnableBankingTransaction): string | null {
   const name =
     tx.credit_debit_indicator === "DBIT" ? tx.creditor?.name : tx.debtor?.name;
   return name ?? null;
+}
+
+function counterpartyIban(tx: EnableBankingTransaction): string | null {
+  const account =
+    tx.credit_debit_indicator === "DBIT" ? tx.creditor_account : tx.debtor_account;
+  if (account?.scheme_name === "IBAN" && account.identification) {
+    return account.identification;
+  }
+  return null;
 }
 
 const HISTORY_DAYS = 90;
@@ -56,6 +72,36 @@ async function fetchAllTransactions(
   } while (continuationKey);
 
   return all;
+}
+
+// If a transaction's counterparty IBAN matches one of the user's own linked
+// accounts (e.g. money moved from ING to Rabobank/Revolut), it's a transfer
+// between own accounts, not real spend or income — mark it as such and skip
+// the manual review queue for it.
+async function markOwnTransfers(supabase: SupabaseClient, transactionIds: string[]) {
+  if (transactionIds.length === 0) return;
+
+  const { data: ownAccounts } = await supabase
+    .from("bank_accounts")
+    .select("iban")
+    .not("iban", "is", null);
+  const ownIbans = new Set((ownAccounts ?? []).map((a) => a.iban));
+  if (ownIbans.size === 0) return;
+
+  const { data: transactions } = await supabase
+    .from("transactions")
+    .select("id, counterparty_iban")
+    .in("id", transactionIds)
+    .not("counterparty_iban", "is", null);
+
+  for (const tx of transactions ?? []) {
+    if (tx.counterparty_iban && ownIbans.has(tx.counterparty_iban)) {
+      await supabase
+        .from("transactions")
+        .update({ is_transfer: true, reviewed: true })
+        .eq("id", tx.id);
+    }
+  }
 }
 
 export async function syncBankConnection(
@@ -85,6 +131,7 @@ export async function syncBankConnection(
           amount: toSignedAmount(tx),
           currency: tx.transaction_amount.currency,
           counterparty_name: counterpartyName(tx),
+          counterparty_iban: counterpartyIban(tx),
           raw_description: (tx.remittance_information ?? []).join(" ") || null,
         };
       })
@@ -104,6 +151,7 @@ export async function syncBankConnection(
       // ignoreDuplicates means only genuinely new rows come back here —
       // safe to run the rule matcher / reclaim auto-linker on exactly those.
       const insertedIds = (inserted ?? []).map((row) => row.id);
+      await markOwnTransfers(supabase, insertedIds);
       await applyCategoryRules(supabase, insertedIds);
       await autoMatchIncomingTransactions(supabase, insertedIds);
     }

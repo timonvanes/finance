@@ -92,7 +92,7 @@ export default async function ReclaimsPage({
 
   const people = peopleWithGroups.map((p) => {
     const group = Array.isArray(p.person_groups) ? p.person_groups[0] : p.person_groups;
-    return { id: p.id, name: p.name, groupName: group?.name ?? null };
+    return { id: p.id, name: p.name, groupName: group?.name ?? null, isSelf: p.is_self };
   });
 
   const openReclaims = reclaims.filter((r) => r.status !== "paid");

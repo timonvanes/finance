@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
           account_uid: account.uid,
           currency: account.currency ?? null,
           display_name: account.name ?? null,
+          iban: account.account_id?.iban ?? null,
         }))
       );
       if (accountsError) {

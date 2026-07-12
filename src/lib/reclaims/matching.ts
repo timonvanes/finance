@@ -140,7 +140,8 @@ export async function autoMatchIncomingTransactions(
     .from("transactions")
     .select("id, booking_date, amount, counterparty_name, raw_description")
     .in("id", incomingTransactionIds)
-    .gt("amount", 0);
+    .gt("amount", 0)
+    .eq("is_transfer", false);
   if (!transactions || transactions.length === 0) return;
 
   const openReclaims = await getOpenReclaims(supabase);
@@ -181,7 +182,8 @@ export async function autoMatchNewReclaim(supabase: SupabaseClient, reclaimId: s
   let query = supabase
     .from("transactions")
     .select("id, booking_date, amount, counterparty_name, raw_description")
-    .gt("amount", 0);
+    .gt("amount", 0)
+    .eq("is_transfer", false);
   if (usedIds.length > 0) {
     query = query.not("id", "in", `(${usedIds.join(",")})`);
   }

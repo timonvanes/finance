@@ -101,6 +101,7 @@ export default async function PeoplePage() {
                   personId={p.id}
                   name={p.name}
                   personGroupId={p.person_group_id}
+                  isSelf={p.is_self}
                   groups={groups}
                 />
               </li>

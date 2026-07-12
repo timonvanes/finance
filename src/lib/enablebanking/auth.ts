@@ -48,6 +48,7 @@ export interface EnableBankingAccount {
   uid: string;
   name?: string;
   currency?: string;
+  account_id?: { iban?: string };
 }
 
 export interface CreateSessionResult {

@@ -8,6 +8,7 @@ interface Person {
   id: string;
   name: string;
   groupName: string | null;
+  isSelf: boolean;
 }
 
 interface TransactionOption {
@@ -130,7 +131,7 @@ export function SplitReclaimForm({
 
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-700">
-          Van wie krijg je geld terug?{" "}
+          Wie deelt er mee (vink ook jezelf aan als je zelf ook een deel had)?{" "}
           {checkedCount > 1 &&
             "(bedrag wordt verdeeld o.b.v. aantal, pas zelf aan indien nodig)"}
         </label>
@@ -184,8 +185,12 @@ export function SplitReclaimForm({
                           recalcWeightedSplit(nextChecked, nextQuantities, txAmount);
                         }}
                       />
-                      <span className="w-28 shrink-0 truncate text-sm text-gray-900">
+                      <span
+                        className="w-28 shrink-0 truncate text-sm text-gray-900"
+                        title={person.isSelf ? "Jouw eigen aandeel — wordt niet gevorderd" : undefined}
+                      >
                         {person.name}
+                        {person.isSelf && " (jij)"}
                       </span>
                       <input
                         type="number"
