@@ -5,6 +5,7 @@ import {
   getUnlinkedIncomingTransactions,
 } from "@/actions/reclaims";
 import { LinkTransaction, UnlinkButton } from "./link-transaction";
+import { ReferenceCode } from "./reference-code";
 
 export default async function ReclaimsPage() {
   const [transactions, reclaims, incomingTransactions] = await Promise.all([
@@ -117,7 +118,12 @@ export default async function ReclaimsPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Overzicht</h2>
+        <h2 className="mb-1 text-sm font-medium text-gray-700">Overzicht</h2>
+        <p className="mb-2 text-xs text-gray-500">
+          Klik op de code bij een openstaande terugvordering om 'm te kopiëren, en
+          zet 'm in de omschrijving van je Tikkie/betaalverzoek — dan koppelt de
+          betaling straks vanzelf.
+        </p>
         {reclaims.length > 0 ? (
           <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
             {reclaims.map((r) => {
@@ -131,8 +137,11 @@ export default async function ReclaimsPage() {
                 <li key={r.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-gray-900">
+                      <p className="flex flex-wrap items-center gap-2 truncate font-medium text-gray-900">
                         {r.person_name} · €{r.computed_amount.toFixed(2)}
+                        {r.status !== "paid" && r.reference_code && (
+                          <ReferenceCode code={r.reference_code} />
+                        )}
                       </p>
                       <p className="truncate text-gray-500">
                         {relatedTx?.counterparty_name ?? "Onbekend"} ·{" "}
