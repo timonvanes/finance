@@ -93,6 +93,32 @@ export async function createCategory(formData: FormData) {
   if (error) throw error;
 }
 
+export async function updateCategoryName(categoryId: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("categories")
+    .update({ name: trimmed })
+    .eq("id", categoryId);
+  if (error) throw error;
+}
+
+export async function deleteCategory(categoryId: string) {
+  const supabase = await createClient();
+
+  // Transactions using this category fall back to uncategorized rather
+  // than being left with a dangling category_source.
+  const { error: clearError } = await supabase
+    .from("transactions")
+    .update({ category_id: null, category_source: "none" })
+    .eq("category_id", categoryId);
+  if (clearError) throw clearError;
+
+  const { error } = await supabase.from("categories").delete().eq("id", categoryId);
+  if (error) throw error;
+}
+
 export async function updateTransactionCategory(
   transactionId: string,
   categoryId: string

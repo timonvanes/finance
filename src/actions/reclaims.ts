@@ -200,8 +200,31 @@ export async function markReclaimPaid(reclaimId: string) {
 
 export async function deleteReclaim(reclaimId: string) {
   const supabase = await createClient();
+
+  const { data: reclaim, error: fetchError } = await supabase
+    .from("reclaims")
+    .select("transaction_id")
+    .eq("id", reclaimId)
+    .single();
+  if (fetchError) throw fetchError;
+
   const { error } = await supabase.from("reclaims").delete().eq("id", reclaimId);
   if (error) throw error;
+
+  // If no other reclaim still covers this transaction, send it back to the
+  // transactions to-do list instead of leaving it in reviewed limbo.
+  const { data: remaining } = await supabase
+    .from("reclaims")
+    .select("id")
+    .eq("transaction_id", reclaim.transaction_id)
+    .limit(1);
+
+  if (!remaining || remaining.length === 0) {
+    await supabase
+      .from("transactions")
+      .update({ flagged_for_reclaim: false, reviewed: false })
+      .eq("id", reclaim.transaction_id);
+  }
 }
 
 // Link an incoming transaction (the actual payback) to a reclaim, and mark

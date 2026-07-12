@@ -1,4 +1,5 @@
 import { createCategory, getCategories } from "@/actions/transactions";
+import { CategoryRow } from "./category-row";
 
 export default async function CategoriesPage() {
   const categories = await getCategories();
@@ -55,8 +56,8 @@ export default async function CategoriesPage() {
         <h2 className="mb-2 text-sm font-medium text-gray-700">Uitgaven</h2>
         <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
           {expenseCategories.map((c) => (
-            <li key={c.id} className="px-4 py-2 text-sm text-gray-900">
-              {c.name}
+            <li key={c.id} className="flex items-center px-4 py-2 text-sm text-gray-900">
+              <CategoryRow categoryId={c.id} name={c.name} />
             </li>
           ))}
         </ul>
@@ -66,8 +67,8 @@ export default async function CategoriesPage() {
         <h2 className="mb-2 text-sm font-medium text-gray-700">Inkomen</h2>
         <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
           {incomeCategories.map((c) => (
-            <li key={c.id} className="px-4 py-2 text-sm text-gray-900">
-              {c.name}
+            <li key={c.id} className="flex items-center px-4 py-2 text-sm text-gray-900">
+              <CategoryRow categoryId={c.id} name={c.name} />
             </li>
           ))}
         </ul>
