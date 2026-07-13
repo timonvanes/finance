@@ -6,6 +6,7 @@ import { ReviewActions } from "./review-actions";
 
 const FILTERS = [
   { value: "unreviewed", label: "Te controleren" },
+  { value: "uncategorized", label: "Te categoriseren" },
   { value: "all", label: "Alles" },
   { value: "expense", label: "Afschrijvingen" },
   { value: "income", label: "Bijschrijvingen" },
@@ -37,7 +38,7 @@ export default async function TransactionsPage({
     // "Historie vanaf" date without deleting them.
     .from("visible_transactions")
     .select(
-      `id, booking_date, amount, currency, counterparty_name, raw_description, category_id, flagged_for_reclaim, reviewed, is_transfer,
+      `id, booking_date, amount, currency, counterparty_name, raw_description, category_id, category_source, flagged_for_reclaim, reviewed, is_transfer,
       bank_accounts(bank_connections(institution_name))`
     )
     .order("booking_date", { ascending: activeSort === "asc" })
@@ -46,6 +47,8 @@ export default async function TransactionsPage({
   if (activeFilter === "expense") query = query.lt("amount", 0);
   if (activeFilter === "income") query = query.gt("amount", 0);
   if (activeFilter === "unreviewed") query = query.eq("reviewed", false).lt("amount", 0);
+  if (activeFilter === "uncategorized")
+    query = query.eq("category_source", "none").eq("is_transfer", false);
 
   const [{ data: transactions }, categories] = await Promise.all([
     query,
@@ -80,6 +83,21 @@ export default async function TransactionsPage({
           </Link>
         </div>
       </div>
+
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-full border border-red-300 bg-red-50" />
+          geen categorie
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-full border border-amber-300 bg-amber-50" />
+          automatisch toegekend
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-full border border-green-300 bg-green-50" />
+          zelf gecontroleerd
+        </span>
+      </p>
 
       {transactions && transactions.length > 0 ? (
         <ul className="mt-4 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
@@ -118,6 +136,7 @@ export default async function TransactionsPage({
                     <CategorySelect
                       transactionId={tx.id}
                       categoryId={tx.category_id}
+                      categorySource={tx.category_source}
                       categories={categories}
                     />
                     <span
@@ -156,6 +175,10 @@ export default async function TransactionsPage({
             alle transacties
           </Link>
           .
+        </p>
+      ) : activeFilter === "uncategorized" ? (
+        <p className="mt-4 text-sm text-gray-500">
+          Niks te categoriseren — alles heeft al een categorie.
         </p>
       ) : (
         <p className="mt-4 text-sm text-gray-500">

@@ -39,13 +39,18 @@ export async function getDashboardSummary() {
   const supabase = await createClient();
   const { start, end } = currentMonthRange();
 
-  const [{ count: unreviewedCount }, { data: openReclaims }, { data: monthTx }] =
+  const [{ count: unreviewedCount }, { count: uncategorizedCount }, { data: openReclaims }, { data: monthTx }] =
     await Promise.all([
       supabase
         .from("visible_transactions")
         .select("id", { count: "exact", head: true })
         .eq("reviewed", false)
         .lt("amount", 0),
+      supabase
+        .from("visible_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("category_source", "none")
+        .eq("is_transfer", false),
       supabase.from("reclaims").select("computed_amount").neq("status", "paid"),
       supabase
         .from("visible_transactions")
@@ -68,6 +73,7 @@ export async function getDashboardSummary() {
 
   return {
     unreviewedCount: unreviewedCount ?? 0,
+    uncategorizedCount: uncategorizedCount ?? 0,
     outstandingReclaimsTotal,
     monthIncome,
     monthExpense,

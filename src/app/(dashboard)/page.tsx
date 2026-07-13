@@ -72,13 +72,20 @@ export default async function DashboardPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-gray-700">Te doen</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Link
             href="/transactions"
             className="min-h-[64px] rounded-md border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50"
           >
             <p className="text-2xl font-semibold text-gray-900">{summary.unreviewedCount}</p>
             <p className="text-sm text-gray-500">nog te controleren</p>
+          </Link>
+          <Link
+            href="/transactions?type=uncategorized"
+            className="min-h-[64px] rounded-md border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50"
+          >
+            <p className="text-2xl font-semibold text-gray-900">{summary.uncategorizedCount}</p>
+            <p className="text-sm text-gray-500">nog te categoriseren</p>
           </Link>
           <Link
             href="/reclaims"
