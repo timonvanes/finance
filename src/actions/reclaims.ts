@@ -2,16 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
-
-const CODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // no 0/O/1/I to avoid confusion
-
-function generateReferenceCode() {
-  let code = "";
-  for (let i = 0; i < 5; i++) {
-    code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
-  }
-  return `TR-${code}`;
-}
+import { generateReferenceCode } from "@/lib/reclaims/reference-code";
 
 export async function getRecentExpenseTransactions() {
   const supabase = await createClient();
@@ -107,6 +98,8 @@ export async function getUnlinkedIncomingTransactions() {
   return data;
 }
 
+// Reclaims bundled into a payment request are shown grouped under that
+// betaalverzoek instead (see getPaymentRequests), not in this flat list.
 export async function getReclaims() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -117,6 +110,7 @@ export async function getReclaims() {
       transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount),
       settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
+    .is("payment_request_id", null)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
