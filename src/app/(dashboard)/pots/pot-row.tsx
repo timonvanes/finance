@@ -2,7 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addPotEntry, deletePot, deletePotEntry, updatePotMatchText } from "@/actions/pots";
+import {
+  addPotEntry,
+  deletePot,
+  deletePotEntry,
+  updatePotMatchText,
+  updatePotOpeningBalance,
+} from "@/actions/pots";
+import { computePotBalance } from "@/lib/pots/balance";
 
 interface Entry {
   id: string;
@@ -35,6 +42,8 @@ export function PotRow({
     kind: string;
     target_amount: number | null;
     match_text: string | null;
+    opening_balance: number;
+    opening_balance_date: string;
     pot_entries: Entry[];
   };
 }) {
@@ -43,6 +52,8 @@ export function PotRow({
   const [showEntries, setShowEntries] = useState(false);
   const [matchText, setMatchText] = useState(pot.match_text ?? "");
   const [matchResult, setMatchResult] = useState<string | null>(null);
+  const [openingBalance, setOpeningBalance] = useState(String(pot.opening_balance));
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(pot.opening_balance_date);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -55,7 +66,14 @@ export function PotRow({
     });
   }
 
-  const balance = pot.pot_entries.reduce((sum, e) => sum + e.amount, 0);
+  function saveOpeningBalance() {
+    startTransition(async () => {
+      await updatePotOpeningBalance(pot.id, Number(openingBalance) || 0, openingBalanceDate);
+      router.refresh();
+    });
+  }
+
+  const balance = computePotBalance(pot);
   const pct =
     pot.target_amount && pot.target_amount > 0
       ? Math.min(100, (balance / pot.target_amount) * 100)
@@ -141,6 +159,41 @@ export function PotRow({
         {matchResult && <span className="text-xs text-green-700">{matchResult}</span>}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-md bg-gray-50 p-2">
+        <label
+          className="text-xs text-gray-500"
+          title="Stond er al geld op deze rekening/potje voordat je 'm hier bijhield? Vul dat bedrag en de datum in, zodat het saldo klopt."
+        >
+          Startbedrag per datum:
+        </label>
+        <span className="text-xs text-gray-400">€</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          value={openingBalance}
+          disabled={isPending}
+          onChange={(e) => setOpeningBalance(e.target.value)}
+          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+        />
+        <input
+          type="date"
+          value={openingBalanceDate}
+          disabled={isPending}
+          onChange={(e) => setOpeningBalanceDate(e.target.value)}
+          className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+        />
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={saveOpeningBalance}
+          className="text-xs font-medium text-gray-900 underline disabled:opacity-50"
+        >
+          Opslaan
+        </button>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-gray-400">€</span>
         <input
@@ -199,6 +252,14 @@ export function PotRow({
                     {e.transaction_id && (
                       <span className="ml-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-blue-700">
                         automatisch
+                      </span>
+                    )}
+                    {e.entry_date < pot.opening_balance_date && (
+                      <span
+                        className="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-gray-500"
+                        title="Voor de startdatum — telt niet mee in het saldo"
+                      >
+                        telt niet mee
                       </span>
                     )}
                   </span>

@@ -137,7 +137,9 @@ export default async function TransactionsPage({
                       transactionId={tx.id}
                       categoryId={tx.category_id}
                       categorySource={tx.category_source}
-                      categories={categories}
+                      categories={categories.filter((c) =>
+                        tx.amount > 0 ? c.kind === "income" : c.kind === "expense"
+                      )}
                     />
                     <span
                       className={

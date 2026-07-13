@@ -1,13 +1,11 @@
 import { createPot, getPots } from "@/actions/pots";
+import { computePotBalance } from "@/lib/pots/balance";
 import { PotRow } from "./pot-row";
 
 export default async function PotsPage() {
   const pots = await getPots();
 
-  const totalBalance = pots.reduce(
-    (sum, pot) => sum + pot.pot_entries.reduce((s, e) => s + e.amount, 0),
-    0
-  );
+  const totalBalance = pots.reduce((sum, pot) => sum + computePotBalance(pot), 0);
 
   return (
     <div className="space-y-8">
@@ -83,6 +81,31 @@ export default async function PotsPage() {
               min="0"
               placeholder="€"
               className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label
+              className="mb-1 block text-xs font-medium text-gray-700"
+              title="Staat er al geld op deze rekening/potje? Vul hier het bedrag in zodat het saldo klopt."
+            >
+              Startbedrag (optioneel)
+            </label>
+            <input
+              type="number"
+              name="openingBalance"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              placeholder="€"
+              className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-700">Per datum</label>
+            <input
+              type="date"
+              name="openingBalanceDate"
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
           <button

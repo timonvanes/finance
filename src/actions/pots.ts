@@ -8,7 +8,7 @@ export async function getPots() {
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, target_amount, match_text, pot_entries(id, amount, note, entry_date, transaction_id)"
+      "id, name, kind, target_amount, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -21,13 +21,29 @@ export async function createPot(formData: FormData) {
   const kind = (formData.get("kind") as string) || "savings";
   const targetRaw = formData.get("targetAmount") as string;
   const targetAmount = targetRaw ? Number(targetRaw) : null;
+  const openingBalanceRaw = formData.get("openingBalance") as string;
+  const openingBalanceDate = (formData.get("openingBalanceDate") as string) || undefined;
 
   const supabase = await createClient();
   const { error } = await supabase.from("pots").insert({
     name,
     kind,
     target_amount: targetAmount && targetAmount > 0 ? targetAmount : null,
+    opening_balance: openingBalanceRaw ? Number(openingBalanceRaw) : 0,
+    ...(openingBalanceDate ? { opening_balance_date: openingBalanceDate } : {}),
   });
+  if (error) throw error;
+}
+
+// The opening balance is a starting point as of a date, not a regular
+// entry — entries dated before it aren't counted, to avoid double-counting
+// money that's already baked into the manually-entered starting amount.
+export async function updatePotOpeningBalance(potId: string, amount: number, date: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pots")
+    .update({ opening_balance: amount || 0, opening_balance_date: date })
+    .eq("id", potId);
   if (error) throw error;
 }
 
