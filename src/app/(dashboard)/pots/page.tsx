@@ -19,9 +19,27 @@ export default async function PotsPage() {
         </p>
         <p className="mt-1 text-xs text-gray-400">
           Spaar- en beleggingsrekeningen zijn via de bankkoppeling niet zichtbaar (PSD2
-          geeft alleen toegang tot betaalrekeningen), dus inleg en opnames registreer je
-          hier zelf.
+          geeft alleen toegang tot betaalrekeningen). Vul bij een potje een
+          &quot;herkenningstekst&quot; in en overboekingen ernaartoe/vandaan worden
+          automatisch herkend als inleg/opname — anders registreer je het hieronder zelf.
         </p>
+        <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+          <p className="font-medium text-gray-700">Hoe vind je de herkenningstekst?</p>
+          <ul className="mt-1 list-disc space-y-1 pl-4">
+            <li>
+              <span className="font-medium">ING (Oranje Spaarrekening):</span> open een
+              overboeking naar/van je spaarrekening bij Transacties en kijk naar het
+              nummer achter de naam, bv. <code className="rounded bg-white px-1">Z16377129</code>{" "}
+              in &quot;Oranje spaarrekening Z16377129&quot; — elk sub-potje heeft een eigen
+              nummer.
+            </li>
+            <li>
+              <span className="font-medium">Rabobank (potjes):</span> gebruik de naam die je
+              zelf aan het potje hebt gegeven bij de bank, zoals die in de omschrijving
+              verschijnt.
+            </li>
+          </ul>
+        </div>
       </div>
 
       <section>

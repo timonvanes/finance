@@ -119,15 +119,15 @@ export function PotRow({
       )}
 
       <div className="flex flex-wrap items-center gap-2 rounded-md bg-gray-50 p-2">
-        <label className="text-xs text-gray-500">
-          Herkenningstekst (bv. naam potje bij je bank):
+        <label className="text-xs text-gray-500" title="ING: het nummer achter 'Oranje Spaarrekening' (bv. Z16377129). Rabobank: de naam van je potje.">
+          Herkenningstekst (zie uitleg hierboven):
         </label>
         <input
           type="text"
           value={matchText}
           disabled={isPending}
           onChange={(e) => setMatchText(e.target.value)}
-          placeholder="bv. Vakantie Italië"
+          placeholder="bv. Z16377129 of Vakantie Italië"
           className="w-40 rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
         />
         <button

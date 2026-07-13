@@ -24,8 +24,10 @@ export function SyncFromDate({
   }
 
   return (
-    <div className="flex items-center gap-1 text-xs text-gray-500">
-      <label>Historie vanaf:</label>
+    <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+      <label title="Verbergt transacties van vóór deze datum uit alle overzichten en analyses. Niets wordt verwijderd — leeg de datum om weer alles te zien.">
+        Historie vanaf (standaard 90 dagen):
+      </label>
       <input
         type="date"
         value={value}
