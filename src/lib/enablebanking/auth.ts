@@ -44,16 +44,11 @@ export async function startAuthorization({
   });
 }
 
-export interface EnableBankingAccount {
-  uid: string;
-  name?: string;
-  currency?: string;
-  account_id?: { iban?: string };
-}
-
+// The /sessions response only lists account UIDs — name/currency/IBAN
+// require a separate GET /accounts/{uid}/details call per account.
 export interface CreateSessionResult {
   session_id: string;
-  accounts: EnableBankingAccount[];
+  accounts: string[];
   access: { valid_until: string };
 }
 
@@ -62,4 +57,34 @@ export async function createSession(code: string): Promise<CreateSessionResult> 
     method: "POST",
     body: JSON.stringify({ code }),
   });
+}
+
+// Some ASPSPs populate the session's account list asynchronously right
+// after authorization — poll a couple of times before concluding there's
+// genuinely nothing there.
+export async function createSessionWithRetry(code: string): Promise<CreateSessionResult> {
+  const session = await createSession(code);
+  if (session.accounts.length > 0) return session;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const retried = await enableBankingFetch<CreateSessionResult>(
+      `/sessions/${session.session_id}`
+    );
+    if (retried.accounts.length > 0) return retried;
+  }
+  return session;
+}
+
+export interface EnableBankingAccountDetails {
+  uid: string;
+  name?: string;
+  currency?: string;
+  account_id?: { iban?: string };
+}
+
+export async function getAccountDetails(
+  accountUid: string
+): Promise<EnableBankingAccountDetails> {
+  return enableBankingFetch<EnableBankingAccountDetails>(`/accounts/${accountUid}/details`);
 }

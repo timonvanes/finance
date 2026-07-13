@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createSession } from "@/lib/enablebanking/auth";
+import { createSessionWithRetry, getAccountDetails } from "@/lib/enablebanking/auth";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(redirectTo);
     }
 
-    const session = await createSession(code);
+    const session = await createSessionWithRetry(code);
 
     const { error: updateError } = await supabase
       .from("bank_connections")
@@ -50,8 +50,24 @@ export async function GET(request: NextRequest) {
     }
 
     if (session.accounts.length > 0) {
+      // session.accounts is just a list of UIDs — name/currency/IBAN come
+      // from a separate per-account details call.
+      type AccountDetailsOrFallback =
+        | Awaited<ReturnType<typeof getAccountDetails>>
+        | { uid: string; name?: undefined; currency?: undefined; account_id?: undefined };
+
+      const accountDetails: AccountDetailsOrFallback[] = await Promise.all(
+        session.accounts.map(
+          (uid): Promise<AccountDetailsOrFallback> =>
+            getAccountDetails(uid).catch((err) => {
+              console.error(`enablebanking callback: details fetch failed for ${uid}`, err);
+              return { uid };
+            })
+        )
+      );
+
       const { error: accountsError } = await supabase.from("bank_accounts").insert(
-        session.accounts.map((account) => ({
+        accountDetails.map((account) => ({
           bank_connection_id: connection.id,
           account_uid: account.uid,
           currency: account.currency ?? null,
@@ -67,6 +83,12 @@ export async function GET(request: NextRequest) {
         );
         return NextResponse.redirect(redirectTo);
       }
+    } else {
+      // The bank authorized the session but granted access to zero
+      // accounts — likely an account-selection step was skipped at the
+      // bank's own consent screen. Surface this instead of silently
+      // showing "linked" with nothing to sync.
+      redirectTo.searchParams.set("warning", "no_accounts");
     }
 
     redirectTo.searchParams.set("linked", "1");

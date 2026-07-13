@@ -62,14 +62,15 @@ function counterpartyIban(tx: EnableBankingTransaction): string | null {
 const HISTORY_DAYS = 90;
 
 async function fetchAllTransactions(
-  accountUid: string
+  accountUid: string,
+  syncFromDate: string | null
 ): Promise<EnableBankingTransaction[]> {
   const all: EnableBankingTransaction[] = [];
   let continuationKey: string | undefined;
 
-  const dateFrom = new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const dateFrom =
+    syncFromDate ??
+    new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   do {
     const params = new URLSearchParams({ date_from: dateFrom });
@@ -192,17 +193,24 @@ export async function syncBankConnection(
   supabase: SupabaseClient,
   bankConnectionId: string
 ) {
-  const { data: accounts, error: accountsError } = await supabase
-    .from("bank_accounts")
-    .select("id, account_uid")
-    .eq("bank_connection_id", bankConnectionId);
+  const [{ data: accounts, error: accountsError }, { data: connection }] = await Promise.all([
+    supabase.from("bank_accounts").select("id, account_uid").eq("bank_connection_id", bankConnectionId),
+    supabase
+      .from("bank_connections")
+      .select("sync_from_date")
+      .eq("id", bankConnectionId)
+      .single(),
+  ]);
 
   if (accountsError) throw accountsError;
 
   let syncedCount = 0;
 
   for (const account of accounts ?? []) {
-    const transactions = await fetchAllTransactions(account.account_uid);
+    const transactions = await fetchAllTransactions(
+      account.account_uid,
+      connection?.sync_from_date ?? null
+    );
 
     const rows = transactions
       .map((tx) => {

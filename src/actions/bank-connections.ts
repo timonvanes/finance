@@ -65,6 +65,16 @@ export async function syncNow(bankConnectionId: string) {
   return count;
 }
 
+// null clears the override, falling back to the default 90-day lookback.
+export async function updateSyncFromDate(bankConnectionId: string, date: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("bank_connections")
+    .update({ sync_from_date: date })
+    .eq("id", bankConnectionId);
+  if (error) throw error;
+}
+
 const AUTO_SYNC_STALE_MS = 60 * 60 * 1000; // 1 hour
 
 // Called (via next/server's `after`) when the dashboard loads, so banks stay
