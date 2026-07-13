@@ -15,7 +15,7 @@ export async function getMonthlySpendByCategory() {
   const { start, end } = currentMonthRange();
 
   const { data, error } = await supabase
-    .from("transactions")
+    .from("visible_transactions")
     .select("amount, category_id, categories(name)")
     .lt("amount", 0)
     .eq("is_transfer", false)
@@ -42,13 +42,13 @@ export async function getDashboardSummary() {
   const [{ count: unreviewedCount }, { data: openReclaims }, { data: monthTx }] =
     await Promise.all([
       supabase
-        .from("transactions")
+        .from("visible_transactions")
         .select("id", { count: "exact", head: true })
         .eq("reviewed", false)
         .lt("amount", 0),
       supabase.from("reclaims").select("computed_amount").neq("status", "paid"),
       supabase
-        .from("transactions")
+        .from("visible_transactions")
         .select("amount")
         .eq("is_transfer", false)
         .gte("booking_date", start)

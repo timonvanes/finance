@@ -23,7 +23,7 @@ export async function detectRecurringPayments(
     .slice(0, 10);
 
   const { data: transactions } = await supabase
-    .from("transactions")
+    .from("visible_transactions")
     .select("counterparty_name, amount, booking_date")
     .lt("amount", 0)
     .eq("is_transfer", false)

@@ -16,7 +16,7 @@ function generateReferenceCode() {
 export async function getRecentExpenseTransactions() {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("transactions")
+    .from("visible_transactions")
     .select("id, booking_date, amount, counterparty_name, raw_description")
     .lt("amount", 0)
     .eq("is_transfer", false)
@@ -31,7 +31,7 @@ export async function getRecentExpenseTransactions() {
 export async function getQueuedTransactions() {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("transactions")
+    .from("visible_transactions")
     .select("id, booking_date, amount, counterparty_name, raw_description")
     .eq("flagged_for_reclaim", true)
     .order("booking_date", { ascending: false });
@@ -91,7 +91,7 @@ export async function getUnlinkedIncomingTransactions() {
   const usedIds = (alreadyLinked ?? []).map((r) => r.settled_transaction_id);
 
   let query = supabase
-    .from("transactions")
+    .from("visible_transactions")
     .select("id, booking_date, amount, counterparty_name")
     .gt("amount", 0)
     .eq("is_transfer", false)

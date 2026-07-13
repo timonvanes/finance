@@ -33,7 +33,9 @@ export default async function TransactionsPage({
   const supabase = await createClient();
 
   let query = supabase
-    .from("transactions")
+    // visible_transactions hides rows from before a connection's
+    // "Historie vanaf" date without deleting them.
+    .from("visible_transactions")
     .select(
       `id, booking_date, amount, currency, counterparty_name, raw_description, category_id, flagged_for_reclaim, reviewed, is_transfer,
       bank_accounts(bank_connections(institution_name))`

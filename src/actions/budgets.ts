@@ -57,7 +57,7 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
     await Promise.all([
       supabase.from("budgets").select("category_id, monthly_limit, categories(name)"),
       supabase
-        .from("transactions")
+        .from("visible_transactions")
         .select("amount, category_id")
         .lt("amount", 0)
         .eq("is_transfer", false)
@@ -119,7 +119,7 @@ export async function getSpendingAnomaly(): Promise<SpendingAnomaly | null> {
     .slice(0, 10);
 
   const { data: transactions, error } = await supabase
-    .from("transactions")
+    .from("visible_transactions")
     .select("amount, booking_date")
     .lt("amount", 0)
     .eq("is_transfer", false)

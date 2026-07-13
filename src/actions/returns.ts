@@ -105,7 +105,7 @@ export async function getUnlinkedIncomingTransactionsForReturns() {
   const usedIds = (alreadyLinked ?? []).map((o) => o.refund_transaction_id);
 
   let query = supabase
-    .from("transactions")
+    .from("visible_transactions")
     .select("id, booking_date, amount, counterparty_name")
     .gt("amount", 0)
     .eq("is_transfer", false)
