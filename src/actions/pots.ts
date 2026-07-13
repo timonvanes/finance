@@ -1,12 +1,15 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { rematchPotHistory } from "@/lib/pots/matching";
 
 export async function getPots() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("pots")
-    .select("id, name, kind, target_amount, pot_entries(id, amount, note, entry_date)")
+    .select(
+      "id, name, kind, target_amount, match_text, pot_entries(id, amount, note, entry_date, transaction_id)"
+    )
     .order("created_at", { ascending: true });
   if (error) throw error;
   return data;
@@ -32,6 +35,20 @@ export async function deletePot(potId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("pots").delete().eq("id", potId);
   if (error) throw error;
+}
+
+// Setting/changing the match text also re-scans existing history, since
+// ongoing sync only checks newly-synced transactions going forward.
+export async function updatePotMatchText(potId: string, matchText: string | null) {
+  const supabase = await createClient();
+  const trimmed = matchText?.trim() || null;
+  const { error } = await supabase.from("pots").update({ match_text: trimmed }).eq("id", potId);
+  if (error) throw error;
+
+  if (trimmed) {
+    return rematchPotHistory(supabase, potId);
+  }
+  return 0;
 }
 
 // direction "withdraw" stores the amount negative.

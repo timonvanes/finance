@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addPotEntry, deletePot, deletePotEntry } from "@/actions/pots";
+import { addPotEntry, deletePot, deletePotEntry, updatePotMatchText } from "@/actions/pots";
 
 interface Entry {
   id: string;
   amount: number;
   note: string | null;
   entry_date: string;
+  transaction_id: string | null;
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -33,14 +34,26 @@ export function PotRow({
     name: string;
     kind: string;
     target_amount: number | null;
+    match_text: string | null;
     pot_entries: Entry[];
   };
 }) {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [showEntries, setShowEntries] = useState(false);
+  const [matchText, setMatchText] = useState(pot.match_text ?? "");
+  const [matchResult, setMatchResult] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+
+  function saveMatchText() {
+    setMatchResult(null);
+    startTransition(async () => {
+      const count = await updatePotMatchText(pot.id, matchText || null);
+      setMatchResult(matchText ? `${count} transactie(s) gekoppeld` : null);
+      router.refresh();
+    });
+  }
 
   const balance = pot.pot_entries.reduce((sum, e) => sum + e.amount, 0);
   const pct =
@@ -105,6 +118,29 @@ export function PotRow({
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-2 rounded-md bg-gray-50 p-2">
+        <label className="text-xs text-gray-500">
+          Herkenningstekst (bv. naam potje bij je bank):
+        </label>
+        <input
+          type="text"
+          value={matchText}
+          disabled={isPending}
+          onChange={(e) => setMatchText(e.target.value)}
+          placeholder="bv. Vakantie Italië"
+          className="w-40 rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+        />
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={saveMatchText}
+          className="text-xs font-medium text-gray-900 underline disabled:opacity-50"
+        >
+          Opslaan
+        </button>
+        {matchResult && <span className="text-xs text-green-700">{matchResult}</span>}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-gray-400">€</span>
         <input
@@ -160,6 +196,11 @@ export function PotRow({
                   <span className="text-gray-500">
                     {new Date(e.entry_date).toLocaleDateString("nl-NL")}
                     {e.note && ` · ${e.note}`}
+                    {e.transaction_id && (
+                      <span className="ml-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-blue-700">
+                        automatisch
+                      </span>
+                    )}
                   </span>
                   <span className="flex items-center gap-2">
                     <span
