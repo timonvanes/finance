@@ -77,9 +77,11 @@ export default async function BankConnectionsPage({
                           : STATUS_LABELS[c.consent_status] ?? c.consent_status}
                         {c.last_synced_at &&
                           !hasNoAccounts &&
+                          // Rendered server-side (UTC on Vercel) — without an
+                          // explicit timezone this shows 1-2h behind NL.
                           ` · laatst gesynchroniseerd ${new Date(
                             c.last_synced_at
-                          ).toLocaleString("nl-NL")}`}
+                          ).toLocaleString("nl-NL", { timeZone: "Europe/Amsterdam" })}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
