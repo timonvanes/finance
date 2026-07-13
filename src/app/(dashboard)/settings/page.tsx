@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const SETTINGS_LINKS = [
   { href: "/settings/categories", label: "Categorieën", description: "Beheer je uitgaven- en inkomencategorieën" },
+  { href: "/settings/budgets", label: "Budgetdoelen", description: "Maandbudget per categorie, met tempo-waarschuwingen op het overzicht" },
   { href: "/settings/people", label: "Personen", description: "Personen en groepen voor terugvorderingen" },
   { href: "/settings/bank-connections", label: "Bank", description: "Bankkoppelingen en synchronisatie" },
   { href: "/settings/own-ibans", label: "Eigen IBAN's", description: "Extra eigen rekeningen (bv. Revolut) voor herkenning van verschuivingen" },

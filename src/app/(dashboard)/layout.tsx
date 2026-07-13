@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { href: "/transactions", label: "Transacties" },
   { href: "/reclaims", label: "Terugvorderingen" },
   { href: "/returns", label: "Retouren" },
+  { href: "/pots", label: "Potjes" },
   { href: "/settings", label: "Instellingen" },
 ];
 

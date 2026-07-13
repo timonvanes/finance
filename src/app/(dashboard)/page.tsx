@@ -5,6 +5,7 @@ import {
   getMonthlySpendByCategory,
   getRecurringPayments,
 } from "@/actions/dashboard";
+import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections } from "@/actions/bank-connections";
 
 const MONTH_NAMES = [
@@ -17,18 +18,57 @@ export default async function DashboardPage() {
   // response is sent, throttled to once per hour per connection.
   after(() => autoSyncStaleConnections());
 
-  const [summary, categorySpend, recurring] = await Promise.all([
+  const [summary, categorySpend, recurring, budgetStatus, anomaly] = await Promise.all([
     getDashboardSummary(),
     getMonthlySpendByCategory(),
     getRecurringPayments(),
+    getBudgetStatus(),
+    getSpendingAnomaly(),
   ]);
 
   const monthLabel = MONTH_NAMES[new Date().getMonth()];
   const maxCategoryTotal = Math.max(1, ...categorySpend.map((c) => c.total));
+  const budgetWarnings = budgetStatus.filter((b) => b.aheadOfPace || b.overBudget);
 
   return (
     <div className="space-y-8">
       <h1 className="text-lg font-semibold text-gray-900">Overzicht</h1>
+
+      {(anomaly || budgetWarnings.length > 0) && (
+        <section className="space-y-2">
+          {anomaly && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              Je hebt tot nu toe deze maand €{anomaly.monthToDateSpend.toFixed(0)} uitgegeven
+              — {Math.round(anomaly.pctAbove)}% meer dan je gewoonlijk op dit punt van de
+              maand hebt uitgegeven (~€{anomaly.usualMonthToDateSpend.toFixed(0)}).
+            </p>
+          )}
+          {budgetWarnings.map((b) => (
+            <p
+              key={b.categoryId}
+              className={
+                b.overBudget
+                  ? "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+                  : "rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
+              }
+            >
+              {b.overBudget ? (
+                <>
+                  Budget <span className="font-medium">{b.categoryName}</span> overschreden:
+                  €{b.spent.toFixed(0)} van €{b.monthlyLimit.toFixed(0)}.
+                </>
+              ) : (
+                <>
+                  Je zit op {Math.round(b.pctOfMonthElapsed)}% van de maand, maar al op{" "}
+                  {Math.round(b.pctUsed)}% van je budget voor{" "}
+                  <span className="font-medium">{b.categoryName}</span> (€{b.spent.toFixed(0)}{" "}
+                  van €{b.monthlyLimit.toFixed(0)}).
+                </>
+              )}
+            </p>
+          ))}
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-gray-700">Te doen</h2>
@@ -65,6 +105,55 @@ export default async function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {budgetStatus.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-gray-700">Budgetten ({monthLabel})</h2>
+            <Link href="/settings/budgets" className="text-xs text-gray-500 underline">
+              Aanpassen
+            </Link>
+          </div>
+          <ul className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+            {budgetStatus.map((b) => (
+              <li key={b.categoryId}>
+                <div className="mb-1 flex items-center justify-between text-sm">
+                  <span className="text-gray-900">{b.categoryName}</span>
+                  <span
+                    className={
+                      b.overBudget
+                        ? "font-medium text-red-700"
+                        : b.aheadOfPace
+                          ? "font-medium text-amber-700"
+                          : "font-medium text-gray-900"
+                    }
+                  >
+                    €{b.spent.toFixed(2)} / €{b.monthlyLimit.toFixed(2)}
+                  </span>
+                </div>
+                <div className="relative h-2 rounded-full bg-gray-100">
+                  <div
+                    className={
+                      b.overBudget
+                        ? "h-2 rounded-full bg-red-600"
+                        : b.aheadOfPace
+                          ? "h-2 rounded-full bg-amber-500"
+                          : "h-2 rounded-full bg-green-600"
+                    }
+                    style={{ width: `${Math.min(100, b.pctUsed)}%` }}
+                  />
+                  {/* marker for how far the month has progressed */}
+                  <div
+                    className="absolute top-[-2px] h-3 w-0.5 bg-gray-400"
+                    style={{ left: `${b.pctOfMonthElapsed}%` }}
+                    title="Zover is de maand"
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-gray-700">
