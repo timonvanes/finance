@@ -61,11 +61,23 @@ export async function markOwnExpense(formData: FormData) {
   if (error) throw error;
 }
 
+// Third triage option: the automatic own-account-transfer detection
+// (IBAN/name/amount matching) doesn't always catch everything — let the
+// user flag it manually instead of it sitting in the to-do list.
+export async function markAsTransfer(transactionId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transactions")
+    .update({ is_transfer: true, reviewed: true, flagged_for_reclaim: false })
+    .eq("id", transactionId);
+  if (error) throw error;
+}
+
 export async function unreviewTransaction(transactionId: string) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("transactions")
-    .update({ reviewed: false })
+    .update({ reviewed: false, is_transfer: false })
     .eq("id", transactionId);
   if (error) throw error;
 }
@@ -188,6 +200,28 @@ export async function markReclaimPaid(reclaimId: string) {
   const { error } = await supabase
     .from("reclaims")
     .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", reclaimId);
+  if (error) throw error;
+}
+
+// "Niet inbaar": stop chasing this reclaim — it drops out of outstanding
+// totals and auto-matching, and is effectively treated as your own cost
+// from here on (the underlying transaction's amount was already counted
+// as spend regardless of reclaim status).
+export async function writeOffReclaim(reclaimId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("reclaims")
+    .update({ status: "written_off" })
+    .eq("id", reclaimId);
+  if (error) throw error;
+}
+
+export async function undoWriteOffReclaim(reclaimId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("reclaims")
+    .update({ status: "requested" })
     .eq("id", reclaimId);
   if (error) throw error;
 }

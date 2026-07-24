@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { combineReclaims } from "@/actions/payment-requests";
+import { writeOffReclaim } from "@/actions/reclaims";
 import { LinkTransaction, DeleteButton } from "./link-transaction";
 import { ReferenceCode } from "./reference-code";
 
@@ -119,7 +120,23 @@ export function OpenReclaimsList({
                     )}
                   </p>
                 </div>
-                <DeleteButton reclaimId={r.id} />
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => {
+                      if (!confirm(`"${r.person_name}" niet meer proberen te innen? Dit wordt dan als eigen kosten beschouwd.`)) return;
+                      startTransition(async () => {
+                        await writeOffReclaim(r.id);
+                        router.refresh();
+                      });
+                    }}
+                    className="whitespace-nowrap text-xs text-gray-400 underline hover:text-gray-600 disabled:opacity-50"
+                  >
+                    Niet inbaar
+                  </button>
+                  <DeleteButton reclaimId={r.id} />
+                </div>
               </div>
               <LinkTransaction
                 reclaimId={r.id}

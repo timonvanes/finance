@@ -6,7 +6,9 @@ import {
   linkPaymentRequestToTransaction,
   markPaymentRequestPaid,
   uncombinePaymentRequest,
+  undoWriteOffPaymentRequest,
   unlinkPaymentRequest,
+  writeOffPaymentRequest,
 } from "@/actions/payment-requests";
 import { ReferenceCode } from "./reference-code";
 
@@ -61,7 +63,12 @@ export function PaymentRequestRow({
             <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
               gecombineerd ({reclaims.length}x)
             </span>
-            {status !== "paid" && <ReferenceCode code={referenceCode} />}
+            {status === "requested" && <ReferenceCode code={referenceCode} />}
+            {status === "written_off" && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                Niet inbaar
+              </span>
+            )}
           </p>
           <p className="text-gray-500">
             {reclaims
@@ -94,25 +101,56 @@ export function PaymentRequestRow({
               Ongedaan maken
             </button>
           )}
-          {status !== "paid" && (
+          {status === "written_off" && (
             <button
               type="button"
               disabled={isPending}
               onClick={() => {
-                if (!confirm("Deze combinatie ontbinden? De terugvorderingen blijven los bestaan.")) return;
                 startTransition(async () => {
-                  try {
-                    await uncombinePaymentRequest(id);
-                    router.refresh();
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : "Ontbinden mislukt");
-                  }
+                  await undoWriteOffPaymentRequest(id);
+                  router.refresh();
                 });
               }}
               className="text-xs text-gray-400 underline hover:text-gray-600 disabled:opacity-50"
             >
-              Ontbinden
+              Ongedaan maken
             </button>
+          )}
+          {status === "requested" && (
+            <>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  if (!confirm(`"${personName}" niet meer proberen te innen? Dit wordt dan als eigen kosten beschouwd.`)) return;
+                  startTransition(async () => {
+                    await writeOffPaymentRequest(id);
+                    router.refresh();
+                  });
+                }}
+                className="text-xs text-gray-400 underline hover:text-gray-600 disabled:opacity-50"
+              >
+                Niet inbaar
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  if (!confirm("Deze combinatie ontbinden? De terugvorderingen blijven los bestaan.")) return;
+                  startTransition(async () => {
+                    try {
+                      await uncombinePaymentRequest(id);
+                      router.refresh();
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : "Ontbinden mislukt");
+                    }
+                  });
+                }}
+                className="text-xs text-gray-400 underline hover:text-gray-600 disabled:opacity-50"
+              >
+                Ontbinden
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -124,7 +162,7 @@ export function PaymentRequestRow({
           {settledTransaction.amount.toFixed(2)})
         </p>
       )}
-      {status !== "paid" && (
+      {status === "requested" && (
         <div className="flex items-center gap-2">
           <select
             disabled={isPending}

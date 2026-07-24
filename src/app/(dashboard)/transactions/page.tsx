@@ -125,11 +125,6 @@ export default async function TransactionsPage({
                           {bankConnection.institution_name}
                         </span>
                       )}
-                      {tx.is_transfer && (
-                        <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                          Verschuiving eigen rekening
-                        </span>
-                      )}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
@@ -159,13 +154,13 @@ export default async function TransactionsPage({
                     {tx.raw_description}
                   </p>
                 )}
-                {tx.amount < 0 && !tx.is_transfer && (
-                  <ReviewActions
-                    transactionId={tx.id}
-                    reviewed={tx.reviewed}
-                    flaggedForReclaim={tx.flagged_for_reclaim}
-                  />
-                )}
+                <ReviewActions
+                  transactionId={tx.id}
+                  reviewed={tx.reviewed}
+                  flaggedForReclaim={tx.flagged_for_reclaim}
+                  isTransfer={tx.is_transfer}
+                  isExpense={tx.amount < 0}
+                />
               </li>
             );
           })}

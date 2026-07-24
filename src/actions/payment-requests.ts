@@ -117,6 +117,36 @@ export async function markPaymentRequestPaid(paymentRequestId: string) {
   if (reclaimsError) throw reclaimsError;
 }
 
+export async function writeOffPaymentRequest(paymentRequestId: string) {
+  const supabase = await createClient();
+  const { error: prError } = await supabase
+    .from("payment_requests")
+    .update({ status: "written_off" })
+    .eq("id", paymentRequestId);
+  if (prError) throw prError;
+
+  const { error: reclaimsError } = await supabase
+    .from("reclaims")
+    .update({ status: "written_off" })
+    .eq("payment_request_id", paymentRequestId);
+  if (reclaimsError) throw reclaimsError;
+}
+
+export async function undoWriteOffPaymentRequest(paymentRequestId: string) {
+  const supabase = await createClient();
+  const { error: prError } = await supabase
+    .from("payment_requests")
+    .update({ status: "requested" })
+    .eq("id", paymentRequestId);
+  if (prError) throw prError;
+
+  const { error: reclaimsError } = await supabase
+    .from("reclaims")
+    .update({ status: "requested" })
+    .eq("payment_request_id", paymentRequestId);
+  if (reclaimsError) throw reclaimsError;
+}
+
 export async function linkPaymentRequestToTransaction(
   paymentRequestId: string,
   transactionId: string

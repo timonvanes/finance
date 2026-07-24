@@ -4,6 +4,7 @@ import {
   getRecentExpenseTransactions,
   getReclaims,
   getUnlinkedIncomingTransactions,
+  undoWriteOffReclaim,
   unflagTransactionForReclaim,
 } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
@@ -35,7 +36,12 @@ function ReclaimRow({
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 truncate font-medium text-gray-900">
             {person?.name ?? "Onbekend"} · €{r.computed_amount.toFixed(2)}
-            {r.status !== "paid" && r.reference_code && <ReferenceCode code={r.reference_code} />}
+            {r.status === "requested" && r.reference_code && <ReferenceCode code={r.reference_code} />}
+            {r.status === "written_off" && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                Niet inbaar
+              </span>
+            )}
           </p>
           <p className="truncate text-gray-500">
             {relatedTx?.counterparty_name ?? "Onbekend"} ·{" "}
@@ -51,6 +57,13 @@ function ReclaimRow({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {r.status === "paid" && <UnlinkButton reclaimId={r.id} />}
+          {r.status === "written_off" && (
+            <form action={undoWriteOffReclaim.bind(null, r.id)}>
+              <button type="submit" className="text-xs text-gray-400 underline hover:text-gray-600">
+                Ongedaan maken
+              </button>
+            </form>
+          )}
           <DeleteButton reclaimId={r.id} />
         </div>
       </div>
@@ -61,7 +74,7 @@ function ReclaimRow({
           {settledTx.amount.toFixed(2)})
         </p>
       )}
-      {r.status !== "paid" && (
+      {r.status === "requested" && (
         <LinkTransaction
           reclaimId={r.id}
           computedAmount={r.computed_amount}
@@ -69,7 +82,7 @@ function ReclaimRow({
           showAutoMatch={r.settlement_method === "bank"}
         />
       )}
-      {r.status !== "paid" && r.settlement_method === "external_app" && (
+      {r.status === "requested" && r.settlement_method === "external_app" && (
         <p className="text-xs text-gray-400">
           Via WieBetaaltWat/andere app — wordt niet automatisch herkend.
         </p>
@@ -106,8 +119,9 @@ export default async function ReclaimsPage({
     return { id: p.id, name: p.name, groupName: group?.name ?? null, isSelf: p.is_self };
   });
 
-  const openReclaims = reclaims.filter((r) => r.status !== "paid");
+  const openReclaims = reclaims.filter((r) => r.status === "requested");
   const paidReclaims = reclaims.filter((r) => r.status === "paid");
+  const writtenOffReclaims = reclaims.filter((r) => r.status === "written_off");
 
   const normalizedPaymentRequests = paymentRequests.map((pr) => {
     const person = Array.isArray(pr.people) ? pr.people[0] : pr.people;
@@ -134,8 +148,9 @@ export default async function ReclaimsPage({
       total: reclaimLines.reduce((sum, r) => sum + r.computed_amount, 0),
     };
   });
-  const openPaymentRequests = normalizedPaymentRequests.filter((pr) => pr.status !== "paid");
+  const openPaymentRequests = normalizedPaymentRequests.filter((pr) => pr.status === "requested");
   const paidPaymentRequests = normalizedPaymentRequests.filter((pr) => pr.status === "paid");
+  const writtenOffPaymentRequests = normalizedPaymentRequests.filter((pr) => pr.status === "written_off");
 
   const outstandingTotal =
     openReclaims.reduce((sum, r) => sum + r.computed_amount, 0) +
@@ -302,6 +317,35 @@ export default async function ReclaimsPage({
           <p className="text-sm text-gray-500">Nog niks ontvangen.</p>
         )}
       </section>
+
+      {(writtenOffReclaims.length > 0 || writtenOffPaymentRequests.length > 0) && (
+        <section>
+          <h2 className="mb-1 text-sm font-medium text-gray-700">
+            Niet inbaar ({writtenOffReclaims.length + writtenOffPaymentRequests.length})
+          </h2>
+          <p className="mb-2 text-xs text-gray-500">
+            Niet meer opgevolgd — telt niet mee als openstaand en wordt beschouwd als eigen kosten.
+          </p>
+          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white opacity-75">
+            {writtenOffPaymentRequests.map((pr) => (
+              <PaymentRequestRow
+                key={pr.id}
+                id={pr.id}
+                personName={pr.personName}
+                status={pr.status}
+                referenceCode={pr.referenceCode}
+                tikkieLink={pr.tikkieLink}
+                reclaims={pr.reclaims}
+                settledTransaction={pr.settledTransaction}
+                incomingTransactions={incomingTransactions}
+              />
+            ))}
+            {writtenOffReclaims.map((r) => (
+              <ReclaimRow key={r.id} r={r} incomingTransactions={incomingTransactions} />
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
