@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ensureDefaultCategories, getCategories } from "@/actions/transactions";
+import { getContributionsForTransactions, getIncomeSourceOptions } from "@/actions/contributions";
 import { CategorySelect } from "./category-select";
 import { ReviewActions } from "./review-actions";
 import { TransactionNote } from "./transaction-note";
+import { ExpenseContribution } from "./expense-contribution";
 
 const FILTERS = [
   { value: "unreviewed", label: "Te controleren" },
@@ -51,10 +53,19 @@ export default async function TransactionsPage({
   if (activeFilter === "uncategorized")
     query = query.eq("category_source", "none").eq("is_transfer", false);
 
-  const [{ data: transactions }, categories] = await Promise.all([
+  const [{ data: transactions }, categories, incomeSources] = await Promise.all([
     query,
     getCategories(),
+    getIncomeSourceOptions(),
   ]);
+
+  const expenseTxIds = (transactions ?? []).filter((tx) => tx.amount < 0).map((tx) => tx.id);
+  const allContributions = await getContributionsForTransactions(expenseTxIds);
+  const contributionsByTx = new Map<string, typeof allContributions>();
+  for (const c of allContributions) {
+    if (!contributionsByTx.has(c.expense_transaction_id)) contributionsByTx.set(c.expense_transaction_id, []);
+    contributionsByTx.get(c.expense_transaction_id)!.push(c);
+  }
 
   return (
     <div>
@@ -156,6 +167,20 @@ export default async function TransactionsPage({
                   </p>
                 )}
                 <TransactionNote transactionId={tx.id} note={tx.note} />
+                {tx.amount < 0 && (
+                  <ExpenseContribution
+                    transactionId={tx.id}
+                    contributions={(contributionsByTx.get(tx.id) ?? []).map((c) => ({
+                      id: c.id,
+                      amount: c.amount,
+                      label: c.label,
+                      source_transaction: Array.isArray(c.source_transaction)
+                        ? (c.source_transaction[0] ?? null)
+                        : c.source_transaction,
+                    }))}
+                    incomeSources={incomeSources}
+                  />
+                )}
                 <ReviewActions
                   transactionId={tx.id}
                   reviewed={tx.reviewed}

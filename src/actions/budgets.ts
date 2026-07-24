@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getContributionAdjustments, netExpenseAmount } from "@/lib/contributions/net-amount";
 
 export async function getBudgets() {
   const supabase = await createClient();
@@ -58,7 +59,7 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
       supabase.from("budgets").select("category_id, monthly_limit, categories(name)"),
       supabase
         .from("visible_transactions")
-        .select("amount, category_id")
+        .select("id, amount, category_id")
         .lt("amount", 0)
         .eq("is_transfer", false)
         .gte("booking_date", monthStart)
@@ -67,12 +68,14 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
   if (budgetsError) throw budgetsError;
   if (txError) throw txError;
 
+  const adjustments = await getContributionAdjustments(supabase, (monthTx ?? []).map((tx) => tx.id));
+
   const spentPerCategory = new Map<string, number>();
   for (const tx of monthTx ?? []) {
     if (!tx.category_id) continue;
     spentPerCategory.set(
       tx.category_id,
-      (spentPerCategory.get(tx.category_id) ?? 0) + Math.abs(tx.amount)
+      (spentPerCategory.get(tx.category_id) ?? 0) + netExpenseAmount(tx.id, tx.amount, adjustments)
     );
   }
 
@@ -120,11 +123,13 @@ export async function getSpendingAnomaly(): Promise<SpendingAnomaly | null> {
 
   const { data: transactions, error } = await supabase
     .from("visible_transactions")
-    .select("amount, booking_date")
+    .select("id, amount, booking_date")
     .lt("amount", 0)
     .eq("is_transfer", false)
     .gte("booking_date", lookbackStart);
   if (error) throw error;
+
+  const adjustments = await getContributionAdjustments(supabase, (transactions ?? []).map((tx) => tx.id));
 
   const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
   const perMonth = new Map<string, number>();
@@ -135,7 +140,7 @@ export async function getSpendingAnomaly(): Promise<SpendingAnomaly | null> {
     // same window as the current month-to-date.
     if (d.getDate() > dayOfMonth) continue;
     const key = `${d.getFullYear()}-${d.getMonth()}`;
-    perMonth.set(key, (perMonth.get(key) ?? 0) + Math.abs(tx.amount));
+    perMonth.set(key, (perMonth.get(key) ?? 0) + netExpenseAmount(tx.id, tx.amount, adjustments));
   }
 
   const monthToDateSpend = perMonth.get(currentMonthKey) ?? 0;

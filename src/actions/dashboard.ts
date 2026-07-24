@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { detectRecurringPayments } from "@/lib/dashboard/recurring";
+import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@/lib/contributions/net-amount";
 
 function currentMonthRange() {
   const now = new Date();
@@ -16,18 +17,20 @@ export async function getMonthlySpendByCategory() {
 
   const { data, error } = await supabase
     .from("visible_transactions")
-    .select("amount, category_id, categories(name)")
+    .select("id, amount, category_id, categories(name)")
     .lt("amount", 0)
     .eq("is_transfer", false)
     .gte("booking_date", start)
     .lt("booking_date", end);
   if (error) throw error;
 
+  const adjustments = await getContributionAdjustments(supabase, (data ?? []).map((tx) => tx.id));
+
   const totals = new Map<string, number>();
   for (const tx of data ?? []) {
     const category = Array.isArray(tx.categories) ? tx.categories[0] : tx.categories;
     const name = category?.name ?? "Ongecategoriseerd";
-    totals.set(name, (totals.get(name) ?? 0) + Math.abs(tx.amount));
+    totals.set(name, (totals.get(name) ?? 0) + netExpenseAmount(tx.id, tx.amount, adjustments));
   }
 
   return [...totals.entries()]
@@ -51,10 +54,11 @@ export async function getDashboardSummary() {
         .select("id", { count: "exact", head: true })
         .eq("category_source", "none")
         .eq("is_transfer", false),
-      supabase.from("reclaims").select("computed_amount").neq("status", "paid"),
+      // "requested" only — written-off reclaims aren't really outstanding.
+      supabase.from("reclaims").select("computed_amount").eq("status", "requested"),
       supabase
         .from("visible_transactions")
-        .select("amount")
+        .select("id, amount")
         .eq("is_transfer", false)
         .gte("booking_date", start)
         .lt("booking_date", end),
@@ -64,12 +68,14 @@ export async function getDashboardSummary() {
     (sum, r) => sum + r.computed_amount,
     0
   );
+
+  const adjustments = await getContributionAdjustments(supabase, (monthTx ?? []).map((tx) => tx.id));
   const monthIncome = (monthTx ?? [])
     .filter((tx) => tx.amount > 0)
-    .reduce((sum, tx) => sum + tx.amount, 0);
+    .reduce((sum, tx) => sum + netIncomeAmount(tx.id, tx.amount, adjustments), 0);
   const monthExpense = (monthTx ?? [])
     .filter((tx) => tx.amount < 0)
-    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0);
 
   return {
     unreviewedCount: unreviewedCount ?? 0,
