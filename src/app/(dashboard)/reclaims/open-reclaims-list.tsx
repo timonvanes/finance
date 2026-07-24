@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { combineReclaims } from "@/actions/payment-requests";
+import { addReclaimToPaymentRequest, combineReclaims } from "@/actions/payment-requests";
 import { writeOffReclaim } from "@/actions/reclaims";
 import { LinkTransaction, DeleteButton } from "./link-transaction";
 import { ReferenceCode } from "./reference-code";
@@ -29,12 +29,21 @@ interface OpenReclaim {
   receipt_path: string | null;
 }
 
+interface OpenPaymentRequest {
+  id: string;
+  personId: string;
+  referenceCode: string;
+  total: number;
+}
+
 export function OpenReclaimsList({
   reclaims,
   incomingTransactions,
+  openPaymentRequests,
 }: {
   reclaims: OpenReclaim[];
   incomingTransactions: IncomingTransaction[];
+  openPaymentRequests: OpenPaymentRequest[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +168,39 @@ export function OpenReclaimsList({
                   Via WieBetaaltWat/andere app — wordt niet automatisch herkend.
                 </p>
               )}
+              {r.settlement_method === "bank" &&
+                (() => {
+                  const matching = openPaymentRequests.filter((pr) => pr.personId === r.person_id);
+                  if (matching.length === 0) return null;
+                  return (
+                    <select
+                      disabled={isPending}
+                      defaultValue=""
+                      onChange={(e) => {
+                        const paymentRequestId = e.target.value;
+                        if (!paymentRequestId) return;
+                        startTransition(async () => {
+                          try {
+                            await addReclaimToPaymentRequest(r.id, paymentRequestId);
+                            router.refresh();
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Toevoegen mislukt");
+                          }
+                        });
+                      }}
+                      className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50"
+                    >
+                      <option value="" disabled>
+                        Toevoegen aan bestaand betaalverzoek…
+                      </option>
+                      {matching.map((pr) => (
+                        <option key={pr.id} value={pr.id}>
+                          {pr.referenceCode} · €{pr.total.toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
             </div>
           </li>
         ))}

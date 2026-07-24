@@ -146,6 +146,7 @@ export default async function ReclaimsPage({
     });
     return {
       id: pr.id,
+      personId: pr.person_id,
       personName: person?.name ?? "Onbekend",
       status: pr.status,
       referenceCode: pr.reference_code,
@@ -296,7 +297,16 @@ export default async function ReclaimsPage({
           Tikkie/betaalverzoek — dan koppelt de betaling straks vanzelf. Vink meerdere
           terugvorderingen van dezelfde persoon aan om ze in één betaalverzoek te combineren.
         </p>
-        <OpenReclaimsList reclaims={openReclaimItems} incomingTransactions={incomingTransactions} />
+        <OpenReclaimsList
+          reclaims={openReclaimItems}
+          incomingTransactions={incomingTransactions}
+          openPaymentRequests={openPaymentRequests.map((pr) => ({
+            id: pr.id,
+            personId: pr.personId,
+            referenceCode: pr.referenceCode,
+            total: pr.total,
+          }))}
+        />
       </section>
 
       <section>

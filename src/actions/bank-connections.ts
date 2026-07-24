@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { listAspsps, startAuthorization } from "@/lib/enablebanking/auth";
 import { syncBankConnection } from "@/lib/enablebanking/sync";
 
@@ -80,8 +81,13 @@ const AUTO_SYNC_STALE_MS = 60 * 60 * 1000; // 1 hour
 // Called (via next/server's `after`) when the dashboard loads, so banks stay
 // fresh without needing a manual "Sync now" click every time — throttled so
 // opening the app repeatedly doesn't burn through the daily API quota.
+//
+// Uses the admin client rather than the cookie-based one: after() runs once
+// the response has already been sent, and Next.js doesn't allow reading
+// cookies() at that point — this crashed the callback on every single page
+// load. There's only one user in this app, so bypassing RLS here is fine.
 export async function autoSyncStaleConnections() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const staleBefore = new Date(Date.now() - AUTO_SYNC_STALE_MS).toISOString();
 
   const { data: connections } = await supabase

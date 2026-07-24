@@ -64,6 +64,43 @@ export async function combineReclaims(reclaimIds: string[]) {
   await autoMatchNewPaymentRequest(supabase, paymentRequest.id);
 }
 
+// Adds one more (still-open, not-yet-combined) reclaim to an existing,
+// still-open betaalverzoek for the same person — e.g. a new dinner bill
+// for someone you already have a running tab with.
+export async function addReclaimToPaymentRequest(reclaimId: string, paymentRequestId: string) {
+  const supabase = await createClient();
+
+  const [{ data: reclaim, error: reclaimError }, { data: pr, error: prError }] = await Promise.all([
+    supabase
+      .from("reclaims")
+      .select("person_id, status, settlement_method, payment_request_id")
+      .eq("id", reclaimId)
+      .single(),
+    supabase.from("payment_requests").select("person_id, status").eq("id", paymentRequestId).single(),
+  ]);
+  if (reclaimError) throw reclaimError;
+  if (prError) throw prError;
+
+  if (reclaim.status !== "requested" || reclaim.payment_request_id) {
+    throw new Error("Deze terugvordering is al betaald of al gecombineerd.");
+  }
+  if (reclaim.settlement_method !== "bank") {
+    throw new Error("Combineren kan alleen voor terugvorderingen via bankoverschrijving.");
+  }
+  if (pr.status !== "requested") {
+    throw new Error("Dit betaalverzoek staat niet meer open.");
+  }
+  if (pr.person_id !== reclaim.person_id) {
+    throw new Error("Dit betaalverzoek is voor een andere persoon.");
+  }
+
+  const { error: updateError } = await supabase
+    .from("reclaims")
+    .update({ payment_request_id: paymentRequestId })
+    .eq("id", reclaimId);
+  if (updateError) throw updateError;
+}
+
 // Splits a payment request back into individually-tracked reclaims — only
 // while still open; a paid one should be unlinked first if it needs undoing.
 export async function uncombinePaymentRequest(paymentRequestId: string) {
