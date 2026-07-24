@@ -15,10 +15,12 @@ const FILTERS = [
   { value: "income", label: "Bijschrijvingen" },
 ] as const;
 
-function buildHref(type: string, sort: string) {
+function buildHref(overrides: { type?: string; sort?: string; q?: string }, current: { type: string; sort: string; q: string }) {
+  const merged = { ...current, ...overrides };
   const params = new URLSearchParams();
-  if (type !== "unreviewed") params.set("type", type);
-  if (sort !== "desc") params.set("sort", sort);
+  if (merged.type !== "unreviewed") params.set("type", merged.type);
+  if (merged.sort !== "desc") params.set("sort", merged.sort);
+  if (merged.q) params.set("q", merged.q);
   const query = params.toString();
   return query ? `/transactions?${query}` : "/transactions";
 }
@@ -26,13 +28,15 @@ function buildHref(type: string, sort: string) {
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string }>;
+  searchParams: Promise<{ type?: string; sort?: string; q?: string }>;
 }) {
   await ensureDefaultCategories();
 
-  const { type, sort } = await searchParams;
+  const { type, sort, q } = await searchParams;
   const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "unreviewed";
   const activeSort = sort === "asc" ? "asc" : "desc";
+  const activeQuery = q?.trim() ?? "";
+  const current = { type: activeFilter, sort: activeSort, q: activeQuery };
 
   const supabase = await createClient();
 
@@ -52,6 +56,13 @@ export default async function TransactionsPage({
   if (activeFilter === "unreviewed") query = query.eq("reviewed", false).lt("amount", 0);
   if (activeFilter === "uncategorized")
     query = query.eq("category_source", "none").eq("is_transfer", false);
+  if (activeQuery) {
+    // Strip characters that would break the PostgREST .or() filter syntax.
+    const safeQuery = activeQuery.replace(/[,()]/g, "");
+    query = query.or(
+      `counterparty_name.ilike.%${safeQuery}%,raw_description.ilike.%${safeQuery}%,note.ilike.%${safeQuery}%`
+    );
+  }
 
   const [{ data: transactions }, categories, incomeSources] = await Promise.all([
     query,
@@ -76,7 +87,7 @@ export default async function TransactionsPage({
             {FILTERS.map((f) => (
               <Link
                 key={f.value}
-                href={buildHref(f.value, activeSort)}
+                href={buildHref({ type: f.value }, current)}
                 className={
                   activeFilter === f.value
                     ? "min-h-[40px] rounded px-3 py-2 font-medium bg-gray-900 text-white flex items-center"
@@ -88,13 +99,39 @@ export default async function TransactionsPage({
             ))}
           </div>
           <Link
-            href={buildHref(activeFilter, activeSort === "asc" ? "desc" : "asc")}
+            href={buildHref({ sort: activeSort === "asc" ? "desc" : "asc" }, current)}
             className="flex min-h-[40px] items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
           >
             Datum {activeSort === "asc" ? "↑ oudste eerst" : "↓ nieuwste eerst"}
           </Link>
         </div>
       </div>
+
+      <form method="get" className="mt-3 flex items-center gap-2">
+        {activeFilter !== "unreviewed" && <input type="hidden" name="type" value={activeFilter} />}
+        {activeSort !== "desc" && <input type="hidden" name="sort" value={activeSort} />}
+        <input
+          type="search"
+          name="q"
+          defaultValue={activeQuery}
+          placeholder="Zoek op naam, omschrijving of notitie…"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm sm:w-80"
+        />
+        <button
+          type="submit"
+          className="min-h-[40px] rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+        >
+          Zoeken
+        </button>
+        {activeQuery && (
+          <Link
+            href={buildHref({ q: "" }, current)}
+            className="min-h-[40px] whitespace-nowrap text-sm text-gray-500 underline hover:text-gray-700 flex items-center"
+          >
+            Wissen
+          </Link>
+        )}
+      </form>
 
       <p className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
         <span className="flex items-center gap-1">
@@ -192,6 +229,10 @@ export default async function TransactionsPage({
             );
           })}
         </ul>
+      ) : activeQuery ? (
+        <p className="mt-4 text-sm text-gray-500">
+          Niks gevonden voor &quot;{activeQuery}&quot;.
+        </p>
       ) : activeFilter === "unreviewed" ? (
         <p className="mt-4 text-sm text-gray-500">
           Niks te controleren — alle afschrijvingen zijn gecontroleerd. Bekijk{" "}
