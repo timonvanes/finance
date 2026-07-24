@@ -1,6 +1,7 @@
 import { createPot, getPots } from "@/actions/pots";
 import { computePotBalance } from "@/lib/pots/balance";
 import { PotRow } from "./pot-row";
+import { InvestmentCalculator } from "./investment-calculator";
 
 export default async function PotsPage() {
   const pots = await getPots();
@@ -84,6 +85,14 @@ export default async function PotsPage() {
             />
           </div>
           <div>
+            <label className="mb-1 block text-xs font-medium text-gray-700">Doeldatum</label>
+            <input
+              type="date"
+              name="targetDate"
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
             <label
               className="mb-1 block text-xs font-medium text-gray-700"
               title="Staat er al geld op deze rekening/potje? Vul hier het bedrag in zodat het saldo klopt."
@@ -130,6 +139,11 @@ export default async function PotsPage() {
         ) : (
           <p className="text-sm text-gray-500">Nog geen potjes aangemaakt.</p>
         )}
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-gray-700">Beleggen: wat kan €X/maand opleveren?</h2>
+        <InvestmentCalculator />
       </section>
     </div>
   );

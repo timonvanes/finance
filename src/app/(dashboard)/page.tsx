@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { after } from "next/server";
 import {
+  getAccountBalances,
   getDashboardSummary,
+  getFreeToSpendPerMonth,
   getMonthlySpendByCategory,
   getRecurringPayments,
 } from "@/actions/dashboard";
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections } from "@/actions/bank-connections";
+import { getPotsTotalBalance } from "@/actions/pots";
 
 const MONTH_NAMES = [
   "januari", "februari", "maart", "april", "mei", "juni",
@@ -22,13 +25,17 @@ export default async function DashboardPage() {
   // response is sent, throttled to once per hour per connection.
   after(() => autoSyncStaleConnections());
 
-  const [summary, categorySpend, recurring, budgetStatus, anomaly] = await Promise.all([
-    getDashboardSummary(),
-    getMonthlySpendByCategory(),
-    getRecurringPayments(),
-    getBudgetStatus(),
-    getSpendingAnomaly(),
-  ]);
+  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, potsTotal, freeToSpend] =
+    await Promise.all([
+      getDashboardSummary(),
+      getMonthlySpendByCategory(),
+      getRecurringPayments(),
+      getBudgetStatus(),
+      getSpendingAnomaly(),
+      getAccountBalances(),
+      getPotsTotalBalance(),
+      getFreeToSpendPerMonth(),
+    ]);
 
   const monthLabel = MONTH_NAMES[new Date().getMonth()];
   const maxCategoryTotal = Math.max(1, ...categorySpend.map((c) => c.total));
@@ -37,6 +44,55 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <h1 className="text-lg font-semibold text-gray-900">Overzicht</h1>
+
+      {balances.accounts.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-medium text-gray-700">Saldo</h2>
+          <div className="rounded-md border border-gray-200 bg-white p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm text-gray-500">Totaal op betaalrekeningen</span>
+              <span className="text-xl font-semibold text-gray-900">€{balances.total.toFixed(2)}</span>
+            </div>
+            <ul className="space-y-1 border-t border-gray-100 pt-2">
+              {balances.accounts.map((a) => (
+                <li key={a.id} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">
+                    {a.institutionName}
+                    {a.displayName && ` · ${a.displayName}`}
+                  </span>
+                  <span className="text-gray-900">€{a.balance.toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-gray-400">
+              Alleen betaalrekeningen — spaarrekeningen zijn via PSD2 niet op te vragen.
+              {potsTotal > 0 && (
+                <>
+                  {" "}
+                  Los daarvan staat er nog{" "}
+                  <Link href="/pots" className="underline">
+                    €{potsTotal.toFixed(2)} in je potjes
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {freeToSpend != null && (
+        <section>
+          <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xl font-semibold text-gray-900">
+              €{Math.max(0, freeToSpend).toFixed(2)}
+            </p>
+            <p className="text-sm text-gray-500">
+              vrije ruimte per maand (gemiddeld over de laatste maanden)
+            </p>
+          </div>
+        </section>
+      )}
 
       {(anomaly || budgetWarnings.length > 0) && (
         <section className="space-y-2">

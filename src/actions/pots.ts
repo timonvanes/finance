@@ -2,17 +2,23 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { rematchPotHistory } from "@/lib/pots/matching";
+import { computePotBalance } from "@/lib/pots/balance";
 
 export async function getPots() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, target_amount, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id)"
+      "id, name, kind, target_amount, target_date, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
   return data;
+}
+
+export async function getPotsTotalBalance() {
+  const pots = await getPots();
+  return pots.reduce((sum, pot) => sum + computePotBalance(pot), 0);
 }
 
 export async function createPot(formData: FormData) {
@@ -21,6 +27,7 @@ export async function createPot(formData: FormData) {
   const kind = (formData.get("kind") as string) || "savings";
   const targetRaw = formData.get("targetAmount") as string;
   const targetAmount = targetRaw ? Number(targetRaw) : null;
+  const targetDate = (formData.get("targetDate") as string) || null;
   const openingBalanceRaw = formData.get("openingBalance") as string;
   const openingBalanceDate = (formData.get("openingBalanceDate") as string) || undefined;
 
@@ -29,9 +36,22 @@ export async function createPot(formData: FormData) {
     name,
     kind,
     target_amount: targetAmount && targetAmount > 0 ? targetAmount : null,
+    target_date: targetAmount && targetAmount > 0 ? targetDate : null,
     opening_balance: openingBalanceRaw ? Number(openingBalanceRaw) : 0,
     ...(openingBalanceDate ? { opening_balance_date: openingBalanceDate } : {}),
   });
+  if (error) throw error;
+}
+
+export async function updatePotTarget(potId: string, targetAmount: number | null, targetDate: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pots")
+    .update({
+      target_amount: targetAmount && targetAmount > 0 ? targetAmount : null,
+      target_date: targetAmount && targetAmount > 0 ? targetDate : null,
+    })
+    .eq("id", potId);
   if (error) throw error;
 }
 

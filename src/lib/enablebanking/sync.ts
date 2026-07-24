@@ -39,6 +39,33 @@ interface TransactionsResponse {
   continuation_key?: string;
 }
 
+interface BalancesResponse {
+  balances: {
+    balance_amount: { amount: string; currency: string };
+    balance_type: string;
+  }[];
+}
+
+const BALANCE_TYPE_PRIORITY = ["CLBD", "ITBD", "XPCD"];
+
+async function fetchAccountBalance(accountUid: string): Promise<number | null> {
+  try {
+    const { balances } = await enableBankingFetch<BalancesResponse>(
+      `/accounts/${accountUid}/balances`
+    );
+    if (!balances || balances.length === 0) return null;
+
+    for (const type of BALANCE_TYPE_PRIORITY) {
+      const match = balances.find((b) => b.balance_type === type);
+      if (match) return Number(match.balance_amount.amount);
+    }
+    return Number(balances[0].balance_amount.amount);
+  } catch (err) {
+    console.error(`Failed to fetch balance for account ${accountUid}`, err);
+    return null;
+  }
+}
+
 function toSignedAmount(tx: EnableBankingTransaction): number {
   const magnitude = Number(tx.transaction_amount.amount);
   return tx.credit_debit_indicator === "DBIT" ? -magnitude : magnitude;
@@ -237,6 +264,14 @@ export async function syncBankConnection(
   let syncedCount = 0;
 
   for (const account of accounts ?? []) {
+    const balance = await fetchAccountBalance(account.account_uid);
+    if (balance !== null) {
+      await supabase
+        .from("bank_accounts")
+        .update({ current_balance: balance, balance_updated_at: new Date().toISOString() })
+        .eq("id", account.id);
+    }
+
     const transactions = await fetchAllTransactions(
       account.account_uid,
       connection?.sync_from_date ?? null

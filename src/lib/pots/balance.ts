@@ -10,3 +10,23 @@ export function computePotBalance(pot: {
   const counted = pot.pot_entries.filter((e) => e.entry_date >= pot.opening_balance_date);
   return pot.opening_balance + counted.reduce((sum, e) => sum + e.amount, 0);
 }
+
+// How much to deposit per month, from now, to hit target_amount by
+// target_date — null if there's no target/date set, 0 if already there.
+export function computeRequiredMonthlyDeposit(
+  balance: number,
+  targetAmount: number | null,
+  targetDate: string | null
+): number | null {
+  if (!targetAmount || !targetDate) return null;
+  const remaining = targetAmount - balance;
+  if (remaining <= 0) return 0;
+
+  const now = new Date();
+  const target = new Date(targetDate);
+  const monthsRemaining = Math.max(
+    1,
+    (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth())
+  );
+  return remaining / monthsRemaining;
+}

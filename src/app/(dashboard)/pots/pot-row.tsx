@@ -8,8 +8,9 @@ import {
   deletePotEntry,
   updatePotMatchText,
   updatePotOpeningBalance,
+  updatePotTarget,
 } from "@/actions/pots";
-import { computePotBalance } from "@/lib/pots/balance";
+import { computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 
 interface Entry {
   id: string;
@@ -41,6 +42,7 @@ export function PotRow({
     name: string;
     kind: string;
     target_amount: number | null;
+    target_date: string | null;
     match_text: string | null;
     opening_balance: number;
     opening_balance_date: string;
@@ -54,6 +56,8 @@ export function PotRow({
   const [matchResult, setMatchResult] = useState<string | null>(null);
   const [openingBalance, setOpeningBalance] = useState(String(pot.opening_balance));
   const [openingBalanceDate, setOpeningBalanceDate] = useState(pot.opening_balance_date);
+  const [targetAmount, setTargetAmount] = useState(pot.target_amount != null ? String(pot.target_amount) : "");
+  const [targetDate, setTargetDate] = useState(pot.target_date ?? "");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -73,11 +77,19 @@ export function PotRow({
     });
   }
 
+  function saveTarget() {
+    startTransition(async () => {
+      await updatePotTarget(pot.id, targetAmount ? Number(targetAmount) : null, targetDate || null);
+      router.refresh();
+    });
+  }
+
   const balance = computePotBalance(pot);
   const pct =
     pot.target_amount && pot.target_amount > 0
       ? Math.min(100, (balance / pot.target_amount) * 100)
       : null;
+  const requiredMonthly = computeRequiredMonthlyDeposit(balance, pot.target_amount, pot.target_date);
 
   function submit(direction: "deposit" | "withdraw") {
     const value = Number(amount);
@@ -135,6 +147,50 @@ export function PotRow({
           />
         </div>
       )}
+      {requiredMonthly != null && (
+        <p className="text-xs text-gray-500">
+          {requiredMonthly > 0 ? (
+            <>
+              Nog <span className="font-medium text-gray-900">€{requiredMonthly.toFixed(2)}</span>{" "}
+              per maand nodig om je doel op{" "}
+              {pot.target_date && new Date(pot.target_date).toLocaleDateString("nl-NL")} te halen.
+            </>
+          ) : (
+            <span className="font-medium text-green-700">Doel al bereikt 🎉</span>
+          )}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 rounded-md bg-gray-50 p-2">
+        <label className="text-xs text-gray-500">Doelbedrag / -datum:</label>
+        <span className="text-xs text-gray-400">€</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          value={targetAmount}
+          disabled={isPending}
+          onChange={(e) => setTargetAmount(e.target.value)}
+          placeholder="Doelbedrag"
+          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+        />
+        <input
+          type="date"
+          value={targetDate}
+          disabled={isPending}
+          onChange={(e) => setTargetDate(e.target.value)}
+          className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+        />
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={saveTarget}
+          className="text-xs font-medium text-gray-900 underline disabled:opacity-50"
+        >
+          Opslaan
+        </button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-md bg-gray-50 p-2">
         <label className="text-xs text-gray-500" title="ING: het nummer achter 'Oranje Spaarrekening' (bv. Z16377129). Rabobank: de naam van je potje.">
