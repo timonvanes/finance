@@ -56,11 +56,11 @@ interface CandidateReclaim {
 // Priority: reference code in the description (near-certain) > a learned
 // person alias + amount match (self-learned from past manual links) >
 // amount + name/description correlation (only if unambiguous).
-async function findMatch(
-  supabase: SupabaseClient,
+function findMatch(
   tx: CandidateTransaction,
-  openReclaims: CandidateReclaim[]
-): Promise<CandidateReclaim | null> {
+  openReclaims: CandidateReclaim[],
+  aliases: { person_id: string; counterparty_name: string }[]
+): CandidateReclaim | null {
   const description = (tx.raw_description ?? "").toUpperCase();
 
   // A code can intentionally be shared across a group (one betaalverzoek,
@@ -84,10 +84,7 @@ async function findMatch(
     return null; // ambiguous — leave for the manual dropdown
   }
 
-  const { data: aliases } = await supabase
-    .from("person_aliases")
-    .select("person_id, counterparty_name");
-  if (aliases && aliases.length > 0 && tx.counterparty_name) {
+  if (aliases.length > 0 && tx.counterparty_name) {
     const counterparty = tx.counterparty_name.toLowerCase().trim();
     const matchingAliases = openReclaims.filter((r) =>
       aliases.some(
@@ -218,9 +215,10 @@ export async function autoMatchIncomingTransactions(
     .eq("is_transfer", false);
   if (!transactions || transactions.length === 0) return;
 
-  const [openReclaims, openPaymentRequests] = await Promise.all([
+  const [openReclaims, openPaymentRequests, { data: aliases }] = await Promise.all([
     getOpenReclaims(supabase),
     getOpenPaymentRequests(supabase),
+    supabase.from("person_aliases").select("person_id, counterparty_name"),
   ]);
 
   for (const tx of transactions) {
@@ -233,7 +231,7 @@ export async function autoMatchIncomingTransactions(
       continue;
     }
     if (openReclaims.length === 0) continue;
-    const match = await findMatch(supabase, tx, openReclaims);
+    const match = findMatch(tx, openReclaims, aliases ?? []);
     if (match) await settleReclaim(supabase, match.id, tx.id, tx.booking_date);
   }
 }
@@ -307,11 +305,14 @@ export async function autoMatchNewReclaim(supabase: SupabaseClient, reclaimId: s
     query = query.not("id", "in", `(${usedIds.join(",")})`);
   }
 
-  const { data: candidates } = await query;
+  const [{ data: candidates }, { data: aliases }] = await Promise.all([
+    query,
+    supabase.from("person_aliases").select("person_id, counterparty_name"),
+  ]);
   if (!candidates || candidates.length === 0) return;
 
   for (const tx of candidates) {
-    const match = await findMatch(supabase, tx, [reclaim]);
+    const match = findMatch(tx, [reclaim], aliases ?? []);
     if (match) {
       await settleReclaim(supabase, reclaim.id, tx.id, tx.booking_date);
       return;

@@ -4,6 +4,11 @@ import { SyncButton } from "./sync-button";
 import { SyncFromDate } from "./sync-from-date";
 import { DeleteConnectionButton } from "./delete-button";
 
+// A first-time 90-day sync across several accounts can take a while —
+// raise the default serverless function timeout so "Sync now" doesn't get
+// cut off mid-sync (which surfaced as a generic request-failed error).
+export const maxDuration = 60;
+
 const STATUS_LABELS: Record<string, string> = {
   pending: "Bezig met koppelen…",
   linked: "Gekoppeld",

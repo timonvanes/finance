@@ -32,21 +32,28 @@ export async function applyCategoryRules(
     .eq("category_source", "none");
   if (!transactions) return;
 
+  // Group by matched rule so a first-time sync (potentially hundreds of
+  // rows, e.g. many Albert Heijn transactions) does a couple of batched
+  // updates instead of two round-trips per transaction.
+  const txIdsByRule = new Map<string, string[]>();
   for (const tx of transactions) {
     const normalized = normalizeCounterparty(tx.counterparty_name);
     if (!normalized) continue;
-
     const match = rules.find((rule) => normalized.includes(rule.match_pattern));
     if (!match) continue;
+    if (!txIdsByRule.has(match.id)) txIdsByRule.set(match.id, []);
+    txIdsByRule.get(match.id)!.push(tx.id);
+  }
 
-    await supabase
-      .from("transactions")
-      .update({ category_id: match.category_id, category_source: "rule" })
-      .eq("id", tx.id);
-
-    await supabase
-      .from("category_rules")
-      .update({ last_applied_at: new Date().toISOString() })
-      .eq("id", match.id);
+  const now = new Date().toISOString();
+  for (const [ruleId, txIds] of txIdsByRule) {
+    const rule = rules.find((r) => r.id === ruleId)!;
+    await Promise.all([
+      supabase
+        .from("transactions")
+        .update({ category_id: rule.category_id, category_source: "rule" })
+        .in("id", txIds),
+      supabase.from("category_rules").update({ last_applied_at: now }).eq("id", ruleId),
+    ]);
   }
 }

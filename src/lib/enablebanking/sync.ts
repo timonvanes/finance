@@ -104,6 +104,11 @@ const TRANSFER_MATCH_WINDOW_DAYS = 3;
 // all). As a fallback, pair it up with an opposite-amount transaction on a
 // *different* own account within a few days — only when there's exactly one
 // candidate, to avoid mismatching on coincidentally equal amounts.
+//
+// Fetches the whole own-account candidate pool in one query and pairs it up
+// in memory — a first-time 90-day sync can have hundreds of new
+// transactions, and a per-transaction query here was the main cause of
+// sync timing out / failing on larger syncs.
 async function matchTransfersByAmount(supabase: SupabaseClient, transactionIds: string[]) {
   if (transactionIds.length === 0) return;
 
@@ -117,38 +122,47 @@ async function matchTransfersByAmount(supabase: SupabaseClient, transactionIds: 
     .in("id", transactionIds)
     .eq("is_transfer", false)
     .in("bank_account_id", ownAccountIds);
+  if (!candidates || candidates.length === 0) return;
 
-  for (const tx of candidates ?? []) {
-    const dateFrom = new Date(
-      new Date(tx.booking_date).getTime() - TRANSFER_MATCH_WINDOW_DAYS * 86400000
-    )
-      .toISOString()
-      .slice(0, 10);
-    const dateTo = new Date(
-      new Date(tx.booking_date).getTime() + TRANSFER_MATCH_WINDOW_DAYS * 86400000
-    )
-      .toISOString()
-      .slice(0, 10);
+  const windowMs = TRANSFER_MATCH_WINDOW_DAYS * 86400000;
+  const bookingTimes = candidates.map((c) => new Date(c.booking_date).getTime());
+  const poolFrom = new Date(Math.min(...bookingTimes) - windowMs).toISOString().slice(0, 10);
+  const poolTo = new Date(Math.max(...bookingTimes) + windowMs).toISOString().slice(0, 10);
+
+  const { data: pool } = await supabase
+    .from("transactions")
+    .select("id, bank_account_id, amount, booking_date")
+    .in("bank_account_id", ownAccountIds)
+    .gte("booking_date", poolFrom)
+    .lte("booking_date", poolTo);
+  const poolList = pool ?? [];
+
+  const toFlag = new Set<string>();
+  for (const tx of candidates) {
+    const from = new Date(tx.booking_date).getTime() - windowMs;
+    const to = new Date(tx.booking_date).getTime() + windowMs;
 
     // Don't require the opposite side to still be unflagged — it may
     // already have been marked a transfer via IBAN/name matching, which
     // only confirms this is its pair, not a reason to skip it.
-    const { data: opposite } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("amount", -tx.amount)
-      .neq("bank_account_id", tx.bank_account_id)
-      .in("bank_account_id", ownAccountIds)
-      .gte("booking_date", dateFrom)
-      .lte("booking_date", dateTo)
-      .limit(2);
+    const opposite = poolList.filter((o) => {
+      if (o.id === tx.id || o.bank_account_id === tx.bank_account_id) return false;
+      if (o.amount !== -tx.amount) return false;
+      const t = new Date(o.booking_date).getTime();
+      return t >= from && t <= to;
+    });
 
-    if (opposite && opposite.length === 1) {
-      await supabase
-        .from("transactions")
-        .update({ is_transfer: true, reviewed: true })
-        .in("id", [tx.id, opposite[0].id]);
+    if (opposite.length === 1) {
+      toFlag.add(tx.id);
+      toFlag.add(opposite[0].id);
     }
+  }
+
+  if (toFlag.size > 0) {
+    await supabase
+      .from("transactions")
+      .update({ is_transfer: true, reviewed: true })
+      .in("id", [...toFlag]);
   }
 }
 
@@ -174,16 +188,19 @@ export async function markOwnTransfers(supabase: SupabaseClient, transactionIds:
       .select("id, counterparty_iban, counterparty_name")
       .in("id", transactionIds);
 
-    for (const tx of transactions ?? []) {
-      const isOwn =
-        (tx.counterparty_iban && ownIbans.has(tx.counterparty_iban)) ||
-        looksLikeOwnAccountByName(tx.counterparty_name);
-      if (isOwn) {
-        await supabase
-          .from("transactions")
-          .update({ is_transfer: true, reviewed: true })
-          .eq("id", tx.id);
-      }
+    const toFlag = (transactions ?? [])
+      .filter(
+        (tx) =>
+          (tx.counterparty_iban && ownIbans.has(tx.counterparty_iban)) ||
+          looksLikeOwnAccountByName(tx.counterparty_name)
+      )
+      .map((tx) => tx.id);
+
+    if (toFlag.length > 0) {
+      await supabase
+        .from("transactions")
+        .update({ is_transfer: true, reviewed: true })
+        .in("id", toFlag);
     }
   }
 

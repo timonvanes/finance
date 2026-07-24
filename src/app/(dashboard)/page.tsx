@@ -13,6 +13,10 @@ const MONTH_NAMES = [
   "juli", "augustus", "september", "oktober", "november", "december",
 ];
 
+// The after() auto-sync can take a while on a big first sync — give it
+// room instead of being cut off by the default function timeout.
+export const maxDuration = 60;
+
 export default async function DashboardPage() {
   // Keeps bank data fresh without blocking the page — runs after the
   // response is sent, throttled to once per hour per connection.
