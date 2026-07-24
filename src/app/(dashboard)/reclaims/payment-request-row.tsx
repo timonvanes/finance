@@ -88,6 +88,12 @@ export function PaymentRequestRow({
           {tikkieLink && <p className="italic text-gray-500">{tikkieLink}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <a
+            href={`/api/export/payment-request/${id}`}
+            className="text-xs text-gray-400 underline hover:text-gray-600"
+          >
+            Exporteren
+          </a>
           {status === "paid" && (
             <button
               type="button"

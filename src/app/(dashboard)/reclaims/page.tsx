@@ -57,6 +57,9 @@ function ReclaimRow({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <a href={`/api/export/reclaim/${r.id}`} className="text-xs text-gray-400 underline hover:text-gray-600">
+            Exporteren
+          </a>
           {r.status === "paid" && <UnlinkButton reclaimId={r.id} />}
           {r.status === "written_off" && (
             <form action={undoWriteOffReclaim.bind(null, r.id)}>

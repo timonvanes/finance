@@ -124,6 +124,12 @@ export function OpenReclaimsList({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <a
+                    href={`/api/export/reclaim/${r.id}`}
+                    className="whitespace-nowrap text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    Exporteren
+                  </a>
                   <button
                     type="button"
                     disabled={isPending}
