@@ -12,7 +12,11 @@ interface AccountIdentification {
 interface EnableBankingTransaction {
   transaction_id?: string;
   entry_reference?: string;
-  booking_date: string;
+  // A not-yet-settled card payment (status "PDNG") has neither of these —
+  // only transaction_date — which caused a NOT NULL crash on booking_date.
+  booking_date: string | null;
+  value_date?: string | null;
+  transaction_date?: string | null;
   transaction_amount: { amount: string; currency: string };
   credit_debit_indicator: "CRDT" | "DBIT";
   creditor?: { name?: string };
@@ -20,6 +24,14 @@ interface EnableBankingTransaction {
   creditor_account?: AccountIdentification;
   debtor_account?: AccountIdentification;
   remittance_information?: string[];
+}
+
+// Falls back through value_date/transaction_date for pending transactions
+// that don't have a final booking_date yet — still worth showing (you
+// typically want to see a pending card payment the same day), it'll just
+// get its real booking_date once the transaction settles.
+function resolveBookingDate(tx: EnableBankingTransaction): string | null {
+  return tx.booking_date || tx.value_date || tx.transaction_date || null;
 }
 
 interface TransactionsResponse {
@@ -234,10 +246,12 @@ export async function syncBankConnection(
       .map((tx) => {
         const externalId = tx.transaction_id || tx.entry_reference;
         if (!externalId) return null;
+        const bookingDate = resolveBookingDate(tx);
+        if (!bookingDate) return null; // no usable date at all — skip rather than crash
         return {
           bank_account_id: account.id,
           external_transaction_id: externalId,
-          booking_date: tx.booking_date,
+          booking_date: bookingDate,
           amount: toSignedAmount(tx),
           currency: tx.transaction_amount.currency,
           counterparty_name: counterpartyName(tx),
