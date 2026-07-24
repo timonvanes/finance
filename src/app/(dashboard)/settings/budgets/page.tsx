@@ -7,6 +7,7 @@ export default async function BudgetsPage() {
 
   const limitByCategory = new Map(budgets.map((b) => [b.category_id, b.monthly_limit]));
   const expenseCategories = categories.filter((c) => c.kind !== "income");
+  const totalBudget = budgets.reduce((sum, b) => sum + b.monthly_limit, 0);
 
   return (
     <div className="space-y-6">
@@ -16,6 +17,16 @@ export default async function BudgetsPage() {
           Stel per categorie een maandbudget in — op het overzicht zie je hoe je ervoor
           staat, met een waarschuwing als je sneller uitgeeft dan de maand vordert.
         </p>
+        {budgets.length > 0 && (
+          <p className="mt-2 text-sm text-gray-700">
+            Totaal ingesteld:{" "}
+            <span className="font-semibold text-gray-900">€{totalBudget.toFixed(2)}</span>
+            <span className="text-gray-400"> / maand</span>{" "}
+            <span className="text-xs text-gray-400">
+              (over {budgets.length} {budgets.length === 1 ? "categorie" : "categorieën"})
+            </span>
+          </p>
+        )}
       </div>
 
       {expenseCategories.length > 0 ? (

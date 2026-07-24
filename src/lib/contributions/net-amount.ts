@@ -7,6 +7,12 @@ export interface ContributionAdjustments {
   sourceReduction: Map<string, number>;
 }
 
+// Both manual "Bijdrage" contributions AND reclaims reduce what counts as
+// true spend on the underlying transaction — a reclaim is just as much
+// "not really your cost" as a huurtoeslag contribution, as long as you're
+// still expecting the money back. Only "written_off" reclaims are excluded
+// here on purpose: once you give up on collecting, that portion becomes a
+// real expense again.
 export async function getContributionAdjustments(
   supabase: SupabaseClient,
   transactionIds: string[]
@@ -14,16 +20,23 @@ export async function getContributionAdjustments(
   const empty = { expenseReduction: new Map<string, number>(), sourceReduction: new Map<string, number>() };
   if (transactionIds.length === 0) return empty;
 
-  const { data } = await supabase
-    .from("expense_contributions")
-    .select("expense_transaction_id, source_transaction_id, amount")
-    .or(
-      `expense_transaction_id.in.(${transactionIds.join(",")}),source_transaction_id.in.(${transactionIds.join(",")})`
-    );
+  const idList = transactionIds.join(",");
+  const [{ data: contributions }, { data: reclaims }] = await Promise.all([
+    supabase
+      .from("expense_contributions")
+      .select("expense_transaction_id, source_transaction_id, amount")
+      .or(`expense_transaction_id.in.(${idList}),source_transaction_id.in.(${idList})`),
+    supabase
+      .from("reclaims")
+      .select("transaction_id, settled_transaction_id, computed_amount")
+      .in("status", ["requested", "paid"])
+      .or(`transaction_id.in.(${idList}),settled_transaction_id.in.(${idList})`),
+  ]);
 
   const expenseReduction = new Map<string, number>();
   const sourceReduction = new Map<string, number>();
-  for (const c of data ?? []) {
+
+  for (const c of contributions ?? []) {
     expenseReduction.set(
       c.expense_transaction_id,
       (expenseReduction.get(c.expense_transaction_id) ?? 0) + c.amount
@@ -32,6 +45,17 @@ export async function getContributionAdjustments(
       sourceReduction.set(c.source_transaction_id, (sourceReduction.get(c.source_transaction_id) ?? 0) + c.amount);
     }
   }
+
+  for (const r of reclaims ?? []) {
+    expenseReduction.set(r.transaction_id, (expenseReduction.get(r.transaction_id) ?? 0) + r.computed_amount);
+    if (r.settled_transaction_id) {
+      sourceReduction.set(
+        r.settled_transaction_id,
+        (sourceReduction.get(r.settled_transaction_id) ?? 0) + r.computed_amount
+      );
+    }
+  }
+
   return { expenseReduction, sourceReduction };
 }
 
