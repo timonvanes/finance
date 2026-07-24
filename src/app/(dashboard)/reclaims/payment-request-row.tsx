@@ -11,6 +11,7 @@ import {
   writeOffPaymentRequest,
 } from "@/actions/payment-requests";
 import { ReferenceCode } from "./reference-code";
+import { ReclaimNoteReceipt } from "./reclaim-note-receipt";
 
 interface IncomingTransaction {
   id: string;
@@ -24,6 +25,8 @@ interface ReclaimLine {
   computed_amount: number;
   booking_date: string | null;
   counterparty_name: string | null;
+  note: string | null;
+  receipt_path: string | null;
 }
 
 export function PaymentRequestRow({
@@ -70,20 +73,19 @@ export function PaymentRequestRow({
               </span>
             )}
           </p>
-          <p className="text-gray-500">
-            {reclaims
-              .map(
-                (r) =>
-                  `${r.counterparty_name ?? "Onbekend"}${r.booking_date ? " (" + new Date(r.booking_date).toLocaleDateString("nl-NL") + ")" : ""} €${r.computed_amount.toFixed(2)}`
-              )
-              .join(" · ")}
-            {tikkieLink && (
-              <>
-                {" · "}
-                <span className="italic">{tikkieLink}</span>
-              </>
-            )}
-          </p>
+          <ul className="space-y-1">
+            {reclaims.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-2 text-gray-500">
+                <span>
+                  {r.counterparty_name ?? "Onbekend"}
+                  {r.booking_date && ` (${new Date(r.booking_date).toLocaleDateString("nl-NL")})`}{" "}
+                  €{r.computed_amount.toFixed(2)}
+                </span>
+                <ReclaimNoteReceipt reclaimId={r.id} note={r.note} receiptPath={r.receipt_path} />
+              </li>
+            ))}
+          </ul>
+          {tikkieLink && <p className="italic text-gray-500">{tikkieLink}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {status === "paid" && (

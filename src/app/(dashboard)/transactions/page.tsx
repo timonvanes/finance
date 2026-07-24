@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureDefaultCategories, getCategories } from "@/actions/transactions";
 import { CategorySelect } from "./category-select";
 import { ReviewActions } from "./review-actions";
+import { TransactionNote } from "./transaction-note";
 
 const FILTERS = [
   { value: "unreviewed", label: "Te controleren" },
@@ -38,7 +39,7 @@ export default async function TransactionsPage({
     // "Historie vanaf" date without deleting them.
     .from("visible_transactions")
     .select(
-      `id, booking_date, amount, currency, counterparty_name, raw_description, category_id, category_source, flagged_for_reclaim, reviewed, is_transfer,
+      `id, booking_date, amount, currency, counterparty_name, raw_description, note, category_id, category_source, flagged_for_reclaim, reviewed, is_transfer,
       bank_accounts(bank_connections(institution_name))`
     )
     .order("booking_date", { ascending: activeSort === "asc" })
@@ -154,6 +155,7 @@ export default async function TransactionsPage({
                     {tx.raw_description}
                   </p>
                 )}
+                <TransactionNote transactionId={tx.id} note={tx.note} />
                 <ReviewActions
                   transactionId={tx.id}
                   reviewed={tx.reviewed}

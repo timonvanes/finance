@@ -152,3 +152,12 @@ export async function updateTransactionCategory(
     if (ruleError) throw ruleError;
   }
 }
+
+export async function updateTransactionNote(transactionId: string, note: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transactions")
+    .update({ note: note.trim() || null })
+    .eq("id", transactionId);
+  if (error) throw error;
+}

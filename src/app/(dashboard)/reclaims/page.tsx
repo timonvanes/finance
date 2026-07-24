@@ -14,6 +14,7 @@ import { ReferenceCode } from "./reference-code";
 import { SplitReclaimForm } from "./split-form";
 import { OpenReclaimsList } from "./open-reclaims-list";
 import { PaymentRequestRow } from "./payment-request-row";
+import { ReclaimNoteReceipt } from "./reclaim-note-receipt";
 
 type Reclaim = Awaited<ReturnType<typeof getReclaims>>[number];
 
@@ -74,6 +75,7 @@ function ReclaimRow({
           {settledTx.amount.toFixed(2)})
         </p>
       )}
+      <ReclaimNoteReceipt reclaimId={r.id} note={r.note} receiptPath={r.receipt_path} />
       {r.status === "requested" && (
         <LinkTransaction
           reclaimId={r.id}
@@ -135,6 +137,8 @@ export default async function ReclaimsPage({
         computed_amount: r.computed_amount,
         booking_date: tx?.booking_date ?? null,
         counterparty_name: tx?.counterparty_name ?? null,
+        note: r.note,
+        receipt_path: r.receipt_path,
       };
     });
     return {
@@ -180,6 +184,8 @@ export default async function ReclaimsPage({
       person_name: person?.name ?? "Onbekend",
       counterparty_name: tx?.counterparty_name ?? null,
       booking_date: tx?.booking_date ?? null,
+      note: r.note,
+      receipt_path: r.receipt_path,
     };
   });
 

@@ -6,6 +6,7 @@ import { combineReclaims } from "@/actions/payment-requests";
 import { writeOffReclaim } from "@/actions/reclaims";
 import { LinkTransaction, DeleteButton } from "./link-transaction";
 import { ReferenceCode } from "./reference-code";
+import { ReclaimNoteReceipt } from "./reclaim-note-receipt";
 
 interface IncomingTransaction {
   id: string;
@@ -24,6 +25,8 @@ interface OpenReclaim {
   person_name: string;
   counterparty_name: string | null;
   booking_date: string | null;
+  note: string | null;
+  receipt_path: string | null;
 }
 
 export function OpenReclaimsList({
@@ -138,6 +141,7 @@ export function OpenReclaimsList({
                   <DeleteButton reclaimId={r.id} />
                 </div>
               </div>
+              <ReclaimNoteReceipt reclaimId={r.id} note={r.note} receiptPath={r.receipt_path} />
               <LinkTransaction
                 reclaimId={r.id}
                 computedAmount={r.computed_amount}

@@ -117,7 +117,7 @@ export async function getReclaims() {
   const { data, error } = await supabase
     .from("reclaims")
     .select(
-      `id, person_id, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method,
+      `id, person_id, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path,
       people(name),
       transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount),
       settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -297,4 +297,77 @@ export async function unlinkReclaim(reclaimId: string) {
     .update({ settled_transaction_id: null, status: "requested", paid_at: null })
     .eq("id", reclaimId);
   if (error) throw error;
+}
+
+export async function updateReclaimNote(reclaimId: string, note: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("reclaims")
+    .update({ note: note.trim() || null })
+    .eq("id", reclaimId);
+  if (error) throw error;
+}
+
+const RECEIPT_BUCKET = "receipts";
+
+export async function uploadReceipt(reclaimId: string, formData: FormData) {
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+
+  const { data: existing } = await supabase
+    .from("reclaims")
+    .select("receipt_path")
+    .eq("id", reclaimId)
+    .single();
+
+  // Replace any previous receipt for this reclaim rather than accumulating.
+  if (existing?.receipt_path) {
+    await supabase.storage.from(RECEIPT_BUCKET).remove([existing.receipt_path]);
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${user.id}/${reclaimId}/${Date.now()}_${safeName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(RECEIPT_BUCKET)
+    .upload(path, file, { contentType: file.type });
+  if (uploadError) throw uploadError;
+
+  const { error: updateError } = await supabase
+    .from("reclaims")
+    .update({ receipt_path: path })
+    .eq("id", reclaimId);
+  if (updateError) throw updateError;
+}
+
+export async function deleteReceipt(reclaimId: string) {
+  const supabase = await createClient();
+  const { data: reclaim } = await supabase
+    .from("reclaims")
+    .select("receipt_path")
+    .eq("id", reclaimId)
+    .single();
+  if (!reclaim?.receipt_path) return;
+
+  await supabase.storage.from(RECEIPT_BUCKET).remove([reclaim.receipt_path]);
+  const { error } = await supabase
+    .from("reclaims")
+    .update({ receipt_path: null })
+    .eq("id", reclaimId);
+  if (error) throw error;
+}
+
+export async function getReceiptUrl(receiptPath: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from(RECEIPT_BUCKET)
+    .createSignedUrl(receiptPath, 60 * 10); // 10 minutes, just long enough to view
+  if (error) throw error;
+  return data.signedUrl;
 }

@@ -11,7 +11,7 @@ export async function getPaymentRequests() {
     .select(
       `id, person_id, reference_code, tikkie_link, status, paid_at, created_at, settled_transaction_id,
       people(name),
-      reclaims(id, computed_amount, transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount)),
+      reclaims(id, computed_amount, note, receipt_path, transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount)),
       settled_transaction:transactions!payment_requests_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
     .order("created_at", { ascending: false });
