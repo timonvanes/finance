@@ -28,7 +28,7 @@ export default async function BankConnectionsPage({
     supabase
       .from("bank_connections")
       .select(
-        "id, institution_name, consent_status, consent_expires_at, last_synced_at, sync_from_date"
+        "id, institution_name, consent_status, consent_expires_at, last_synced_at, sync_from_date, created_at"
       )
       .order("created_at", { ascending: false }),
     supabase.from("bank_accounts").select("bank_connection_id"),
@@ -40,10 +40,24 @@ export default async function BankConnectionsPage({
     accountCounts.set(a.bank_connection_id, (accountCounts.get(a.bank_connection_id) ?? 0) + 1);
   }
 
+  // A "pending" row means the redirect back from the bank never completed —
+  // the user closed the tab, 2FA timed out, or the bank/Enable Banking
+  // errored partway through. There's no automatic timeout, so after a few
+  // minutes it's safe to assume it's genuinely stuck rather than still in
+  // progress.
+  const STALE_PENDING_MS = 15 * 60 * 1000;
+  const now = Date.now();
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-lg font-semibold text-gray-900">Bankkoppelingen</h1>
+        <p className="mt-1 text-xs text-gray-400">
+          Blijft een koppeling op &quot;Bezig met koppelen…&quot; staan? Dat betekent dat de
+          laatste stap bij de bank niet is afgerond (tab gesloten, 2FA verlopen, of een
+          fout bij de bank). Na 15 minuten wordt dat hier aangegeven — verwijder 'm dan en
+          probeer opnieuw.
+        </p>
         {linked && !warning && (
           <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
             Bank gekoppeld.
@@ -71,15 +85,19 @@ export default async function BankConnectionsPage({
             {connections.map((c) => {
               const accountCount = accountCounts.get(c.id) ?? 0;
               const hasNoAccounts = c.consent_status === "linked" && accountCount === 0;
+              const isStalePending =
+                c.consent_status === "pending" && now - new Date(c.created_at).getTime() > STALE_PENDING_MS;
               return (
                 <li key={c.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-900">{c.institution_name}</p>
-                      <p className={hasNoAccounts ? "text-amber-700" : "text-gray-500"}>
-                        {hasNoAccounts
-                          ? "Gekoppeld, maar 0 rekeningen gevonden — verwijder en koppel opnieuw"
-                          : STATUS_LABELS[c.consent_status] ?? c.consent_status}
+                      <p className={hasNoAccounts || isStalePending ? "text-amber-700" : "text-gray-500"}>
+                        {isStalePending
+                          ? "Koppelen niet afgerond of mislukt — verwijder en probeer opnieuw"
+                          : hasNoAccounts
+                            ? "Gekoppeld, maar 0 rekeningen gevonden — verwijder en koppel opnieuw"
+                            : STATUS_LABELS[c.consent_status] ?? c.consent_status}
                         {c.last_synced_at &&
                           !hasNoAccounts &&
                           // Rendered server-side (UTC on Vercel) — without an
