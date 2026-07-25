@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Overzicht" },
   { href: "/transactions", label: "Transacties" },
   { href: "/reclaims", label: "Terugvorderingen" },
+  { href: "/events", label: "Gedeelde uitgaven" },
   { href: "/returns", label: "Retouren" },
   { href: "/pots", label: "Potjes" },
   { href: "/settings", label: "Instellingen" },
