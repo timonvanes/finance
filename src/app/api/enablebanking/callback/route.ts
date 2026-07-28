@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createSessionWithRetry, getAccountDetails } from "@/lib/enablebanking/auth";
+import {
+  createSessionWithRetry,
+  getAccountDetails,
+  type EnableBankingAccountDetails,
+} from "@/lib/enablebanking/auth";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -50,20 +54,21 @@ export async function GET(request: NextRequest) {
     }
 
     if (session.accounts.length > 0) {
-      // session.accounts is just a list of UIDs — name/currency/IBAN come
-      // from a separate per-account details call.
-      type AccountDetailsOrFallback =
-        | Awaited<ReturnType<typeof getAccountDetails>>
-        | { uid: string; name?: undefined; currency?: undefined; account_id?: undefined };
-
-      const accountDetails: AccountDetailsOrFallback[] = await Promise.all(
-        session.accounts.map(
-          (uid): Promise<AccountDetailsOrFallback> =>
-            getAccountDetails(uid).catch((err) => {
-              console.error(`enablebanking callback: details fetch failed for ${uid}`, err);
-              return { uid };
-            })
-        )
+      // Each entry is usually just a UID string (name/currency/IBAN then
+      // come from a separate per-account details call) — but has sometimes
+      // arrived as a full account object already. Handle both: treating an
+      // object as a bare UID built a malformed details URL that failed
+      // silently and corrupted account_uid with the whole object.
+      const accountDetails: EnableBankingAccountDetails[] = await Promise.all(
+        session.accounts.map(async (entry): Promise<EnableBankingAccountDetails> => {
+          if (typeof entry === "string") {
+            return getAccountDetails(entry).catch((err) => {
+              console.error(`enablebanking callback: details fetch failed for ${entry}`, err);
+              return { uid: entry };
+            });
+          }
+          return entry;
+        })
       );
 
       const { error: accountsError } = await supabase.from("bank_accounts").insert(

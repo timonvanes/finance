@@ -262,8 +262,20 @@ export async function syncBankConnection(
   if (accountsError) throw accountsError;
 
   let syncedCount = 0;
+  // A malformed account_uid (e.g. a whole JSON object stringified in by a
+  // past callback bug) would otherwise build a broken URL that Enable
+  // Banking hangs or errors slowly on — skip it outright instead of
+  // burning the retry budget on a request that can never succeed.
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   for (const account of accounts ?? []) {
+    if (!UUID_PATTERN.test(account.account_uid)) {
+      console.error(
+        `syncBankConnection: skipping malformed account_uid for bank_account ${account.id}`
+      );
+      continue;
+    }
+
     const balance = await fetchAccountBalance(account.account_uid);
     if (balance !== null) {
       await supabase

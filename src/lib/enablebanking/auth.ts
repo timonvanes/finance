@@ -44,11 +44,19 @@ export async function startAuthorization({
   });
 }
 
-// The /sessions response only lists account UIDs — name/currency/IBAN
-// require a separate GET /accounts/{uid}/details call per account.
+// GET /sessions/{id} only lists account UIDs (name/currency/IBAN require a
+// separate GET /accounts/{uid}/details call per account) — but the initial
+// POST /sessions response has sometimes returned full account objects
+// instead, for reasons that aren't documented. Accept either shape rather
+// than assuming: treating an object as a bare UID string built a malformed
+// details URL, which failed silently and corrupted account_uid with the
+// whole object (also the root cause of a "sync times out" bug — the same
+// corrupted value then went into the transactions URL too).
+export type AccountEntry = string | EnableBankingAccountDetails;
+
 export interface CreateSessionResult {
   session_id: string;
-  accounts: string[];
+  accounts: AccountEntry[];
   access: { valid_until: string };
 }
 
