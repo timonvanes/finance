@@ -29,16 +29,22 @@ export function SplitReclaimForm({
   people: Person[];
   initialTransactionId?: string;
 }) {
-  const initialTx =
-    (initialTransactionId && transactions.find((t) => t.id === initialTransactionId)) ||
-    transactions[0];
-  const [txAmount, setTxAmount] = useState(initialTx ? Math.abs(initialTx.amount) : 0);
+  const [selectedTx, setSelectedTx] = useState<Record<string, boolean>>(
+    initialTransactionId ? { [initialTransactionId]: true } : {}
+  );
+  const [txFilter, setTxFilter] = useState("");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+
+  // Combining multiple transactions first (WieBetaaltWat-style: add up the
+  // whole pot, then divide) instead of splitting one transaction at a time.
+  const totalAmount = transactions
+    .filter((t) => selectedTx[t.id])
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
   // Amounts are weighted by quantity (WieBetaaltWat-style: 2x someone's
   // share counts double), but stay a plain editable € amount afterwards for
@@ -62,7 +68,17 @@ export function SplitReclaimForm({
     });
   }
 
+  function toggleTx(txId: string, value: boolean) {
+    const nextSelectedTx = { ...selectedTx, [txId]: value };
+    setSelectedTx(nextSelectedTx);
+    const nextTotal = transactions
+      .filter((t) => nextSelectedTx[t.id])
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    recalcWeightedSplit(checked, quantities, nextTotal);
+  }
+
   const checkedCount = Object.values(checked).filter(Boolean).length;
+  const selectedTxCount = Object.values(selectedTx).filter(Boolean).length;
 
   const groups = new Map<string, Person[]>();
   for (const person of people) {
@@ -77,15 +93,16 @@ export function SplitReclaimForm({
       nextChecked[p.id] = select;
     });
     setChecked(nextChecked);
-    recalcWeightedSplit(nextChecked, quantities, txAmount);
+    recalcWeightedSplit(nextChecked, quantities, totalAmount);
   }
 
   function resetForm() {
     formRef.current?.reset();
+    setSelectedTx({});
+    setTxFilter("");
     setChecked({});
     setQuantities({});
     setAmounts({});
-    setTxAmount(initialTx ? Math.abs(initialTx.amount) : 0);
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -98,6 +115,12 @@ export function SplitReclaimForm({
     });
   }
 
+  const filteredTransactions = txFilter
+    ? transactions.filter((t) =>
+        (t.counterparty_name ?? "").toLowerCase().includes(txFilter.toLowerCase())
+      )
+    : transactions;
+
   return (
     <form
       ref={formRef}
@@ -106,27 +129,41 @@ export function SplitReclaimForm({
     >
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-700">
-          Transactie (afschrijving)
+          Transacties (afschrijvingen) — vink er één of meerdere aan om te combineren
         </label>
-        <select
-          name="transactionId"
-          required
-          defaultValue={initialTx?.id}
-          onChange={(e) => {
-            const opt = transactions.find((t) => t.id === e.target.value);
-            const amount = opt ? Math.abs(opt.amount) : 0;
-            setTxAmount(amount);
-            recalcWeightedSplit(checked, quantities, amount);
-          }}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
-          {transactions.map((tx) => (
-            <option key={tx.id} value={tx.id}>
-              {new Date(tx.booking_date).toLocaleDateString("nl-NL")} ·{" "}
-              {tx.counterparty_name ?? "Onbekend"} · €{Math.abs(tx.amount).toFixed(2)}
-            </option>
+        <input
+          type="text"
+          value={txFilter}
+          onChange={(e) => setTxFilter(e.target.value)}
+          placeholder="Zoek op naam…"
+          className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
+        <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
+          {filteredTransactions.map((tx) => (
+            <label key={tx.id} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="transactionId"
+                value={tx.id}
+                checked={!!selectedTx[tx.id]}
+                onChange={(e) => toggleTx(tx.id, e.target.checked)}
+              />
+              <span className="min-w-0 flex-1 truncate">
+                {new Date(tx.booking_date).toLocaleDateString("nl-NL")} ·{" "}
+                {tx.counterparty_name ?? "Onbekend"}
+              </span>
+              <span className="shrink-0 font-medium text-gray-900">
+                €{Math.abs(tx.amount).toFixed(2)}
+              </span>
+            </label>
           ))}
-        </select>
+        </div>
+        {selectedTxCount > 0 && (
+          <p className="mt-1 text-xs text-gray-600">
+            {selectedTxCount} transactie{selectedTxCount > 1 ? "s" : ""} geselecteerd · Totaal:{" "}
+            <span className="font-medium text-gray-900">€{totalAmount.toFixed(2)}</span>
+          </p>
+        )}
       </div>
 
       <div>
@@ -182,7 +219,7 @@ export function SplitReclaimForm({
                           };
                           setChecked(nextChecked);
                           setQuantities(nextQuantities);
-                          recalcWeightedSplit(nextChecked, nextQuantities, txAmount);
+                          recalcWeightedSplit(nextChecked, nextQuantities, totalAmount);
                         }}
                       />
                       <span
@@ -203,7 +240,7 @@ export function SplitReclaimForm({
                         onChange={(e) => {
                           const nextQuantities = { ...quantities, [person.id]: e.target.value };
                           setQuantities(nextQuantities);
-                          recalcWeightedSplit(checked, nextQuantities, txAmount);
+                          recalcWeightedSplit(checked, nextQuantities, totalAmount);
                         }}
                         className="w-14 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-400"
                       />
@@ -267,7 +304,7 @@ export function SplitReclaimForm({
 
       <button
         type="submit"
-        disabled={people.length === 0 || isPending}
+        disabled={people.length === 0 || isPending || selectedTxCount === 0}
         className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
       >
         {isPending ? "Bezig…" : "Toevoegen"}

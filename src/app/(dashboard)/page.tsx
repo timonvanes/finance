@@ -20,15 +20,24 @@ const MONTH_NAMES = [
 // room instead of being cut off by the default function timeout.
 export const maxDuration = 60;
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
   // Keeps bank data fresh without blocking the page — runs after the
   // response is sent, throttled to once per hour per connection.
   after(() => autoSyncStaleConnections());
 
+  const { month } = await searchParams;
+  // 0 = this month, 1 = previous month, etc. — can't navigate into the future.
+  const monthsAgo = Math.max(0, parseInt(month ?? "0", 10) || 0);
+  const isCurrentMonth = monthsAgo === 0;
+
   const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, potsTotal, freeToSpend] =
     await Promise.all([
-      getDashboardSummary(),
-      getMonthlySpendByCategory(),
+      getDashboardSummary(monthsAgo),
+      getMonthlySpendByCategory(monthsAgo),
       getRecurringPayments(),
       getBudgetStatus(),
       getSpendingAnomaly(),
@@ -37,13 +46,37 @@ export default async function DashboardPage() {
       getFreeToSpendPerMonth(),
     ]);
 
-  const monthLabel = MONTH_NAMES[new Date().getMonth()];
+  const now = new Date();
+  const viewedDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
+  const monthLabel =
+    viewedDate.getFullYear() === now.getFullYear()
+      ? MONTH_NAMES[viewedDate.getMonth()]
+      : `${MONTH_NAMES[viewedDate.getMonth()]} ${viewedDate.getFullYear()}`;
   const maxCategoryTotal = Math.max(1, ...categorySpend.map((c) => c.total));
   const budgetWarnings = budgetStatus.filter((b) => b.aheadOfPace || b.overBudget);
+  const expenseDelta = summary.monthExpense - summary.previousMonthExpense;
 
   return (
     <div className="space-y-8">
-      <h1 className="text-lg font-semibold text-gray-900">Overzicht</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold text-gray-900">Overzicht</h1>
+        <div className="flex items-center gap-2 text-sm">
+          <Link
+            href={`/?month=${monthsAgo + 1}`}
+            className="flex min-h-[36px] items-center rounded-md border border-gray-200 px-2 text-gray-600 hover:bg-gray-50"
+          >
+            ← vorige maand
+          </Link>
+          {!isCurrentMonth && (
+            <Link
+              href={monthsAgo - 1 === 0 ? "/" : `/?month=${monthsAgo - 1}`}
+              className="flex min-h-[36px] items-center rounded-md border border-gray-200 px-2 text-gray-600 hover:bg-gray-50"
+            >
+              volgende maand →
+            </Link>
+          )}
+        </div>
+      </div>
 
       {balances.accounts.length > 0 && (
         <section>
@@ -94,7 +127,7 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {(anomaly || budgetWarnings.length > 0) && (
+      {isCurrentMonth && (anomaly || budgetWarnings.length > 0) && (
         <section className="space-y-2">
           {anomaly && (
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -160,7 +193,9 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Deze maand ({monthLabel})</h2>
+        <h2 className="mb-2 text-sm font-medium text-gray-700">
+          {isCurrentMonth ? "Deze maand" : "Maand"} ({monthLabel})
+        </h2>
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
             <p className="text-xl font-semibold text-green-700">€{summary.monthIncome.toFixed(2)}</p>
@@ -168,12 +203,20 @@ export default async function DashboardPage() {
           </div>
           <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
             <p className="text-xl font-semibold text-gray-900">€{summary.monthExpense.toFixed(2)}</p>
-            <p className="text-sm text-gray-500">uitgegeven</p>
+            <p className="text-sm text-gray-500">
+              uitgegeven
+              {summary.previousMonthExpense > 0 && (
+                <span className={expenseDelta > 0 ? "text-red-600" : "text-green-700"}>
+                  {" "}
+                  ({expenseDelta > 0 ? "+" : ""}€{expenseDelta.toFixed(0)} t.o.v. vorige maand)
+                </span>
+              )}
+            </p>
           </div>
         </div>
       </section>
 
-      {budgetStatus.length > 0 && (
+      {isCurrentMonth && budgetStatus.length > 0 && (
         <section>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium text-gray-700">Budgetten ({monthLabel})</h2>
@@ -228,26 +271,39 @@ export default async function DashboardPage() {
         </h2>
         {categorySpend.length > 0 ? (
           <ul className="space-y-2 rounded-md border border-gray-200 bg-white p-4">
-            {categorySpend.map((c) => (
-              <li key={c.name}>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="text-gray-900">{c.name}</span>
-                  <span className="font-medium text-gray-900">€{c.total.toFixed(2)}</span>
-                </div>
-                <div className="h-2 rounded-full bg-gray-100">
-                  <div
-                    className="h-2 rounded-full bg-gray-900"
-                    style={{ width: `${(c.total / maxCategoryTotal) * 100}%` }}
-                  />
-                </div>
-              </li>
-            ))}
+            {categorySpend.map((c) => {
+              const delta = c.total - c.previousTotal;
+              return (
+                <li key={c.name}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="text-gray-900">{c.name}</span>
+                    <span className="font-medium text-gray-900">
+                      €{c.total.toFixed(2)}
+                      {c.previousTotal > 0 && Math.abs(delta) >= 1 && (
+                        <span
+                          className={`ml-1 text-xs font-normal ${delta > 0 ? "text-red-600" : "text-green-700"}`}
+                        >
+                          ({delta > 0 ? "+" : ""}€{delta.toFixed(0)})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100">
+                    <div
+                      className="h-2 rounded-full bg-gray-900"
+                      style={{ width: `${(c.total / maxCategoryTotal) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-sm text-gray-500">Nog geen uitgaven deze maand.</p>
         )}
       </section>
 
+      {isCurrentMonth && (
       <section>
         <h2 className="mb-2 text-sm font-medium text-gray-700">Vaste lasten (herkend)</h2>
         {recurring.length > 0 ? (
@@ -270,6 +326,7 @@ export default async function DashboardPage() {
           </p>
         )}
       </section>
+      )}
     </div>
   );
 }

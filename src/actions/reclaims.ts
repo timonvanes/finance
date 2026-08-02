@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
 import { generateReferenceCode } from "@/lib/reclaims/reference-code";
+import { combineReclaims } from "@/actions/payment-requests";
 
 export async function getRecentExpenseTransactions() {
   const supabase = await createClient();
@@ -128,10 +129,17 @@ export async function getReclaims() {
   return data;
 }
 
-// Create one reclaim per selected person for the same transaction — e.g.
-// split a €50 dinner among 10 people at €5 each, all in one go.
+// Create one reclaim per (selected transaction × selected person) — e.g.
+// combine 3 dinners into one €100 pot first (WieBetaaltWat-style: add
+// everything up, then divide), split that total among people, and each
+// person's share gets spread proportionally across the underlying
+// transactions so category-spend netting still applies per transaction.
+// When a person's share spans more than one transaction, those reclaims
+// are auto-bundled into a single combined betaalverzoek.
 export async function createSplitReclaim(formData: FormData) {
-  const transactionId = formData.get("transactionId") as string;
+  const transactionIds = formData.getAll("transactionId") as string[];
+  if (transactionIds.length === 0) return;
+
   const settlementMethod =
     (formData.get("settlementMethod") as string) === "external_app"
       ? "external_app"
@@ -146,7 +154,16 @@ export async function createSplitReclaim(formData: FormData) {
   const sharedCode = useSharedCode ? generateReferenceCode() : null;
 
   const supabase = await createClient();
-  const createdIds: string[] = [];
+
+  const { data: selectedTransactions, error: txError } = await supabase
+    .from("transactions")
+    .select("id, amount")
+    .in("id", transactionIds);
+  if (txError) throw txError;
+  if (!selectedTransactions || selectedTransactions.length === 0) return;
+
+  const totalAmount = selectedTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  if (totalAmount <= 0) return;
 
   const { data: selfPerson } = await supabase
     .from("people")
@@ -162,37 +179,45 @@ export async function createSplitReclaim(formData: FormData) {
     const amountValue = Number(formData.get(`amount_${personId}`));
     if (!amountValue || amountValue <= 0) continue;
 
-    const { data, error } = await supabase
-      .from("reclaims")
-      .insert({
-        transaction_id: transactionId,
-        person_id: personId,
-        amount_type: "fixed",
-        amount_value: amountValue,
-        computed_amount: amountValue,
-        tikkie_link: tikkieLink,
-        settlement_method: settlementMethod,
-        reference_code:
-          settlementMethod === "bank" ? sharedCode ?? generateReferenceCode() : null,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    createdIds.push(data.id);
+    const code =
+      settlementMethod === "bank" ? sharedCode ?? generateReferenceCode() : null;
+    const createdIds: string[] = [];
+
+    for (const tx of selectedTransactions) {
+      const share = (Math.abs(tx.amount) / totalAmount) * amountValue;
+      if (share <= 0) continue;
+
+      const { data, error } = await supabase
+        .from("reclaims")
+        .insert({
+          transaction_id: tx.id,
+          person_id: personId,
+          amount_type: "fixed",
+          amount_value: share,
+          computed_amount: share,
+          tikkie_link: tikkieLink,
+          settlement_method: settlementMethod,
+          reference_code: code,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      createdIds.push(data.id);
+    }
+
+    if (createdIds.length > 1) {
+      // combineReclaims also re-checks for an already-arrived payment.
+      await combineReclaims(createdIds);
+    } else if (createdIds.length === 1 && settlementMethod === "bank") {
+      await autoMatchNewReclaim(supabase, createdIds[0]);
+    }
   }
 
   // No longer needs to sit in the "still to split" queue.
   await supabase
     .from("transactions")
     .update({ flagged_for_reclaim: false })
-    .eq("id", transactionId);
-
-  // The payback may already have arrived before this reclaim was logged.
-  if (settlementMethod === "bank") {
-    for (const id of createdIds) {
-      await autoMatchNewReclaim(supabase, id);
-    }
-  }
+    .in("id", transactionIds);
 }
 
 export async function markReclaimPaid(reclaimId: string) {

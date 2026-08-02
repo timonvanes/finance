@@ -4,17 +4,20 @@ import { createClient } from "@/lib/supabase/server";
 import { detectRecurringPayments } from "@/lib/dashboard/recurring";
 import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@/lib/contributions/net-amount";
 
-function currentMonthRange() {
+// monthsAgo 0 = current month, 1 = previous month, etc.
+function monthRange(monthsAgo: number = 0) {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().slice(0, 10);
+  const start = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1)
+    .toISOString()
+    .slice(0, 10);
+  const end = new Date(now.getFullYear(), now.getMonth() - monthsAgo + 1, 1)
+    .toISOString()
+    .slice(0, 10);
   return { start, end };
 }
 
-export async function getMonthlySpendByCategory() {
+async function spendByCategoryForRange(start: string, end: string) {
   const supabase = await createClient();
-  const { start, end } = currentMonthRange();
-
   const { data, error } = await supabase
     .from("visible_transactions")
     .select("id, amount, category_id, categories(name)")
@@ -32,15 +35,34 @@ export async function getMonthlySpendByCategory() {
     const name = category?.name ?? "Ongecategoriseerd";
     totals.set(name, (totals.get(name) ?? 0) + netExpenseAmount(tx.id, tx.amount, adjustments));
   }
+  return totals;
+}
 
-  return [...totals.entries()]
-    .map(([name, total]) => ({ name, total }))
+// Includes each category's total for the previous month too, so the
+// dashboard can show "€50 meer dan vorige maand" style comparisons.
+export async function getMonthlySpendByCategory(monthsAgo: number = 0) {
+  const { start, end } = monthRange(monthsAgo);
+  const { start: prevStart, end: prevEnd } = monthRange(monthsAgo + 1);
+
+  const [totals, previousTotals] = await Promise.all([
+    spendByCategoryForRange(start, end),
+    spendByCategoryForRange(prevStart, prevEnd),
+  ]);
+
+  const names = new Set([...totals.keys(), ...previousTotals.keys()]);
+  return [...names]
+    .map((name) => ({
+      name,
+      total: totals.get(name) ?? 0,
+      previousTotal: previousTotals.get(name) ?? 0,
+    }))
+    .filter((c) => c.total > 0 || c.previousTotal > 0)
     .sort((a, b) => b.total - a.total);
 }
 
-export async function getDashboardSummary() {
+export async function getDashboardSummary(monthsAgo: number = 0) {
   const supabase = await createClient();
-  const { start, end } = currentMonthRange();
+  const { start, end } = monthRange(monthsAgo);
 
   const [{ count: unreviewedCount }, { count: uncategorizedCount }, { data: openReclaims }, { data: monthTx }] =
     await Promise.all([
@@ -77,12 +99,29 @@ export async function getDashboardSummary() {
     .filter((tx) => tx.amount < 0)
     .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0);
 
+  // For the "t.o.v. vorige maand" comparison.
+  const { start: prevStart, end: prevEnd } = monthRange(monthsAgo + 1);
+  const { data: prevMonthTx } = await supabase
+    .from("visible_transactions")
+    .select("id, amount")
+    .eq("is_transfer", false)
+    .gte("booking_date", prevStart)
+    .lt("booking_date", prevEnd);
+  const prevAdjustments = await getContributionAdjustments(
+    supabase,
+    (prevMonthTx ?? []).map((tx) => tx.id)
+  );
+  const previousMonthExpense = (prevMonthTx ?? [])
+    .filter((tx) => tx.amount < 0)
+    .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, prevAdjustments), 0);
+
   return {
     unreviewedCount: unreviewedCount ?? 0,
     uncategorizedCount: uncategorizedCount ?? 0,
     outstandingReclaimsTotal,
     monthIncome,
     monthExpense,
+    previousMonthExpense,
   };
 }
 
