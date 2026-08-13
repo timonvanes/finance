@@ -60,10 +60,18 @@ export async function startBankLink(formData: FormData) {
   redirect(url);
 }
 
+// Returns a result object rather than throwing — an uncaught error here
+// (e.g. an expired Enable Banking session) surfaced to the user as a
+// generic "page couldn't load" crash instead of a readable message.
 export async function syncNow(bankConnectionId: string) {
   const supabase = await createClient();
-  const count = await syncBankConnection(supabase, bankConnectionId);
-  return count;
+  try {
+    const count = await syncBankConnection(supabase, bankConnectionId);
+    return { count, error: null as string | null };
+  } catch (err) {
+    console.error("syncNow failed for connection", bankConnectionId, err);
+    return { count: 0, error: err instanceof Error ? err.message : "Sync mislukt" };
+  }
 }
 
 // null clears the override, falling back to the default 90-day lookback.
@@ -85,7 +93,10 @@ const AUTO_SYNC_STALE_MS = 60 * 60 * 1000; // 1 hour
 // Uses the admin client rather than the cookie-based one: after() runs once
 // the response has already been sent, and Next.js doesn't allow reading
 // cookies() at that point — this crashed the callback on every single page
-// load. There's only one user in this app, so bypassing RLS here is fine.
+// load. Bypassing RLS here is intentional: this scans stale connections for
+// ALL users in one background pass, not just the current session's user.
+// Since there's no auth.uid() session context on this client, syncBankConnection
+// must stamp user_id explicitly on every insert it makes (transactions, pot_entries).
 export async function autoSyncStaleConnections() {
   const supabase = createAdminClient();
   const staleBefore = new Date(Date.now() - AUTO_SYNC_STALE_MS).toISOString();

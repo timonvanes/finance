@@ -246,20 +246,37 @@ export async function markOwnTransfers(supabase: SupabaseClient, transactionIds:
   await matchTransfersByAmount(supabase, transactionIds);
 }
 
+// Enable Banking's consent sessions expire (typically ~90 days) — after
+// that every call 401s with EXPIRED_SESSION. This was previously an
+// uncaught crash (surfaced to the user as a generic page-load failure);
+// now it's detected and the connection is marked so the UI can prompt a
+// re-link instead.
+function isExpiredSessionError(err: unknown): boolean {
+  return err instanceof Error && /EXPIRED_SESSION|\b401\b/.test(err.message);
+}
+
 export async function syncBankConnection(
   supabase: SupabaseClient,
   bankConnectionId: string
 ) {
-  const [{ data: accounts, error: accountsError }, { data: connection }] = await Promise.all([
-    supabase.from("bank_accounts").select("id, account_uid").eq("bank_connection_id", bankConnectionId),
-    supabase
-      .from("bank_connections")
-      .select("sync_from_date")
-      .eq("id", bankConnectionId)
-      .single(),
-  ]);
+  const [{ data: accounts, error: accountsError }, { data: connection, error: connectionError }] =
+    await Promise.all([
+      supabase.from("bank_accounts").select("id, account_uid").eq("bank_connection_id", bankConnectionId),
+      supabase
+        .from("bank_connections")
+        .select("user_id, sync_from_date")
+        .eq("id", bankConnectionId)
+        .single(),
+    ]);
 
   if (accountsError) throw accountsError;
+  if (connectionError) throw connectionError;
+  // Every insert below needs an explicit user_id: this can run via the
+  // admin (service-role) client from the background auto-sync, which has
+  // no auth.uid() session for the "default auth.uid()" column default to
+  // fall back on — omitting it there crashed every single insert with a
+  // NOT NULL violation.
+  const userId = connection.user_id as string;
 
   let syncedCount = 0;
   // A malformed account_uid (e.g. a whole JSON object stringified in by a
@@ -276,56 +293,70 @@ export async function syncBankConnection(
       continue;
     }
 
-    const balance = await fetchAccountBalance(account.account_uid);
-    if (balance !== null) {
-      await supabase
-        .from("bank_accounts")
-        .update({ current_balance: balance, balance_updated_at: new Date().toISOString() })
-        .eq("id", account.id);
-    }
+    try {
+      const balance = await fetchAccountBalance(account.account_uid);
+      if (balance !== null) {
+        await supabase
+          .from("bank_accounts")
+          .update({ current_balance: balance, balance_updated_at: new Date().toISOString() })
+          .eq("id", account.id);
+      }
 
-    const transactions = await fetchAllTransactions(
-      account.account_uid,
-      connection?.sync_from_date ?? null
-    );
+      const transactions = await fetchAllTransactions(
+        account.account_uid,
+        connection?.sync_from_date ?? null
+      );
 
-    const rows = transactions
-      .map((tx) => {
-        const externalId = tx.transaction_id || tx.entry_reference;
-        if (!externalId) return null;
-        const bookingDate = resolveBookingDate(tx);
-        if (!bookingDate) return null; // no usable date at all — skip rather than crash
-        return {
-          bank_account_id: account.id,
-          external_transaction_id: externalId,
-          booking_date: bookingDate,
-          amount: toSignedAmount(tx),
-          currency: tx.transaction_amount.currency,
-          counterparty_name: counterpartyName(tx),
-          counterparty_iban: counterpartyIban(tx),
-          raw_description: (tx.remittance_information ?? []).join(" ") || null,
-        };
-      })
-      .filter((row): row is NonNullable<typeof row> => row !== null);
-
-    if (rows.length > 0) {
-      const { data: inserted, error: upsertError } = await supabase
-        .from("transactions")
-        .upsert(rows, {
-          onConflict: "bank_account_id,external_transaction_id",
-          ignoreDuplicates: true,
+      const rows = transactions
+        .map((tx) => {
+          const externalId = tx.transaction_id || tx.entry_reference;
+          if (!externalId) return null;
+          const bookingDate = resolveBookingDate(tx);
+          if (!bookingDate) return null; // no usable date at all — skip rather than crash
+          return {
+            user_id: userId,
+            bank_account_id: account.id,
+            external_transaction_id: externalId,
+            booking_date: bookingDate,
+            amount: toSignedAmount(tx),
+            currency: tx.transaction_amount.currency,
+            counterparty_name: counterpartyName(tx),
+            counterparty_iban: counterpartyIban(tx),
+            raw_description: (tx.remittance_information ?? []).join(" ") || null,
+          };
         })
-        .select("id");
-      if (upsertError) throw upsertError;
-      syncedCount += rows.length;
+        .filter((row): row is NonNullable<typeof row> => row !== null);
 
-      // ignoreDuplicates means only genuinely new rows come back here —
-      // safe to run the rule matcher / reclaim auto-linker on exactly those.
-      const insertedIds = (inserted ?? []).map((row) => row.id);
-      await markOwnTransfers(supabase, insertedIds);
-      await matchPotTransfers(supabase, insertedIds);
-      await applyCategoryRules(supabase, insertedIds);
-      await autoMatchIncomingTransactions(supabase, insertedIds);
+      if (rows.length > 0) {
+        const { data: inserted, error: upsertError } = await supabase
+          .from("transactions")
+          .upsert(rows, {
+            onConflict: "bank_account_id,external_transaction_id",
+            ignoreDuplicates: true,
+          })
+          .select("id");
+        if (upsertError) throw upsertError;
+        syncedCount += rows.length;
+
+        // ignoreDuplicates means only genuinely new rows come back here —
+        // safe to run the rule matcher / reclaim auto-linker on exactly those.
+        const insertedIds = (inserted ?? []).map((row) => row.id);
+        await markOwnTransfers(supabase, insertedIds);
+        await matchPotTransfers(supabase, insertedIds, userId);
+        await applyCategoryRules(supabase, insertedIds);
+        await autoMatchIncomingTransactions(supabase, insertedIds);
+      }
+    } catch (err) {
+      if (isExpiredSessionError(err)) {
+        await supabase
+          .from("bank_connections")
+          .update({ consent_status: "expired" })
+          .eq("id", bankConnectionId);
+        throw new Error(
+          `Bankkoppeling verlopen — koppel opnieuw (${bankConnectionId.slice(0, 8)})`
+        );
+      }
+      throw err;
     }
   }
 

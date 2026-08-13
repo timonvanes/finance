@@ -3,7 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // Sub-accounts like Rabobank's internal "potjes" don't have their own IBAN,
 // so the only signal that a transaction belongs to one is its name showing
 // up in the counterparty/description text.
-export async function matchPotTransfers(supabase: SupabaseClient, transactionIds: string[]) {
+//
+// userId is required when this runs via the admin (service-role) client
+// (the background auto-sync) — there's no auth.uid() session there for the
+// pot_entries.user_id column default to fall back on.
+export async function matchPotTransfers(
+  supabase: SupabaseClient,
+  transactionIds: string[],
+  userId: string
+) {
   if (transactionIds.length === 0) return;
 
   const { data: pots } = await supabase.from("pots").select("id, match_text").not("match_text", "is", null);
@@ -26,6 +34,7 @@ export async function matchPotTransfers(supabase: SupabaseClient, transactionIds
     // Money leaving the checking account (negative) is money going into the
     // pot (deposit, positive); money coming back (positive) is a withdrawal.
     const { error } = await supabase.from("pot_entries").insert({
+      user_id: userId,
       pot_id: pot.id,
       amount: -tx.amount,
       entry_date: tx.booking_date,
