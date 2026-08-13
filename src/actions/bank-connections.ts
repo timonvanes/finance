@@ -45,6 +45,7 @@ export async function startBankLink(formData: FormData) {
     auth_ref: authRef,
     consent_status: "pending",
     consent_expires_at: validUntil,
+    auth_started_at: new Date().toISOString(),
   });
   if (insertError) throw insertError;
 
@@ -90,6 +91,7 @@ export async function reauthorizeBankLink(formData: FormData) {
       session_id: null,
       consent_status: "pending",
       consent_expires_at: validUntil,
+      auth_started_at: new Date().toISOString(),
     })
     .eq("id", bankConnectionId);
   if (updateError) throw updateError;

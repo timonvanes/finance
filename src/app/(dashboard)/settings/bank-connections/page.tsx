@@ -29,7 +29,7 @@ export default async function BankConnectionsPage({
     supabase
       .from("bank_connections")
       .select(
-        "id, institution_name, consent_status, consent_expires_at, last_synced_at, sync_from_date, created_at"
+        "id, institution_name, consent_status, consent_expires_at, last_synced_at, sync_from_date, created_at, auth_started_at"
       )
       .order("created_at", { ascending: false }),
     supabase.from("bank_accounts").select("bank_connection_id"),
@@ -56,8 +56,9 @@ export default async function BankConnectionsPage({
         <p className="mt-1 text-xs text-gray-400">
           Blijft een koppeling op &quot;Bezig met koppelen…&quot; staan? Dat betekent dat de
           laatste stap bij de bank niet is afgerond (tab gesloten, 2FA verlopen, of een
-          fout bij de bank). Na 15 minuten wordt dat hier aangegeven — verwijder 'm dan en
-          probeer opnieuw.
+          fout bij de bank). Na 15 minuten wordt dat hier aangegeven met een knop om het
+          opnieuw te proberen — dat gebeurt zonder je bestaande transacties/categorisatie
+          kwijt te raken. Verwijderen is alleen nodig als je de bank echt wilt loskoppelen.
         </p>
         {linked && !warning && (
           <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
@@ -86,8 +87,19 @@ export default async function BankConnectionsPage({
             {connections.map((c) => {
               const accountCount = accountCounts.get(c.id) ?? 0;
               const hasNoAccounts = c.consent_status === "linked" && accountCount === 0;
+              // auth_started_at tracks the CURRENT attempt (reset whenever a
+              // re-authorization kicks off), unlike created_at which is the
+              // connection's original creation date — using created_at here
+              // made a connection look instantly "stuck" the moment an old
+              // connection's re-auth attempt began.
+              const pendingSince = new Date(c.auth_started_at ?? c.created_at).getTime();
               const isStalePending =
-                c.consent_status === "pending" && now - new Date(c.created_at).getTime() > STALE_PENDING_MS;
+                c.consent_status === "pending" && now - pendingSince > STALE_PENDING_MS;
+              // Any of these mean the same thing: the last handshake with
+              // the bank didn't result in a usable connection, and retrying
+              // (reusing this row, so existing transaction history and
+              // categorization survive) is the way forward.
+              const canReauthorize = c.consent_status === "expired" || isStalePending || hasNoAccounts;
               return (
                 <li key={c.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between">
@@ -95,9 +107,9 @@ export default async function BankConnectionsPage({
                       <p className="font-medium text-gray-900">{c.institution_name}</p>
                       <p className={hasNoAccounts || isStalePending ? "text-amber-700" : "text-gray-500"}>
                         {isStalePending
-                          ? "Koppelen niet afgerond of mislukt — verwijder en probeer opnieuw"
+                          ? "Koppelen niet afgerond of mislukt — probeer opnieuw"
                           : hasNoAccounts
-                            ? "Gekoppeld, maar 0 rekeningen gevonden — verwijder en koppel opnieuw"
+                            ? "Gekoppeld, maar 0 rekeningen gevonden — probeer opnieuw"
                             : STATUS_LABELS[c.consent_status] ?? c.consent_status}
                         {c.last_synced_at &&
                           !hasNoAccounts &&
@@ -112,9 +124,7 @@ export default async function BankConnectionsPage({
                       {c.consent_status === "linked" && !hasNoAccounts && (
                         <SyncButton bankConnectionId={c.id} />
                       )}
-                      {c.consent_status === "expired" && (
-                        <ReauthorizeButton bankConnectionId={c.id} />
-                      )}
+                      {canReauthorize && <ReauthorizeButton bankConnectionId={c.id} />}
                       <DeleteConnectionButton bankConnectionId={c.id} />
                     </div>
                   </div>
