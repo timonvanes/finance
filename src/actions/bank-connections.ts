@@ -60,6 +60,52 @@ export async function startBankLink(formData: FormData) {
   redirect(url);
 }
 
+// Re-runs the Enable Banking consent flow for an EXISTING connection (e.g.
+// one whose consent_status is "expired") instead of deleting it and starting
+// over. Deleting cascades to bank_accounts -> transactions -> everything
+// built on top (categorization, reclaims, pot matches) — reusing the same
+// connection row keeps all of that intact. The callback route matches the
+// accounts that come back by IBAN against the existing bank_accounts rows
+// for this connection, so it updates rather than duplicates them.
+export async function reauthorizeBankLink(formData: FormData) {
+  const bankConnectionId = formData.get("bankConnectionId") as string;
+
+  const supabase = await createClient();
+  const { data: connection, error: fetchError } = await supabase
+    .from("bank_connections")
+    .select("institution_name, institution_country")
+    .eq("id", bankConnectionId)
+    .single();
+  if (fetchError) throw fetchError;
+
+  const authRef = randomUUID();
+  const validUntil = new Date(
+    Date.now() + CONSENT_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const { error: updateError } = await supabase
+    .from("bank_connections")
+    .update({
+      auth_ref: authRef,
+      session_id: null,
+      consent_status: "pending",
+      consent_expires_at: validUntil,
+    })
+    .eq("id", bankConnectionId);
+  if (updateError) throw updateError;
+
+  const siteUrl = await getSiteUrl();
+  const { url } = await startAuthorization({
+    aspspName: connection.institution_name,
+    aspspCountry: connection.institution_country,
+    authRef,
+    redirectUrl: `${siteUrl}/api/enablebanking/callback`,
+    validUntil,
+  });
+
+  redirect(url);
+}
+
 // Returns a result object rather than throwing — an uncaught error here
 // (e.g. an expired Enable Banking session) surfaced to the user as a
 // generic "page couldn't load" crash instead of a readable message.

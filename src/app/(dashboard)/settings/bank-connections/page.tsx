@@ -3,6 +3,7 @@ import { getAvailableBanks, startBankLink } from "@/actions/bank-connections";
 import { SyncButton } from "./sync-button";
 import { SyncFromDate } from "./sync-from-date";
 import { DeleteConnectionButton } from "./delete-button";
+import { ReauthorizeButton } from "./reauthorize-button";
 
 // A first-time 90-day sync across several accounts can take a while —
 // raise the default serverless function timeout so "Sync now" doesn't get
@@ -110,6 +111,9 @@ export default async function BankConnectionsPage({
                     <div className="flex items-center gap-3">
                       {c.consent_status === "linked" && !hasNoAccounts && (
                         <SyncButton bankConnectionId={c.id} />
+                      )}
+                      {c.consent_status === "expired" && (
+                        <ReauthorizeButton bankConnectionId={c.id} />
                       )}
                       <DeleteConnectionButton bankConnectionId={c.id} />
                     </div>

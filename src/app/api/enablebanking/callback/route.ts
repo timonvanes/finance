@@ -95,22 +95,57 @@ export async function GET(request: NextRequest) {
         })
       );
 
-      const { error: accountsError } = await supabase.from("bank_accounts").insert(
-        accountDetails.map((account) => ({
-          bank_connection_id: connection.id,
-          account_uid: account.uid,
-          currency: account.currency ?? null,
-          display_name: account.name ?? null,
-          iban: account.account_id?.iban ?? null,
-        }))
-      );
-      if (accountsError) {
-        console.error("enablebanking callback: accounts insert failed", accountsError);
+      // On a re-authorization (e.g. after consent expiry) this connection
+      // may already have bank_accounts rows with transaction history,
+      // categorization, reclaims etc. attached — Enable Banking mints a new
+      // account_uid per session, so match returning accounts by IBAN and
+      // update the existing row in place instead of inserting a duplicate,
+      // which would silently orphan all of that history from the "new"
+      // account going forward.
+      const { data: existingAccounts, error: existingError } = await supabase
+        .from("bank_accounts")
+        .select("id, iban")
+        .eq("bank_connection_id", connection.id);
+      if (existingError) {
+        console.error("enablebanking callback: existing accounts lookup failed", existingError);
         redirectTo.searchParams.set(
           "error",
-          "accounts_insert_failed: " + accountsError.message
+          "existing_accounts_lookup_failed: " + existingError.message
         );
         return NextResponse.redirect(redirectTo);
+      }
+      const existingByIban = new Map(
+        (existingAccounts ?? []).filter((a) => a.iban).map((a) => [a.iban, a])
+      );
+
+      for (const account of accountDetails) {
+        const iban = account.account_id?.iban ?? null;
+        const existing = iban ? existingByIban.get(iban) : undefined;
+
+        const { error: accountError } = existing
+          ? await supabase
+              .from("bank_accounts")
+              .update({
+                account_uid: account.uid,
+                currency: account.currency ?? null,
+                display_name: account.name ?? null,
+              })
+              .eq("id", existing.id)
+          : await supabase.from("bank_accounts").insert({
+              bank_connection_id: connection.id,
+              account_uid: account.uid,
+              currency: account.currency ?? null,
+              display_name: account.name ?? null,
+              iban,
+            });
+        if (accountError) {
+          console.error("enablebanking callback: account upsert failed", accountError);
+          redirectTo.searchParams.set(
+            "error",
+            "accounts_insert_failed: " + accountError.message
+          );
+          return NextResponse.redirect(redirectTo);
+        }
       }
     } else {
       // The bank authorized the session but granted access to zero
