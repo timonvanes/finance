@@ -1,7 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/privacy", "/terms"];
+// The Enable Banking callback is a top-level redirect back from the bank's
+// own site, not a normal in-app navigation — gating it behind session
+// middleware meant any hiccup refreshing the Supabase session cookie at
+// that exact moment (expired access token + a stale/raced refresh token)
+// bounced the request to /login before the callback ever ran, silently
+// dropping the linking result. The route authenticates the request itself
+// via the unguessable auth_ref, so it doesn't need the browser session.
+const PUBLIC_PATHS = ["/login", "/privacy", "/terms", "/api/enablebanking/callback"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

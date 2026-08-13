@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createSessionWithRetry,
   getAccountDetails,
@@ -42,14 +42,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = await createClient();
+    // Admin (service-role) client rather than the cookie-based one: this
+    // request is a top-level redirect back from the bank's own site, so the
+    // browser's Supabase session cookie may be mid-refresh or momentarily
+    // invalid at this exact moment — that previously made the whole linking
+    // result silently vanish. The auth_ref check below (a random, unguessable
+    // per-authorization token) is what actually secures this endpoint, not
+    // the visiting browser's session.
+    const supabase = createAdminClient();
 
     // Validate that this authRef is one we generated and is still pending —
     // prevents an attacker from linking an arbitrary Enable Banking session
     // to this account.
     const { data: connection, error: fetchError } = await supabase
       .from("bank_connections")
-      .select("id")
+      .select("id, user_id")
       .eq("auth_ref", authRef)
       .eq("consent_status", "pending")
       .single();
@@ -132,6 +139,7 @@ export async function GET(request: NextRequest) {
               })
               .eq("id", existing.id)
           : await supabase.from("bank_accounts").insert({
+              user_id: connection.user_id,
               bank_connection_id: connection.id,
               account_uid: account.uid,
               currency: account.currency ?? null,
