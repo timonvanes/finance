@@ -35,39 +35,71 @@ export function SplitReclaimForm({
   const [txFilter, setTxFilter] = useState("");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  // Which checked people have had their amount typed by hand — those are
+  // never touched again. Anyone still untouched auto-shares the remainder
+  // evenly, so simply checking people (the common "split evenly" case)
+  // needs no typing at all, and typing a WBW-given override for one person
+  // reflows the rest instead of wiping it out.
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   // Combining multiple transactions first (WieBetaaltWat-style: add up the
-  // whole pot) instead of splitting one transaction at a time — but the
-  // actual DIVISION among people already happened in WBW, so this app only
-  // records the amounts WBW already computed rather than re-deriving them.
+  // whole pot) instead of splitting one transaction at a time.
   const totalAmount = transactions
     .filter((t) => selectedTx[t.id])
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  function toggleTx(txId: string, value: boolean) {
-    setSelectedTx((prev) => ({ ...prev, [txId]: value }));
+  function redistribute(
+    nextChecked: Record<string, boolean>,
+    nextTouched: Record<string, boolean>,
+    currentAmounts: Record<string, string>,
+    total: number
+  ) {
+    const checkedIds = Object.keys(nextChecked).filter((id) => nextChecked[id]);
+    const untouchedIds = checkedIds.filter((id) => !nextTouched[id]);
+    const touchedSum = checkedIds
+      .filter((id) => nextTouched[id])
+      .reduce((sum, id) => sum + (Number(currentAmounts[id]) || 0), 0);
+    if (untouchedIds.length === 0) return;
+    const share = Math.max(total - touchedSum, 0) / untouchedIds.length;
+    setAmounts((prev) => {
+      const next = { ...prev };
+      untouchedIds.forEach((id) => {
+        next[id] = share.toFixed(2);
+      });
+      return next;
+    });
   }
 
-  // When exactly one person is checked, that's almost always "the whole
-  // amount goes to this one person" — pre-fill it so a single click is
-  // enough. With more than one person checked, leave amounts alone: each
-  // person's number comes straight from WBW, not from a formula, and
-  // recomputing on every checkbox change used to wipe out whatever had
-  // already been typed in.
-  function applySoleCheckedDefault(nextChecked: Record<string, boolean>) {
-    const checkedIds = Object.keys(nextChecked).filter((id) => nextChecked[id]);
-    if (checkedIds.length !== 1) return;
-    const soleId = checkedIds[0];
-    setAmounts((prev) => (prev[soleId] ? prev : { ...prev, [soleId]: totalAmount.toFixed(2) }));
+  function toggleTx(txId: string, value: boolean) {
+    const nextSelectedTx = { ...selectedTx, [txId]: value };
+    setSelectedTx(nextSelectedTx);
+    const nextTotal = transactions
+      .filter((t) => nextSelectedTx[t.id])
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    redistribute(checked, touched, amounts, nextTotal);
   }
 
   function togglePerson(personId: string, value: boolean) {
     const nextChecked = { ...checked, [personId]: value };
+    const nextTouched = { ...touched };
+    if (!value) {
+      delete nextTouched[personId];
+      setAmounts((prev) => ({ ...prev, [personId]: "" }));
+    }
     setChecked(nextChecked);
-    applySoleCheckedDefault(nextChecked);
+    setTouched(nextTouched);
+    redistribute(nextChecked, nextTouched, amounts, totalAmount);
+  }
+
+  function editAmount(personId: string, value: string) {
+    const nextTouched = { ...touched, [personId]: true };
+    const nextAmounts = { ...amounts, [personId]: value };
+    setTouched(nextTouched);
+    setAmounts(nextAmounts);
+    redistribute(checked, nextTouched, nextAmounts, totalAmount);
   }
 
   const checkedCount = Object.values(checked).filter(Boolean).length;
@@ -85,11 +117,25 @@ export function SplitReclaimForm({
 
   function toggleGroup(groupPeople: Person[], select: boolean) {
     const nextChecked = { ...checked };
+    const nextTouched = { ...touched };
     groupPeople.forEach((p) => {
       nextChecked[p.id] = select;
+      if (!select) {
+        delete nextTouched[p.id];
+      }
     });
     setChecked(nextChecked);
-    applySoleCheckedDefault(nextChecked);
+    setTouched(nextTouched);
+    if (!select) {
+      setAmounts((prev) => {
+        const next = { ...prev };
+        groupPeople.forEach((p) => {
+          next[p.id] = "";
+        });
+        return next;
+      });
+    }
+    redistribute(nextChecked, nextTouched, amounts, totalAmount);
   }
 
   function resetForm() {
@@ -98,6 +144,7 @@ export function SplitReclaimForm({
     setTxFilter("");
     setChecked({});
     setAmounts({});
+    setTouched({});
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -164,7 +211,8 @@ export function SplitReclaimForm({
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-700">
           Wie deelt er mee (vink ook jezelf aan als je zelf ook een deel had)?{" "}
-          {checkedCount > 1 && "(vul het bedrag per persoon in zoals WBW/Splitwise dat aangeeft)"}
+          {checkedCount > 1 &&
+            "(wordt gelijk verdeeld — typ een bedrag over om dat van WBW/Splitwise over te nemen)"}
         </label>
         {selectedTxCount > 0 && (
           <p className="mb-1 text-xs text-gray-500">
@@ -176,7 +224,10 @@ export function SplitReclaimForm({
                 {Math.abs(totalAmount - enteredAmount) > 0.01 && (
                   <span className="text-amber-700">
                     {" "}
-                    · nog €{(totalAmount - enteredAmount).toFixed(2)} te verdelen
+                    ·{" "}
+                    {totalAmount - enteredAmount > 0
+                      ? `nog €${(totalAmount - enteredAmount).toFixed(2)} te verdelen`
+                      : `€${(enteredAmount - totalAmount).toFixed(2)} te veel ingevuld`}
                   </span>
                 )}
               </>
@@ -238,9 +289,7 @@ export function SplitReclaimForm({
                         name={`amount_${person.id}`}
                         disabled={!checked[person.id]}
                         value={amounts[person.id] ?? ""}
-                        onChange={(e) =>
-                          setAmounts((prev) => ({ ...prev, [person.id]: e.target.value }))
-                        }
+                        onChange={(e) => editAmount(person.id, e.target.value)}
                         placeholder="€"
                         className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-400"
                       />
