@@ -34,51 +34,47 @@ export function SplitReclaimForm({
   );
   const [txFilter, setTxFilter] = useState("");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   // Combining multiple transactions first (WieBetaaltWat-style: add up the
-  // whole pot, then divide) instead of splitting one transaction at a time.
+  // whole pot) instead of splitting one transaction at a time — but the
+  // actual DIVISION among people already happened in WBW, so this app only
+  // records the amounts WBW already computed rather than re-deriving them.
   const totalAmount = transactions
     .filter((t) => selectedTx[t.id])
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  // Amounts are weighted by quantity (WieBetaaltWat-style: 2x someone's
-  // share counts double), but stay a plain editable € amount afterwards for
-  // one-off custom splits.
-  function recalcWeightedSplit(
-    nextChecked: Record<string, boolean>,
-    nextQuantities: Record<string, string>,
-    amount: number
-  ) {
-    const ids = Object.keys(nextChecked).filter((id) => nextChecked[id]);
-    if (ids.length === 0) return;
-    const totalShares = ids.reduce((sum, id) => sum + (Number(nextQuantities[id]) || 1), 0);
-    if (totalShares <= 0) return;
-    setAmounts((prev) => {
-      const next = { ...prev };
-      ids.forEach((id) => {
-        const share = Number(nextQuantities[id]) || 1;
-        next[id] = ((amount * share) / totalShares).toFixed(2);
-      });
-      return next;
-    });
+  function toggleTx(txId: string, value: boolean) {
+    setSelectedTx((prev) => ({ ...prev, [txId]: value }));
   }
 
-  function toggleTx(txId: string, value: boolean) {
-    const nextSelectedTx = { ...selectedTx, [txId]: value };
-    setSelectedTx(nextSelectedTx);
-    const nextTotal = transactions
-      .filter((t) => nextSelectedTx[t.id])
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    recalcWeightedSplit(checked, quantities, nextTotal);
+  // When exactly one person is checked, that's almost always "the whole
+  // amount goes to this one person" — pre-fill it so a single click is
+  // enough. With more than one person checked, leave amounts alone: each
+  // person's number comes straight from WBW, not from a formula, and
+  // recomputing on every checkbox change used to wipe out whatever had
+  // already been typed in.
+  function applySoleCheckedDefault(nextChecked: Record<string, boolean>) {
+    const checkedIds = Object.keys(nextChecked).filter((id) => nextChecked[id]);
+    if (checkedIds.length !== 1) return;
+    const soleId = checkedIds[0];
+    setAmounts((prev) => (prev[soleId] ? prev : { ...prev, [soleId]: totalAmount.toFixed(2) }));
+  }
+
+  function togglePerson(personId: string, value: boolean) {
+    const nextChecked = { ...checked, [personId]: value };
+    setChecked(nextChecked);
+    applySoleCheckedDefault(nextChecked);
   }
 
   const checkedCount = Object.values(checked).filter(Boolean).length;
   const selectedTxCount = Object.values(selectedTx).filter(Boolean).length;
+  const enteredAmount = Object.keys(checked)
+    .filter((id) => checked[id])
+    .reduce((sum, id) => sum + (Number(amounts[id]) || 0), 0);
 
   const groups = new Map<string, Person[]>();
   for (const person of people) {
@@ -93,7 +89,7 @@ export function SplitReclaimForm({
       nextChecked[p.id] = select;
     });
     setChecked(nextChecked);
-    recalcWeightedSplit(nextChecked, quantities, totalAmount);
+    applySoleCheckedDefault(nextChecked);
   }
 
   function resetForm() {
@@ -101,7 +97,6 @@ export function SplitReclaimForm({
     setSelectedTx({});
     setTxFilter("");
     setChecked({});
-    setQuantities({});
     setAmounts({});
   }
 
@@ -169,9 +164,25 @@ export function SplitReclaimForm({
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-700">
           Wie deelt er mee (vink ook jezelf aan als je zelf ook een deel had)?{" "}
-          {checkedCount > 1 &&
-            "(bedrag wordt verdeeld o.b.v. aantal, pas zelf aan indien nodig)"}
+          {checkedCount > 1 && "(vul het bedrag per persoon in zoals WBW/Splitwise dat aangeeft)"}
         </label>
+        {selectedTxCount > 0 && (
+          <p className="mb-1 text-xs text-gray-500">
+            Totaal: <span className="font-medium text-gray-900">€{totalAmount.toFixed(2)}</span>
+            {checkedCount > 0 && (
+              <>
+                {" "}
+                · Ingevuld: €{enteredAmount.toFixed(2)}
+                {Math.abs(totalAmount - enteredAmount) > 0.01 && (
+                  <span className="text-amber-700">
+                    {" "}
+                    · nog €{(totalAmount - enteredAmount).toFixed(2)} te verdelen
+                  </span>
+                )}
+              </>
+            )}
+          </p>
+        )}
         {people.length === 0 ? (
           <p className="text-xs text-gray-500">
             Nog niemand toegevoegd — voeg eerst iemand toe bij{" "}
@@ -211,16 +222,7 @@ export function SplitReclaimForm({
                         name="personId"
                         value={person.id}
                         checked={!!checked[person.id]}
-                        onChange={(e) => {
-                          const nextChecked = { ...checked, [person.id]: e.target.checked };
-                          const nextQuantities = {
-                            ...quantities,
-                            [person.id]: quantities[person.id] ?? "1",
-                          };
-                          setChecked(nextChecked);
-                          setQuantities(nextQuantities);
-                          recalcWeightedSplit(nextChecked, nextQuantities, totalAmount);
-                        }}
+                        onChange={(e) => togglePerson(person.id, e.target.checked)}
                       />
                       <span
                         className="w-28 shrink-0 truncate text-sm text-gray-900"
@@ -229,22 +231,6 @@ export function SplitReclaimForm({
                         {person.name}
                         {person.isSelf && " (jij)"}
                       </span>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="1"
-                        step="1"
-                        title="Aantal (bv. 2x een broodje)"
-                        disabled={!checked[person.id]}
-                        value={quantities[person.id] ?? "1"}
-                        onChange={(e) => {
-                          const nextQuantities = { ...quantities, [person.id]: e.target.value };
-                          setQuantities(nextQuantities);
-                          recalcWeightedSplit(checked, nextQuantities, totalAmount);
-                        }}
-                        className="w-14 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-400"
-                      />
-                      <span className="text-xs text-gray-400">x</span>
                       <input
                         type="number"
                         inputMode="decimal"
