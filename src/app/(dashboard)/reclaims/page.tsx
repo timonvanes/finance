@@ -37,6 +37,12 @@ function ReclaimRow({
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 truncate font-medium text-gray-900">
             {person?.name ?? "Onbekend"} · €{r.computed_amount.toFixed(2)}
+            {r.source_total_amount != null &&
+              Math.abs(r.source_total_amount - r.computed_amount) > 0.01 && (
+                <span className="text-xs font-normal text-gray-400">
+                  (van €{r.source_total_amount.toFixed(2)} totaal)
+                </span>
+              )}
             {r.status === "requested" && r.reference_code && <ReferenceCode code={r.reference_code} />}
             {r.status === "written_off" && (
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
@@ -138,6 +144,7 @@ export default async function ReclaimsPage({
       return {
         id: r.id,
         computed_amount: r.computed_amount,
+        source_total_amount: r.source_total_amount,
         booking_date: tx?.booking_date ?? null,
         counterparty_name: tx?.counterparty_name ?? null,
         note: r.note,
@@ -182,6 +189,7 @@ export default async function ReclaimsPage({
       id: r.id,
       person_id: r.person_id,
       computed_amount: r.computed_amount,
+      source_total_amount: r.source_total_amount,
       reference_code: r.reference_code,
       tikkie_link: r.tikkie_link,
       settlement_method: r.settlement_method,

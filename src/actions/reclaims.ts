@@ -118,7 +118,7 @@ export async function getReclaims() {
   const { data, error } = await supabase
     .from("reclaims")
     .select(
-      `id, person_id, amount_type, amount_value, computed_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path,
+      `id, person_id, amount_type, amount_value, computed_amount, source_total_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path,
       people(name),
       transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, amount),
       settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -195,6 +195,7 @@ export async function createSplitReclaim(formData: FormData) {
           amount_type: "fixed",
           amount_value: share,
           computed_amount: share,
+          source_total_amount: totalAmount,
           tikkie_link: tikkieLink,
           settlement_method: settlementMethod,
           reference_code: code,

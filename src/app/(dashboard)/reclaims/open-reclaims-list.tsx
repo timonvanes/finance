@@ -19,6 +19,7 @@ interface OpenReclaim {
   id: string;
   person_id: string;
   computed_amount: number;
+  source_total_amount: number | null;
   reference_code: string | null;
   tikkie_link: string | null;
   settlement_method: string;
@@ -119,6 +120,12 @@ export function OpenReclaimsList({
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 truncate font-medium text-gray-900">
                     {r.person_name} · €{r.computed_amount.toFixed(2)}
+                    {r.source_total_amount != null &&
+                      Math.abs(r.source_total_amount - r.computed_amount) > 0.01 && (
+                        <span className="text-xs font-normal text-gray-400">
+                          (van €{r.source_total_amount.toFixed(2)} totaal)
+                        </span>
+                      )}
                     {r.reference_code && <ReferenceCode code={r.reference_code} />}
                   </p>
                   <p className="truncate text-gray-500">

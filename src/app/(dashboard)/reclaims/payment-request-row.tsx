@@ -23,6 +23,7 @@ interface IncomingTransaction {
 interface ReclaimLine {
   id: string;
   computed_amount: number;
+  source_total_amount: number | null;
   booking_date: string | null;
   counterparty_name: string | null;
   note: string | null;
@@ -80,6 +81,9 @@ export function PaymentRequestRow({
                   {r.counterparty_name ?? "Onbekend"}
                   {r.booking_date && ` (${new Date(r.booking_date).toLocaleDateString("nl-NL")})`}{" "}
                   €{r.computed_amount.toFixed(2)}
+                  {r.source_total_amount != null &&
+                    Math.abs(r.source_total_amount - r.computed_amount) > 0.01 &&
+                    ` (van €${r.source_total_amount.toFixed(2)} totaal)`}
                 </span>
                 <ReclaimNoteReceipt reclaimId={r.id} note={r.note} receiptPath={r.receipt_path} />
               </li>
