@@ -121,7 +121,8 @@ export function OpenReclaimsList({
                   <p className="flex flex-wrap items-center gap-2 truncate font-medium text-gray-900">
                     {r.person_name} · €{r.computed_amount.toFixed(2)}
                     {r.source_total_amount != null &&
-                      Math.abs(r.source_total_amount - r.computed_amount) > 0.01 && (
+                      (r.settlement_method === "external_app" ||
+                        Math.abs(r.source_total_amount - r.computed_amount) > 0.01) && (
                         <span className="text-xs font-normal text-gray-400">
                           (van €{r.source_total_amount.toFixed(2)} totaal)
                         </span>
@@ -169,10 +170,12 @@ export function OpenReclaimsList({
                 computedAmount={r.computed_amount}
                 incomingTransactions={incomingTransactions}
                 showAutoMatch={r.settlement_method === "bank"}
+                markLabel={r.settlement_method === "external_app" ? "Gezet in WieBetaaltWat" : undefined}
               />
               {r.settlement_method === "external_app" && (
                 <p className="text-xs text-gray-400">
-                  Via WieBetaaltWat/andere app — wordt niet automatisch herkend.
+                  Via WieBetaaltWat/andere app — wordt niet automatisch herkend. Voer €
+                  {(r.source_total_amount ?? r.computed_amount).toFixed(2)} in bij WBW.
                 </p>
               )}
               {r.settlement_method === "bank" &&

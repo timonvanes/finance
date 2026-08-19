@@ -21,11 +21,13 @@ export function LinkTransaction({
   computedAmount,
   incomingTransactions,
   showAutoMatch = true,
+  markLabel = "Handmatig markeren",
 }: {
   reclaimId: string;
   computedAmount: number;
   incomingTransactions: IncomingTransaction[];
   showAutoMatch?: boolean;
+  markLabel?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -77,7 +79,7 @@ export function LinkTransaction({
         }}
         className="whitespace-nowrap rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
       >
-        Handmatig markeren
+        {markLabel}
       </button>
     </div>
   );

@@ -38,7 +38,8 @@ function ReclaimRow({
           <p className="flex flex-wrap items-center gap-2 truncate font-medium text-gray-900">
             {person?.name ?? "Onbekend"} · €{r.computed_amount.toFixed(2)}
             {r.source_total_amount != null &&
-              Math.abs(r.source_total_amount - r.computed_amount) > 0.01 && (
+              (r.settlement_method === "external_app" ||
+                Math.abs(r.source_total_amount - r.computed_amount) > 0.01) && (
                 <span className="text-xs font-normal text-gray-400">
                   (van €{r.source_total_amount.toFixed(2)} totaal)
                 </span>
@@ -91,6 +92,7 @@ function ReclaimRow({
           computedAmount={r.computed_amount}
           incomingTransactions={incomingTransactions}
           showAutoMatch={r.settlement_method === "bank"}
+          markLabel={r.settlement_method === "external_app" ? "Gezet in WieBetaaltWat" : undefined}
         />
       )}
       {r.status === "requested" && r.settlement_method === "external_app" && (
