@@ -5,7 +5,7 @@ const SECTIONS: { title: string; items: { href: string; label: string; hint?: st
   {
     title: "Overig",
     items: [
-      { href: "/returns", label: "Retouren", hint: "Bestellingen en terugbetalingen" },
+      { href: "/pots", label: "Potjes", hint: "Nog in ontwikkeling" },
       { href: "/settings", label: "Instellingen" },
     ],
   },

@@ -62,20 +62,21 @@ const TABS: {
     ),
   },
   {
-    href: "/pots",
-    label: "Potjes",
-    match: (p) => p.startsWith("/pots"),
+    href: "/returns",
+    label: "Retouren",
+    match: (p) => p.startsWith("/returns"),
     icon: icon(
       <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4" />
+        <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
+        <path d="M3 8l9 5 9-5" />
+        <path d="M12 13v8" />
       </>
     ),
   },
   {
     href: "/meer",
     label: "Meer",
-    match: (p) => p.startsWith("/meer") || p.startsWith("/returns") || p.startsWith("/settings"),
+    match: (p) => p.startsWith("/meer") || p.startsWith("/pots") || p.startsWith("/settings"),
     icon: icon(
       <>
         <circle cx="5" cy="12" r="1.2" />
