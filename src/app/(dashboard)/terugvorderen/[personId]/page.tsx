@@ -51,16 +51,23 @@ export default async function PersonPage({
   for (const pr of paymentRequests) {
     if (pr.person_id !== personId) continue;
     personName = one(pr.people)?.name ?? personName;
-    const lines = (Array.isArray(pr.reclaims) ? pr.reclaims : []).map((l) => ({
-      title: one(l.transactions)?.counterparty_name ?? "Onbekend",
-      amount: l.computed_amount,
-    }));
+    const lines = (Array.isArray(pr.reclaims) ? pr.reclaims : []).map((l) => {
+      const ltx = one(l.transactions);
+      return {
+        title: ltx?.counterparty_name ?? "Onbekend",
+        date: ltx?.booking_date ?? null,
+        description: ltx?.raw_description ?? null,
+        transactionAmount: ltx?.amount ?? null,
+        amount: l.computed_amount,
+        sourceTotal: l.source_total_amount,
+      };
+    });
     const total = lines.reduce((s, l) => s + l.amount, 0);
     if (pr.status === "requested") {
       open.push({
         kind: "request",
         id: pr.id,
-        title: `Gecombineerd (${lines.length}x)`,
+        title: `Gecombineerd · ${lines.length} afschrijvingen`,
         subtitle: "Bank / Tikkie",
         amount: total,
         sourceTotal: null,

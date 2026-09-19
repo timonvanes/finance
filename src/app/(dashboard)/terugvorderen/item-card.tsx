@@ -31,7 +31,14 @@ export interface OpenItem {
   sourceTotal: number | null;
   method: "bank" | "external_app";
   referenceCode: string | null;
-  lines?: { title: string; amount: number }[];
+  lines?: {
+    title: string;
+    date: string | null;
+    description: string | null;
+    transactionAmount: number | null;
+    amount: number;
+    sourceTotal: number | null;
+  }[];
 }
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -84,11 +91,27 @@ export function ItemCard({
       )}
 
       {item.lines && (
-        <ul className="space-y-1 text-sm text-gray-500">
+        <ul className="space-y-2">
           {item.lines.map((l, i) => (
-            <li key={i} className="flex justify-between">
-              <span className="truncate">{l.title}</span>
-              <span>{euro(l.amount)}</span>
+            <li key={i} className="rounded-xl bg-gray-50 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-medium text-gray-900">{l.title}</p>
+                  {l.date && (
+                    <p className="text-sm text-gray-500">
+                      {new Date(l.date).toLocaleDateString("nl-NL")}
+                      {l.transactionAmount != null && ` · afschrijving ${euro(Math.abs(l.transactionAmount))}`}
+                    </p>
+                  )}
+                </div>
+                <p className="shrink-0 text-base font-semibold text-gray-900">{euro(l.amount)}</p>
+              </div>
+              {l.description && (
+                <p className="mt-1 line-clamp-2 text-sm text-gray-500">{l.description}</p>
+              )}
+              {l.sourceTotal != null && Math.abs(l.sourceTotal - l.amount) > 0.01 && (
+                <p className="mt-1 text-sm text-gray-500">van {euro(l.sourceTotal)} totaal</p>
+              )}
             </li>
           ))}
         </ul>
