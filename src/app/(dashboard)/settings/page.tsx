@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const SETTINGS_LINKS = [
+  { href: "/settings/month", label: "Begin van de maand", description: "Laat je maand beginnen op je salarisdag" },
   { href: "/settings/categories", label: "Categorieën", description: "Beheer je uitgaven- en inkomencategorieën" },
   { href: "/settings/budgets", label: "Budgetdoelen", description: "Maandbudget per categorie, met tempo-waarschuwingen op het overzicht" },
   { href: "/settings/people", label: "Personen", description: "Personen en groepen voor terugvorderingen" },

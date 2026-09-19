@@ -3,18 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { detectRecurringPayments } from "@/lib/dashboard/recurring";
 import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@/lib/contributions/net-amount";
-
-// monthsAgo 0 = current month, 1 = previous month, etc.
-function monthRange(monthsAgo: number = 0) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1)
-    .toISOString()
-    .slice(0, 10);
-  const end = new Date(now.getFullYear(), now.getMonth() - monthsAgo + 1, 1)
-    .toISOString()
-    .slice(0, 10);
-  return { start, end };
-}
+import { periodKey, periodRange } from "@/lib/month";
+import { getMonthStartDay } from "@/lib/settings";
 
 async function spendByCategoryForRange(start: string, end: string) {
   const supabase = await createClient();
@@ -41,8 +31,9 @@ async function spendByCategoryForRange(start: string, end: string) {
 // Includes each category's total for the previous month too, so the
 // dashboard can show "€50 meer dan vorige maand" style comparisons.
 export async function getMonthlySpendByCategory(monthsAgo: number = 0) {
-  const { start, end } = monthRange(monthsAgo);
-  const { start: prevStart, end: prevEnd } = monthRange(monthsAgo + 1);
+  const startDay = await getMonthStartDay();
+  const { start, end } = periodRange(monthsAgo, startDay);
+  const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
 
   const [totals, previousTotals] = await Promise.all([
     spendByCategoryForRange(start, end),
@@ -62,7 +53,8 @@ export async function getMonthlySpendByCategory(monthsAgo: number = 0) {
 
 export async function getDashboardSummary(monthsAgo: number = 0) {
   const supabase = await createClient();
-  const { start, end } = monthRange(monthsAgo);
+  const startDay = await getMonthStartDay();
+  const { start, end } = periodRange(monthsAgo, startDay);
 
   const [{ count: unreviewedCount }, { count: uncategorizedCount }, { data: openReclaims }, { data: monthTx }] =
     await Promise.all([
@@ -99,7 +91,7 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
     .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0);
 
   // For the "t.o.v. vorige maand" comparison.
-  const { start: prevStart, end: prevEnd } = monthRange(monthsAgo + 1);
+  const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
   const { data: prevMonthTx } = await supabase
     .from("visible_transactions")
     .select("id, amount")
@@ -162,16 +154,16 @@ const FREE_TO_SPEND_LOOKBACK_MONTHS = 3;
 // excluded since it isn't comparable yet).
 export async function getFreeToSpendPerMonth(): Promise<number | null> {
   const supabase = await createClient();
-  const now = new Date();
-  const rangeStart = new Date(now.getFullYear(), now.getMonth() - FREE_TO_SPEND_LOOKBACK_MONTHS, 1);
-  const rangeEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startDay = await getMonthStartDay();
+  const rangeStart = periodRange(FREE_TO_SPEND_LOOKBACK_MONTHS, startDay).start;
+  const rangeEnd = periodRange(0, startDay).start;
 
   const { data: transactions, error } = await supabase
     .from("visible_transactions")
     .select("id, amount, booking_date")
     .eq("is_transfer", false)
-    .gte("booking_date", rangeStart.toISOString().slice(0, 10))
-    .lt("booking_date", rangeEnd.toISOString().slice(0, 10));
+    .gte("booking_date", rangeStart)
+    .lt("booking_date", rangeEnd);
   if (error) throw error;
   if (!transactions || transactions.length === 0) return null;
 
@@ -179,8 +171,7 @@ export async function getFreeToSpendPerMonth(): Promise<number | null> {
 
   const perMonth = new Map<string, number>();
   for (const tx of transactions) {
-    const d = new Date(tx.booking_date);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    const key = periodKey(tx.booking_date, startDay);
     const net =
       tx.amount > 0
         ? netIncomeAmount(tx.id, tx.amount, adjustments)

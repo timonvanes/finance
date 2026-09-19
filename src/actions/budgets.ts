@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { dayIndexInPeriod, isoDate, periodKey, periodRange } from "@/lib/month";
+import { getMonthStartDay } from "@/lib/settings";
 import { getContributionAdjustments, netExpenseAmount } from "@/lib/contributions/net-amount";
 
 export async function getBudgets() {
@@ -47,12 +49,19 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
   const supabase = await createClient();
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    .toISOString()
-    .slice(0, 10);
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const pctOfMonthElapsed = (now.getDate() / daysInMonth) * 100;
+  const startDay = await getMonthStartDay();
+  const period = periodRange(0, startDay);
+  const monthStart = period.start;
+  const nextMonthStart = period.end;
+  const pctOfMonthElapsed = Math.min(
+    100,
+    Math.max(
+      0,
+      ((now.getTime() - period.startDate.getTime()) /
+        (period.endDate.getTime() - period.startDate.getTime())) *
+        100
+    )
+  );
 
   const [{ data: budgets, error: budgetsError }, { data: monthTx, error: txError }] =
     await Promise.all([
@@ -116,10 +125,10 @@ export async function getSpendingAnomaly(): Promise<SpendingAnomaly | null> {
   const supabase = await createClient();
 
   const now = new Date();
-  const dayOfMonth = now.getDate();
-  const lookbackStart = new Date(now.getFullYear(), now.getMonth() - ANOMALY_LOOKBACK_MONTHS, 1)
-    .toISOString()
-    .slice(0, 10);
+  const startDay = await getMonthStartDay();
+  const today = isoDate(now);
+  const currentDayIndex = dayIndexInPeriod(today, startDay);
+  const lookbackStart = periodRange(ANOMALY_LOOKBACK_MONTHS, startDay).start;
 
   const { data: transactions, error } = await supabase
     .from("visible_transactions")
@@ -131,15 +140,14 @@ export async function getSpendingAnomaly(): Promise<SpendingAnomaly | null> {
 
   const adjustments = await getContributionAdjustments(supabase, (transactions ?? []).map((tx) => tx.id));
 
-  const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+  const currentMonthKey = periodKey(today, startDay);
   const perMonth = new Map<string, number>();
 
   for (const tx of transactions ?? []) {
-    const d = new Date(tx.booking_date);
-    // Only count days 1..dayOfMonth so every month is compared over the
-    // same window as the current month-to-date.
-    if (d.getDate() > dayOfMonth) continue;
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    // Only count the same number of days into each period as the current
+    // period has had so far, so every period is compared over the same window.
+    if (dayIndexInPeriod(tx.booking_date, startDay) > currentDayIndex) continue;
+    const key = periodKey(tx.booking_date, startDay);
     perMonth.set(key, (perMonth.get(key) ?? 0) + netExpenseAmount(tx.id, tx.amount, adjustments));
   }
 

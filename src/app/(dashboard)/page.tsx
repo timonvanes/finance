@@ -12,6 +12,8 @@ import { autoSyncStaleConnections } from "@/actions/bank-connections";
 import { getPotsTotalBalance } from "@/actions/pots";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
+import { periodRange } from "@/lib/month";
+import { getMonthStartDay } from "@/lib/settings";
 
 const MONTH_NAMES = [
   "januari", "februari", "maart", "april", "mei", "juni",
@@ -55,7 +57,17 @@ export default async function DashboardPage({
     ]);
 
   const now = new Date();
-  const viewedDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
+  const startDay = await getMonthStartDay();
+  const period = periodRange(monthsAgo, startDay);
+  const viewedDate = period.labelDate;
+  const rangeLabel =
+    startDay === 1
+      ? null
+      : `${period.startDate.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} – ${new Date(
+          period.endDate.getFullYear(),
+          period.endDate.getMonth(),
+          period.endDate.getDate() - 1
+        ).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}`;
   const monthLabel =
     viewedDate.getFullYear() === now.getFullYear()
       ? MONTH_NAMES[viewedDate.getMonth()]
@@ -180,7 +192,10 @@ export default async function DashboardPage({
 
       <section className="space-y-2">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-lg font-semibold capitalize text-gray-900">{monthLabel}</h2>
+          <div>
+            <h2 className="text-lg font-semibold capitalize text-gray-900">{monthLabel}</h2>
+            {rangeLabel && <p className="text-sm text-gray-500">{rangeLabel}</p>}
+          </div>
           <div className="flex items-center gap-1">
             <Link
               href={`/?month=${monthsAgo + 1}`}

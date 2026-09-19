@@ -13,6 +13,7 @@ const SECTIONS: { title: string; items: { href: string; label: string; hint?: st
   {
     title: "Instellingen",
     items: [
+      { href: "/settings/month", label: "Begin van de maand", hint: "Bijvoorbeeld de dag dat je salaris komt" },
       { href: "/settings/bank-connections", label: "Bankkoppelingen" },
       { href: "/settings/budgets", label: "Budgetdoelen" },
       { href: "/settings/categories", label: "Categorieën" },
