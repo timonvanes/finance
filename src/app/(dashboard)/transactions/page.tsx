@@ -161,12 +161,12 @@ export default async function TransactionsPage({
 
             return (
               <li key={tx.id} className="flex flex-col gap-2 px-5 py-4 text-base">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="break-words font-medium text-gray-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-lg font-medium text-gray-900">
                       {tx.counterparty_name ?? "Onbekend"}
                     </p>
-                    <p className="text-gray-500">
+                    <p className="text-sm text-gray-500">
                       {new Date(tx.booking_date).toLocaleDateString("nl-NL")}
                       {bankConnection?.institution_name && (
                         <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
@@ -175,27 +175,27 @@ export default async function TransactionsPage({
                       )}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <CategorySelect
-                      transactionId={tx.id}
-                      categoryId={tx.category_id}
-                      categorySource={tx.category_source}
-                      categories={categories.filter((c) =>
-                        tx.amount > 0 ? c.kind === "income" : c.kind === "expense"
-                      )}
-                    />
-                    <span
-                      className={
-                        tx.amount < 0
-                          ? "w-24 text-right text-lg font-semibold text-gray-900"
-                          : "w-24 text-right text-lg font-semibold text-green-700"
-                      }
-                    >
-                      {tx.amount < 0 ? "-" : "+"}
-                      {"€"}
-                      {Math.abs(tx.amount).toFixed(2)}
-                    </span>
-                  </div>
+                  <span
+                    className={
+                      tx.amount < 0
+                        ? "shrink-0 whitespace-nowrap text-right text-lg font-semibold text-gray-900"
+                        : "shrink-0 whitespace-nowrap text-right text-lg font-semibold text-green-700"
+                    }
+                  >
+                    {tx.amount < 0 ? "-" : "+"}
+                    {"€"}
+                    {Math.abs(tx.amount).toFixed(2)}
+                  </span>
+                </div>
+                <div className="[&_select]:w-full">
+                  <CategorySelect
+                    transactionId={tx.id}
+                    categoryId={tx.category_id}
+                    categorySource={tx.category_source}
+                    categories={categories.filter((c) =>
+                      tx.amount > 0 ? c.kind === "income" : c.kind === "expense"
+                    )}
+                  />
                 </div>
                 {tx.raw_description && (
                   <p className="whitespace-pre-wrap break-words text-sm text-gray-500">
