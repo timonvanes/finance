@@ -167,7 +167,7 @@ export function SplitReclaimForm({
     <form
       ref={formRef}
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-md border border-gray-200 bg-white p-4"
+      className="space-y-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4"
     >
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-700">

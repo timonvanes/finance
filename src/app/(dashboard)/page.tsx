@@ -17,6 +17,11 @@ const MONTH_NAMES = [
   "juli", "augustus", "september", "oktober", "november", "december",
 ];
 
+const euro = (n: number, digits = 2) =>
+  n.toLocaleString("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+const card = "rounded-2xl bg-white ring-1 ring-gray-200";
+
 // The after() auto-sync can take a while on a big first sync — give it
 // room instead of being cut off by the default function timeout.
 export const maxDuration = 60;
@@ -58,86 +63,52 @@ export default async function DashboardPage({
   const expenseDelta = summary.monthExpense - summary.previousMonthExpense;
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-end">
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-3xl font-semibold text-gray-900">Overzicht</h1>
         <SyncAllButton />
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-gray-900">Overzicht</h1>
-        <div className="flex items-center gap-2 text-sm">
-          <Link
-            href={`/?month=${monthsAgo + 1}`}
-            className="flex min-h-[36px] items-center rounded-md border border-gray-200 px-2 text-gray-600 hover:bg-gray-50"
-          >
-            ← vorige maand
-          </Link>
-          {!isCurrentMonth && (
-            <Link
-              href={monthsAgo - 1 === 0 ? "/" : `/?month=${monthsAgo - 1}`}
-              className="flex min-h-[36px] items-center rounded-md border border-gray-200 px-2 text-gray-600 hover:bg-gray-50"
-            >
-              volgende maand →
-            </Link>
-          )}
-        </div>
       </div>
 
       {balances.accounts.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-medium text-gray-700">Saldo</h2>
-          <div className="rounded-md border border-gray-200 bg-white p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm text-gray-500">Totaal op betaalrekeningen</span>
-              <span className="text-xl font-semibold text-gray-900">€{balances.total.toFixed(2)}</span>
-            </div>
-            <ul className="space-y-1 border-t border-gray-100 pt-2">
-              {balances.accounts.map((a) => (
-                <li key={a.id} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">
-                    {a.institutionName}
-                    {a.displayName && ` · ${a.displayName}`}
-                  </span>
-                  <span className="text-gray-900">€{a.balance.toFixed(2)}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-gray-400">
-              Alleen betaalrekeningen — spaarrekeningen zijn via PSD2 niet op te vragen.
-              {potsTotal > 0 && (
-                <>
-                  {" "}
-                  Los daarvan staat er nog{" "}
-                  <Link href="/pots" className="underline">
-                    €{potsTotal.toFixed(2)} in je potjes
-                  </Link>
-                  .
-                </>
-              )}
-            </p>
-          </div>
+        <section className={`${card} p-5`}>
+          <p className="text-sm text-gray-500">Totaal op je betaalrekeningen</p>
+          <p className="mt-1 text-4xl font-semibold text-gray-900">{euro(balances.total)}</p>
+          <ul className="mt-4 divide-y divide-gray-100 border-t border-gray-100">
+            {balances.accounts.map((a) => (
+              <li key={a.id} className="flex min-h-[48px] items-center justify-between gap-3 text-base">
+                <span className="min-w-0 truncate text-gray-600">
+                  {a.institutionName}
+                  {a.displayName && ` · ${a.displayName}`}
+                </span>
+                <span className="shrink-0 font-medium text-gray-900">{euro(a.balance)}</span>
+              </li>
+            ))}
+          </ul>
+          {potsTotal > 0 && (
+            <Link href="/pots" className="mt-2 block text-sm text-teal-700">
+              Daarnaast {euro(potsTotal)} in je potjes ›
+            </Link>
+          )}
         </section>
       )}
 
       {freeToSpend != null && (
-        <section>
-          <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
-            <p className="text-xl font-semibold text-gray-900">
-              €{Math.max(0, freeToSpend).toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-500">
-              vrije ruimte per maand (gemiddeld over de laatste maanden)
-            </p>
+        <section className={`${card} flex items-center justify-between gap-4 p-5`}>
+          <div>
+            <p className="text-sm text-gray-500">Vrije ruimte per maand</p>
+            <p className="text-xs text-gray-400">gemiddelde van de laatste maanden</p>
           </div>
+          <p className="text-2xl font-semibold text-gray-900">{euro(Math.max(0, freeToSpend), 0)}</p>
         </section>
       )}
 
       {isCurrentMonth && (anomaly || budgetWarnings.length > 0) && (
         <section className="space-y-2">
           {anomaly && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              Je hebt tot nu toe deze maand €{anomaly.monthToDateSpend.toFixed(0)} uitgegeven
-              — {Math.round(anomaly.pctAbove)}% meer dan je gewoonlijk op dit punt van de
-              maand hebt uitgegeven (~€{anomaly.usualMonthToDateSpend.toFixed(0)}).
+            <p className="rounded-2xl bg-red-50 p-4 text-base text-red-700 ring-1 ring-red-100">
+              Je hebt tot nu toe deze maand {euro(anomaly.monthToDateSpend, 0)} uitgegeven —{" "}
+              {Math.round(anomaly.pctAbove)}% meer dan gewoonlijk op dit punt van de maand (~
+              {euro(anomaly.usualMonthToDateSpend, 0)}).
             </p>
           )}
           {budgetWarnings.map((b) => (
@@ -145,21 +116,21 @@ export default async function DashboardPage({
               key={b.categoryId}
               className={
                 b.overBudget
-                  ? "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
-                  : "rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                  ? "rounded-2xl bg-red-50 p-4 text-base text-red-700 ring-1 ring-red-100"
+                  : "rounded-2xl bg-amber-50 p-4 text-base text-amber-800 ring-1 ring-amber-100"
               }
             >
               {b.overBudget ? (
                 <>
-                  Budget <span className="font-medium">{b.categoryName}</span> overschreden:
-                  €{b.spent.toFixed(0)} van €{b.monthlyLimit.toFixed(0)}.
+                  Budget <span className="font-medium">{b.categoryName}</span> overschreden:{" "}
+                  {euro(b.spent, 0)} van {euro(b.monthlyLimit, 0)}.
                 </>
               ) : (
                 <>
                   Je zit op {Math.round(b.pctOfMonthElapsed)}% van de maand, maar al op{" "}
                   {Math.round(b.pctUsed)}% van je budget voor{" "}
-                  <span className="font-medium">{b.categoryName}</span> (€{b.spent.toFixed(0)}{" "}
-                  van €{b.monthlyLimit.toFixed(0)}).
+                  <span className="font-medium">{b.categoryName}</span> ({euro(b.spent, 0)} van{" "}
+                  {euro(b.monthlyLimit, 0)}).
                 </>
               )}
             </p>
@@ -167,71 +138,87 @@ export default async function DashboardPage({
         </section>
       )}
 
-      <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Te doen</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Link
-            href="/transactions"
-            className="min-h-[64px] rounded-md border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50"
-          >
-            <p className="text-2xl font-semibold text-gray-900">{summary.unreviewedCount}</p>
-            <p className="text-sm text-gray-500">nog te controleren</p>
-          </Link>
-          <Link
-            href="/transactions?type=uncategorized"
-            className="min-h-[64px] rounded-md border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50"
-          >
-            <p className="text-2xl font-semibold text-gray-900">{summary.uncategorizedCount}</p>
-            <p className="text-sm text-gray-500">nog te categoriseren</p>
-          </Link>
-          <Link
-            href="/reclaims"
-            className="min-h-[64px] rounded-md border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50"
-          >
-            <p className="text-2xl font-semibold text-gray-900">
-              €{summary.outstandingReclaimsTotal.toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-500">nog openstaand (terugvorderingen)</p>
-          </Link>
-        </div>
+      <section className="space-y-2">
+        <h2 className="px-1 text-lg font-semibold text-gray-900">Te doen</h2>
+        <ul className={`${card} overflow-hidden`}>
+          {[
+            { href: "/transactions", value: String(summary.unreviewedCount), label: "nog te controleren" },
+            {
+              href: "/transactions?type=uncategorized",
+              value: String(summary.uncategorizedCount),
+              label: "nog te categoriseren",
+            },
+            {
+              href: "/terugvorderen",
+              value: euro(summary.outstandingReclaimsTotal),
+              label: "nog te ontvangen (terugvorderen)",
+            },
+          ].map((row) => (
+            <li key={row.href} className="border-b border-gray-100 last:border-b-0">
+              <Link href={row.href} className="flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50">
+                <span className="w-24 shrink-0 text-xl font-semibold text-gray-900">{row.value}</span>
+                <span className="flex-1 text-base text-gray-600">{row.label}</span>
+                <span className="text-2xl text-gray-300">›</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
-          {isCurrentMonth ? "Deze maand" : "Maand"} ({monthLabel})
-        </h2>
+      <section className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-lg font-semibold capitalize text-gray-900">{monthLabel}</h2>
+          <div className="flex items-center gap-1">
+            <Link
+              href={`/?month=${monthsAgo + 1}`}
+              aria-label="Vorige maand"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
+            >
+              ‹
+            </Link>
+            {isCurrentMonth ? (
+              <span className="flex h-11 w-11 items-center justify-center rounded-full text-2xl text-gray-300">›</span>
+            ) : (
+              <Link
+                href={monthsAgo - 1 === 0 ? "/" : `/?month=${monthsAgo - 1}`}
+                aria-label="Volgende maand"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
+              >
+                ›
+              </Link>
+            )}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
-            <p className="text-xl font-semibold text-green-700">€{summary.monthIncome.toFixed(2)}</p>
+          <div className={`${card} p-4`}>
+            <p className="text-2xl font-semibold text-green-700">{euro(summary.monthIncome, 0)}</p>
             <p className="text-sm text-gray-500">binnengekomen</p>
           </div>
-          <div className="rounded-md border border-gray-200 bg-white px-4 py-3">
-            <p className="text-xl font-semibold text-gray-900">€{summary.monthExpense.toFixed(2)}</p>
-            <p className="text-sm text-gray-500">
-              uitgegeven
-              {summary.previousMonthExpense > 0 && (
-                <span className={expenseDelta > 0 ? "text-red-600" : "text-green-700"}>
-                  {" "}
-                  ({expenseDelta > 0 ? "+" : ""}€{expenseDelta.toFixed(0)} t.o.v. vorige maand)
-                </span>
-              )}
-            </p>
+          <div className={`${card} p-4`}>
+            <p className="text-2xl font-semibold text-gray-900">{euro(summary.monthExpense, 0)}</p>
+            <p className="text-sm text-gray-500">uitgegeven</p>
+            {summary.previousMonthExpense > 0 && (
+              <p className={`text-sm ${expenseDelta > 0 ? "text-red-600" : "text-green-700"}`}>
+                {expenseDelta > 0 ? "+" : ""}
+                {euro(expenseDelta, 0)} t.o.v. vorige maand
+              </p>
+            )}
           </div>
         </div>
       </section>
 
       {isCurrentMonth && budgetStatus.length > 0 && (
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-gray-700">Budgetten ({monthLabel})</h2>
-            <Link href="/settings/budgets" className="text-xs text-gray-500 underline">
+        <section className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-lg font-semibold text-gray-900">Budgetten</h2>
+            <Link href="/settings/budgets" className="flex min-h-[44px] items-center text-sm text-teal-700">
               Aanpassen
             </Link>
           </div>
-          <ul className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+          <ul className={`${card} space-y-4 p-5`}>
             {budgetStatus.map((b) => (
               <li key={b.categoryId}>
-                <div className="mb-1 flex items-center justify-between text-sm">
+                <div className="mb-2 flex items-center justify-between text-base">
                   <span className="text-gray-900">{b.categoryName}</span>
                   <span
                     className={
@@ -242,23 +229,23 @@ export default async function DashboardPage({
                           : "font-medium text-gray-900"
                     }
                   >
-                    €{b.spent.toFixed(2)} / €{b.monthlyLimit.toFixed(2)}
+                    {euro(b.spent, 0)} / {euro(b.monthlyLimit, 0)}
                   </span>
                 </div>
-                <div className="relative h-2 rounded-full bg-gray-100">
+                <div className="relative h-3 rounded-full bg-gray-100">
                   <div
                     className={
                       b.overBudget
-                        ? "h-2 rounded-full bg-red-600"
+                        ? "h-3 rounded-full bg-red-600"
                         : b.aheadOfPace
-                          ? "h-2 rounded-full bg-amber-500"
-                          : "h-2 rounded-full bg-green-600"
+                          ? "h-3 rounded-full bg-amber-500"
+                          : "h-3 rounded-full bg-teal-600"
                     }
                     style={{ width: `${Math.min(100, b.pctUsed)}%` }}
                   />
                   {/* marker for how far the month has progressed */}
                   <div
-                    className="absolute top-[-2px] h-3 w-0.5 bg-gray-400"
+                    className="absolute top-[-3px] h-[18px] w-0.5 bg-gray-400"
                     style={{ left: `${b.pctOfMonthElapsed}%` }}
                     title="Zover is de maand"
                   />
@@ -269,32 +256,31 @@ export default async function DashboardPage({
         </section>
       )}
 
-      <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
-          Uitgaven per categorie ({monthLabel})
-        </h2>
+      <section className="space-y-2">
+        <h2 className="px-1 text-lg font-semibold text-gray-900">Uitgaven per categorie</h2>
         {categorySpend.length > 0 ? (
-          <ul className="space-y-2 rounded-md border border-gray-200 bg-white p-4">
+          <ul className={`${card} space-y-4 p-5`}>
             {categorySpend.map((c) => {
               const delta = c.total - c.previousTotal;
               return (
                 <li key={c.name}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
+                  <div className="mb-2 flex items-center justify-between text-base">
                     <span className="text-gray-900">{c.name}</span>
                     <span className="font-medium text-gray-900">
-                      €{c.total.toFixed(2)}
+                      {euro(c.total, 0)}
                       {c.previousTotal > 0 && Math.abs(delta) >= 1 && (
                         <span
-                          className={`ml-1 text-xs font-normal ${delta > 0 ? "text-red-600" : "text-green-700"}`}
+                          className={`ml-1 text-sm font-normal ${delta > 0 ? "text-red-600" : "text-green-700"}`}
                         >
-                          ({delta > 0 ? "+" : ""}€{delta.toFixed(0)})
+                          ({delta > 0 ? "+" : ""}
+                          {euro(delta, 0)})
                         </span>
                       )}
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-gray-100">
+                  <div className="h-3 rounded-full bg-gray-100">
                     <div
-                      className="h-2 rounded-full bg-gray-900"
+                      className="h-3 rounded-full bg-teal-700"
                       style={{ width: `${(c.total / maxCategoryTotal) * 100}%` }}
                     />
                   </div>
@@ -303,33 +289,36 @@ export default async function DashboardPage({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-gray-500">Nog geen uitgaven deze maand.</p>
+          <p className={`${card} p-5 text-base text-gray-500`}>Nog geen uitgaven in deze maand.</p>
         )}
       </section>
 
       {isCurrentMonth && (
-      <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Vaste lasten (herkend)</h2>
-        {recurring.length > 0 ? (
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
-            {recurring.map((r) => (
-              <li key={r.counterpartyName} className="flex items-center justify-between px-4 py-3 text-sm">
-                <div>
-                  <p className="font-medium text-gray-900">{r.counterpartyName}</p>
-                  <p className="text-gray-500">{r.occurrences}x in de laatste 90 dagen</p>
-                </div>
-                <span className="font-medium text-gray-900">
-                  ~€{r.averageAmount.toFixed(2)}/keer
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-gray-500">
-            Nog geen vaste lasten herkend — dit werkt beter zodra er meer historie is.
-          </p>
-        )}
-      </section>
+        <section className="space-y-2">
+          <h2 className="px-1 text-lg font-semibold text-gray-900">Vaste lasten</h2>
+          {recurring.length > 0 ? (
+            <ul className={`${card} overflow-hidden`}>
+              {recurring.map((r) => (
+                <li
+                  key={r.counterpartyName}
+                  className="flex min-h-[64px] items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-medium text-gray-900">{r.counterpartyName}</p>
+                    <p className="text-sm text-gray-500">{r.occurrences}x in de laatste 90 dagen</p>
+                  </div>
+                  <span className="shrink-0 text-base font-medium text-gray-900">
+                    ~{euro(r.averageAmount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={`${card} p-5 text-base text-gray-500`}>
+              Nog geen vaste lasten herkend — dit werkt beter zodra er meer historie is.
+            </p>
+          )}
+        </section>
       )}
     </div>
   );

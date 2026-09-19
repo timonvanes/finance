@@ -19,7 +19,7 @@ export function InvestmentCalculator() {
   const growth = futureValue - totalContributed;
 
   return (
-    <div className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+    <div className="space-y-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4">
       <p className="text-xs text-gray-500">
         Indicatieve berekening op basis van vast maandbedrag en een aangenomen jaarlijks
         rendement — geen beleggingsadvies en geen garantie, echt rendement kan (flink)

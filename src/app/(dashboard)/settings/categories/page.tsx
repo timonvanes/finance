@@ -8,15 +8,15 @@ export default async function CategoriesPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-lg font-semibold text-gray-900">Categorieën</h1>
+      <h1 className="text-3xl font-semibold text-gray-900">Categorieën</h1>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
           Nieuwe categorie
         </h2>
         <form
           action={createCategory}
-          className="flex items-end gap-3 rounded-md border border-gray-200 bg-white p-4"
+          className="flex items-end gap-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4"
         >
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-gray-700">
@@ -53,8 +53,8 @@ export default async function CategoriesPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Uitgaven</h2>
-        <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Uitgaven</h2>
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
           {expenseCategories.map((c) => (
             <li key={c.id} className="flex items-center px-4 py-2 text-sm text-gray-900">
               <CategoryRow categoryId={c.id} name={c.name} />
@@ -64,8 +64,8 @@ export default async function CategoriesPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Inkomen</h2>
-        <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Inkomen</h2>
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
           {incomeCategories.map((c) => (
             <li key={c.id} className="flex items-center px-4 py-2 text-sm text-gray-900">
               <CategoryRow categoryId={c.id} name={c.name} />

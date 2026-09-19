@@ -83,7 +83,7 @@ export function ImportForm() {
 
   if (step === "paste") {
     return (
-      <div className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+      <div className="space-y-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4">
         <label className="block text-xs font-medium text-gray-700">
           Plak hier de tekst van je orderbevestigingsmail
         </label>
@@ -108,7 +108,7 @@ export function ImportForm() {
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+    <div className="space-y-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4">
       <p className="text-xs text-gray-500">
         Controleer de herkende gegevens en pas aan waar nodig.
       </p>

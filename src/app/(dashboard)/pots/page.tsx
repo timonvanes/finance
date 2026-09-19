@@ -11,7 +11,7 @@ export default async function PotsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Potjes</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">Potjes</h1>
         <p className="mt-1 text-sm text-gray-500">
           Virtuele potjes voor vakantie, spaar- en beleggingsdoelen. Totaal opzij gezet:{" "}
           <span className="font-medium text-gray-900">€{totalBalance.toFixed(2)}</span>
@@ -42,10 +42,10 @@ export default async function PotsPage() {
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Nieuw potje</h2>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Nieuw potje</h2>
         <form
           action={createPot}
-          className="flex flex-wrap items-end gap-3 rounded-md border border-gray-200 bg-white p-4"
+          className="flex flex-wrap items-end gap-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4"
         >
           <div className="flex-1 basis-40">
             <label className="mb-1 block text-xs font-medium text-gray-700">Naam</label>
@@ -127,11 +127,11 @@ export default async function PotsPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
           Mijn potjes ({pots.length})
         </h2>
         {pots.length > 0 ? (
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {pots.map((pot) => (
               <PotRow key={pot.id} pot={pot} />
             ))}
@@ -142,7 +142,7 @@ export default async function PotsPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Beleggen: wat kan €X/maand opleveren?</h2>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Beleggen: wat kan €X/maand opleveren?</h2>
         <InvestmentCalculator />
       </section>
     </div>

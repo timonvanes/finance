@@ -106,7 +106,7 @@ export function OpenReclaimsList({
         </div>
       )}
 
-      <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+      <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
         {reclaims.map((r) => (
           <li key={r.id} className="flex gap-3 px-4 py-3 text-sm">
             <input

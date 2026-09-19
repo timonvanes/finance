@@ -12,7 +12,7 @@ export default async function BudgetsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Budgetdoelen</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">Budgetdoelen</h1>
         <p className="mt-1 text-sm text-gray-500">
           Stel per categorie een maandbudget in — op het overzicht zie je hoe je ervoor
           staat, met een waarschuwing als je sneller uitgeeft dan de maand vordert.
@@ -30,7 +30,7 @@ export default async function BudgetsPage() {
       </div>
 
       {expenseCategories.length > 0 ? (
-        <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
           {expenseCategories.map((c) => (
             <li key={c.id} className="flex items-center px-4 py-2">
               <BudgetRow

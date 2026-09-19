@@ -20,7 +20,7 @@ export default async function ReturnsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Retouren</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">Retouren</h1>
         <p className="mt-1 text-sm text-gray-500">
           Plak een orderbevestigingsmail om de artikelen te herkennen, vink aan wat je
           retour stuurt, en koppel de restitutie zodra die binnenkomt.
@@ -28,14 +28,14 @@ export default async function ReturnsPage() {
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Nieuwe bestelling</h2>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Nieuwe bestelling</h2>
         <ImportForm />
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Bestellingen ({orders.length})</h2>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Bestellingen ({orders.length})</h2>
         {orders.length > 0 ? (
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {orders.map((order) => (
               <OrderRow key={order.id} order={order} incomingTransactions={incomingTransactions} />
             ))}

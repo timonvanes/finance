@@ -11,13 +11,13 @@ export default async function PeoplePage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-lg font-semibold text-gray-900">Personen</h1>
+      <h1 className="text-3xl font-semibold text-gray-900">Personen</h1>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Groepen</h2>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Groepen</h2>
         <form
           action={createPersonGroup}
-          className="flex items-end gap-3 rounded-md border border-gray-200 bg-white p-4"
+          className="flex items-end gap-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4"
         >
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-gray-700">
@@ -46,12 +46,12 @@ export default async function PeoplePage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
           Nieuw persoon
         </h2>
         <form
           action={createPerson}
-          className="flex items-end gap-3 rounded-md border border-gray-200 bg-white p-4"
+          className="flex items-end gap-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4"
         >
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-gray-700">
@@ -92,9 +92,9 @@ export default async function PeoplePage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Overzicht</h2>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Overzicht</h2>
         {people.length > 0 ? (
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {people.map((p) => (
               <li key={p.id} className="flex items-center gap-3 px-4 py-2 text-sm">
                 <PersonRow

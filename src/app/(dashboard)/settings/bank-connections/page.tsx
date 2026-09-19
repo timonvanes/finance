@@ -52,7 +52,7 @@ export default async function BankConnectionsPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Bankkoppelingen</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">Bankkoppelingen</h1>
         <p className="mt-1 text-xs text-gray-400">
           Blijft een koppeling op &quot;Bezig met koppelen…&quot; staan? Dat betekent dat de
           laatste stap bij de bank niet is afgerond (tab gesloten, 2FA verlopen, of een
@@ -79,11 +79,11 @@ export default async function BankConnectionsPage({
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
           Gekoppelde rekeningen
         </h2>
         {connections && connections.length > 0 ? (
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {connections.map((c) => {
               const accountCount = accountCounts.get(c.id) ?? 0;
               const hasNoAccounts = c.consent_status === "linked" && accountCount === 0;
@@ -141,8 +141,8 @@ export default async function BankConnectionsPage({
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">Bank koppelen</h2>
-        <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Bank koppelen</h2>
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
           {banks.map((bank) => (
             <li
               key={`${bank.name}-${bank.country}`}

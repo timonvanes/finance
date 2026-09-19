@@ -206,7 +206,7 @@ export default async function ReclaimsPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Terugvorderingen</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">Terugvorderingen</h1>
         <Link
           href="/terugvorderen"
           className="mt-2 inline-flex min-h-[44px] items-center rounded-md bg-blue-50 px-4 text-sm font-medium text-blue-700"
@@ -232,7 +232,7 @@ export default async function ReclaimsPage({
 
       {queuedTransactions.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-medium text-gray-700">
+          <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
             Te verdelen ({queuedTransactions.length})
           </h2>
           <ul className="divide-y divide-gray-200 rounded-md border border-amber-200 bg-amber-50">
@@ -270,7 +270,7 @@ export default async function ReclaimsPage({
       )}
 
       <section id="split-form">
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
           Nieuwe terugvordering
         </h2>
         <SplitReclaimForm
@@ -283,10 +283,10 @@ export default async function ReclaimsPage({
 
       {openPaymentRequests.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-medium text-gray-700">
+          <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
             Gecombineerde betaalverzoeken ({openPaymentRequests.length})
           </h2>
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {openPaymentRequests.map((pr) => (
               <PaymentRequestRow
                 key={pr.id}
@@ -305,7 +305,7 @@ export default async function ReclaimsPage({
       )}
 
       <section>
-        <h2 className="mb-1 text-sm font-medium text-gray-700">
+        <h2 className="mb-1 px-1 text-lg font-semibold text-gray-900">
           Openstaand ({openReclaims.length})
         </h2>
         <p className="mb-2 text-xs text-gray-500">
@@ -326,11 +326,11 @@ export default async function ReclaimsPage({
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-gray-700">
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
           Ontvangen ({paidReclaims.length + paidPaymentRequests.length})
         </h2>
         {paidReclaims.length > 0 || paidPaymentRequests.length > 0 ? (
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white opacity-75">
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200 opacity-75">
             {paidPaymentRequests.map((pr) => (
               <PaymentRequestRow
                 key={pr.id}
@@ -355,13 +355,13 @@ export default async function ReclaimsPage({
 
       {(writtenOffReclaims.length > 0 || writtenOffPaymentRequests.length > 0) && (
         <section>
-          <h2 className="mb-1 text-sm font-medium text-gray-700">
+          <h2 className="mb-1 px-1 text-lg font-semibold text-gray-900">
             Niet inbaar ({writtenOffReclaims.length + writtenOffPaymentRequests.length})
           </h2>
           <p className="mb-2 text-xs text-gray-500">
             Niet meer opgevolgd — telt niet mee als openstaand en wordt beschouwd als eigen kosten.
           </p>
-          <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white opacity-75">
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200 opacity-75">
             {writtenOffPaymentRequests.map((pr) => (
               <PaymentRequestRow
                 key={pr.id}

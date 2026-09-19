@@ -79,35 +79,34 @@ export default async function TransactionsPage({
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-gray-900">Transacties</h1>
-        <div className="flex flex-wrap gap-2">
-          <div className="flex flex-wrap gap-1 rounded-md border border-gray-200 bg-white p-1 text-sm">
-            {FILTERS.map((f) => (
-              <Link
-                key={f.value}
-                href={buildHref({ type: f.value }, current)}
-                className={
-                  activeFilter === f.value
-                    ? "min-h-[40px] rounded px-3 py-2 font-medium bg-gray-900 text-white flex items-center"
-                    : "min-h-[40px] rounded px-3 py-2 text-gray-600 hover:bg-gray-50 flex items-center"
-                }
-              >
-                {f.label}
-              </Link>
-            ))}
-          </div>
-          <Link
-            href={buildHref({ sort: activeSort === "asc" ? "desc" : "asc" }, current)}
-            className="flex min-h-[40px] items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            Datum {activeSort === "asc" ? "↑ oudste eerst" : "↓ nieuwste eerst"}
-          </Link>
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-3xl font-semibold text-gray-900">Transacties</h1>
+        <Link
+          href={buildHref({ sort: activeSort === "asc" ? "desc" : "asc" }, current)}
+          className="flex min-h-[44px] items-center rounded-full bg-white px-4 text-sm text-gray-600 ring-1 ring-gray-200 active:bg-gray-100"
+        >
+          {activeSort === "asc" ? "↑ Oudste eerst" : "↓ Nieuwste eerst"}
+        </Link>
       </div>
 
-      <form method="get" className="mt-3 flex items-center gap-2">
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.value}
+            href={buildHref({ type: f.value }, current)}
+            className={
+              activeFilter === f.value
+                ? "flex min-h-[44px] shrink-0 items-center rounded-full bg-teal-700 px-5 text-base font-medium text-white"
+                : "flex min-h-[44px] shrink-0 items-center rounded-full bg-white px-5 text-base text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
+            }
+          >
+            {f.label}
+          </Link>
+        ))}
+      </div>
+
+      <form method="get" className="flex items-center gap-2">
         {activeFilter !== "unreviewed" && <input type="hidden" name="type" value={activeFilter} />}
         {activeSort !== "desc" && <input type="hidden" name="sort" value={activeSort} />}
         <input
@@ -115,25 +114,25 @@ export default async function TransactionsPage({
           name="q"
           defaultValue={activeQuery}
           placeholder="Zoek op naam, omschrijving of notitie…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm sm:w-80"
+          className="min-h-[52px] w-full rounded-2xl border border-gray-200 bg-white px-4 text-base"
         />
         <button
           type="submit"
-          className="min-h-[40px] rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+          className="min-h-[52px] rounded-2xl bg-gray-900 px-5 text-base font-medium text-white active:bg-gray-700"
         >
-          Zoeken
+          Zoek
         </button>
         {activeQuery && (
           <Link
             href={buildHref({ q: "" }, current)}
-            className="min-h-[40px] whitespace-nowrap text-sm text-gray-500 underline hover:text-gray-700 flex items-center"
+            className="flex min-h-[44px] items-center whitespace-nowrap text-sm text-gray-500 underline"
           >
             Wissen
           </Link>
         )}
       </form>
 
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+      <p className="flex flex-wrap items-center gap-3 px-1 text-xs text-gray-500">
         <span className="flex items-center gap-1">
           <span className="inline-block h-2.5 w-2.5 rounded-full border border-red-300 bg-red-50" />
           geen categorie
@@ -149,7 +148,7 @@ export default async function TransactionsPage({
       </p>
 
       {transactions && transactions.length > 0 ? (
-        <ul className="mt-4 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
           {transactions.map((tx) => {
             const bankAccount = Array.isArray(tx.bank_accounts)
               ? tx.bank_accounts[0]
@@ -161,7 +160,7 @@ export default async function TransactionsPage({
               : null;
 
             return (
-              <li key={tx.id} className="flex flex-col gap-2 px-4 py-4 text-sm">
+              <li key={tx.id} className="flex flex-col gap-2 px-5 py-4 text-base">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="break-words font-medium text-gray-900">
@@ -188,8 +187,8 @@ export default async function TransactionsPage({
                     <span
                       className={
                         tx.amount < 0
-                          ? "w-20 text-right font-medium text-gray-900"
-                          : "w-20 text-right font-medium text-green-700"
+                          ? "w-24 text-right text-lg font-semibold text-gray-900"
+                          : "w-24 text-right text-lg font-semibold text-green-700"
                       }
                     >
                       {tx.amount < 0 ? "-" : "+"}
@@ -199,7 +198,7 @@ export default async function TransactionsPage({
                   </div>
                 </div>
                 {tx.raw_description && (
-                  <p className="whitespace-pre-wrap break-words text-xs text-gray-500">
+                  <p className="whitespace-pre-wrap break-words text-sm text-gray-500">
                     {tx.raw_description}
                   </p>
                 )}
@@ -230,26 +229,26 @@ export default async function TransactionsPage({
           })}
         </ul>
       ) : activeQuery ? (
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
           Niks gevonden voor &quot;{activeQuery}&quot;.
         </p>
       ) : activeFilter === "unreviewed" ? (
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
           Niks te controleren — alle afschrijvingen zijn gecontroleerd. Bekijk{" "}
-          <Link href="/transactions?type=all" className="underline">
+          <Link href="/transactions?type=all" className="text-teal-700 underline">
             alle transacties
           </Link>
           .
         </p>
       ) : activeFilter === "uncategorized" ? (
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
           Niks te categoriseren — alles heeft al een categorie.
         </p>
       ) : (
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
           Nog geen transacties. Koppel eerst een bank en klik op &quot;Sync
           now&quot; bij{" "}
-          <a href="/settings/bank-connections" className="underline">
+          <a href="/settings/bank-connections" className="text-teal-700 underline">
             Bankkoppelingen
           </a>
           .

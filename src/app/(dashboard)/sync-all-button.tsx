@@ -33,10 +33,10 @@ export function SyncAllButton() {
             router.refresh();
           });
         }}
-        className="flex min-h-[48px] items-center gap-2 rounded-full bg-gray-900 px-5 text-base font-medium text-white active:bg-gray-700 disabled:opacity-60"
+        className="flex min-h-[44px] items-center gap-2 rounded-full bg-teal-700 px-4 text-base font-medium text-white active:bg-teal-800 disabled:opacity-60"
       >
         <span className={isPending ? "inline-block animate-spin" : "inline-block"}>↻</span>
-        {isPending ? "Bezig met verversen…" : "Alle banken verversen"}
+        {isPending ? "Bezig…" : "Verversen"}
       </button>
       {message && (
         <span className={`text-sm ${message.isError ? "text-red-600" : "text-gray-500"}`}>
