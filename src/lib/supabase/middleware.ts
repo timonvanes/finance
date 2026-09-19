@@ -8,7 +8,15 @@ import { NextResponse, type NextRequest } from "next/server";
 // bounced the request to /login before the callback ever ran, silently
 // dropping the linking result. The route authenticates the request itself
 // via the unguessable auth_ref, so it doesn't need the browser session.
-const PUBLIC_PATHS = ["/login", "/privacy", "/terms", "/api/enablebanking/callback"];
+// The keep-alive cron is triggered by Vercel, not a logged-in browser — it
+// has no session cookie either, and authenticates itself via CRON_SECRET.
+const PUBLIC_PATHS = [
+  "/login",
+  "/privacy",
+  "/terms",
+  "/api/enablebanking/callback",
+  "/api/cron/keep-alive",
+];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
