@@ -343,7 +343,7 @@ export async function syncBankConnection(
         const insertedIds = (inserted ?? []).map((row) => row.id);
         await markOwnTransfers(supabase, insertedIds);
         await matchPotTransfers(supabase, insertedIds, userId);
-        await applyCategoryRules(supabase, insertedIds);
+        await applyCategoryRules(supabase, insertedIds, userId);
         await autoMatchIncomingTransactions(supabase, insertedIds);
       }
     } catch (err) {

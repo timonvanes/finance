@@ -44,6 +44,10 @@ export default async function TerugvorderenPage() {
     add(pr.person_id, person?.name ?? "Onbekend", total);
   }
 
+  const doneCount =
+    reclaims.filter((r) => r.status !== "requested").length +
+    paymentRequests.filter((pr) => pr.status !== "requested").length;
+
   const people = [...perPerson.entries()].sort((a, b) => b[1].total - a[1].total);
   const outstanding = people.reduce((sum, [, p]) => sum + p.total, 0);
 
@@ -102,6 +106,14 @@ export default async function TerugvorderenPage() {
           ))}
         </ul>
       )}
+
+      <Link
+        href="/terugvorderen/afgerond"
+        className="flex min-h-[64px] items-center gap-3 rounded-2xl bg-white px-5 py-3 ring-1 ring-gray-200 active:bg-gray-50"
+      >
+        <span className="flex-1 text-lg text-gray-900">Afgerond ({doneCount})</span>
+        <span className="text-2xl text-gray-300">›</span>
+      </Link>
 
       <Link
         href="/reclaims"

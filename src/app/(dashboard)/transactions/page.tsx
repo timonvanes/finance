@@ -6,6 +6,9 @@ import { CategorySelect } from "./category-select";
 import { ReviewActions } from "./review-actions";
 import { TransactionNote } from "./transaction-note";
 import { ExpenseContribution } from "./expense-contribution";
+import { RecategorizeButton } from "./recategorize-button";
+
+export const maxDuration = 60;
 
 const FILTERS = [
   { value: "unreviewed", label: "Te controleren" },
@@ -131,6 +134,8 @@ export default async function TransactionsPage({
           </Link>
         )}
       </form>
+
+      {(activeFilter === "uncategorized" || activeFilter === "all") && <RecategorizeButton />}
 
       <p className="flex flex-wrap items-center gap-3 px-1 text-xs text-gray-500">
         <span className="flex items-center gap-1">

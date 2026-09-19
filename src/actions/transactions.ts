@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { normalizeCounterparty } from "@/lib/categorization/engine";
+import { buildCategorizer, counterpartyKey } from "@/lib/categorization/engine";
 
 const DEFAULT_CATEGORIES = [
   { name: "Boodschappen", kind: "expense" },
@@ -138,7 +138,7 @@ export async function updateTransactionCategory(
     .eq("id", transactionId);
   if (updateError) throw updateError;
 
-  const normalized = normalizeCounterparty(tx.counterparty_name);
+  const normalized = counterpartyKey(tx.counterparty_name);
   if (normalized) {
     const { error: ruleError } = await supabase.from("category_rules").upsert(
       {
@@ -160,4 +160,52 @@ export async function updateTransactionNote(transactionId: string, note: string)
     .update({ note: note.trim() || null })
     .eq("id", transactionId);
   if (error) throw error;
+}
+
+// Re-runs the categorization rules over existing transactions. Never touches
+// anything you categorized yourself; with includeAuto it also re-evaluates
+// ones that were automatically assigned earlier.
+export async function recategorizeAll(includeAuto: boolean) {
+  const supabase = await createClient();
+  const categorize = await buildCategorizer(supabase);
+  const sources = includeAuto ? ["none", "rule"] : ["none"];
+
+  const idsByCategory = new Map<string, string[]>();
+  let scanned = 0;
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id, amount, counterparty_name, raw_description, category_id, category_source")
+      .in("category_source", sources)
+      .eq("is_transfer", false)
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    scanned += data.length;
+
+    for (const tx of data) {
+      const categoryId = categorize(tx);
+      if (!categoryId || categoryId === tx.category_id) continue;
+      if (!idsByCategory.has(categoryId)) idsByCategory.set(categoryId, []);
+      idsByCategory.get(categoryId)!.push(tx.id);
+    }
+    if (data.length < PAGE) break;
+  }
+
+  let updated = 0;
+  for (const [categoryId, ids] of idsByCategory) {
+    // Chunked so the .in() list stays a reasonable URL length.
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { error } = await supabase
+        .from("transactions")
+        .update({ category_id: categoryId, category_source: "rule" })
+        .in("id", chunk);
+      if (error) throw error;
+      updated += chunk.length;
+    }
+  }
+  return { scanned, updated };
 }
