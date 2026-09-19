@@ -19,13 +19,14 @@ export function LoanPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState("");
+  const [otherName, setOtherName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   function confirm() {
-    if (!choice) {
-      setError(mode === "borrow" ? "Kies van wie de lening is." : "Kies een lening.");
+    if (!choice || (choice === "other" && !otherName.trim())) {
+      setError(mode === "borrow" ? "Kies of vul in van wie de lening is." : "Kies een lening.");
       return;
     }
     setError(null);
@@ -33,6 +34,8 @@ export function LoanPicker({
       try {
         if (mode === "repay") {
           await markTransactionAsRepayment(transactionId, choice.replace("loan:", ""));
+        } else if (choice === "other") {
+          await markTransactionAsLoan(transactionId, { lenderName: otherName });
         } else if (choice.startsWith("loan:")) {
           await markTransactionAsLoan(transactionId, { loanId: choice.slice(5) });
         } else {
@@ -83,9 +86,19 @@ export function LoanPicker({
                 {p.name}
               </option>
             ))}
+            <option value="other">Iemand anders (zelf invullen)…</option>
           </optgroup>
         )}
       </select>
+      {mode === "borrow" && choice === "other" && (
+        <input
+          type="text"
+          value={otherName}
+          onChange={(e) => setOtherName(e.target.value)}
+          placeholder="Naam van de lener…"
+          className="min-h-[48px] w-full rounded-xl border border-purple-200 bg-white px-3 text-base"
+        />
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2">
         <button

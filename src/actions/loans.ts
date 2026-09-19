@@ -13,12 +13,14 @@ type LoanEntryRow = {
 
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 
+type LoanRef = { id: string; lender_name: string | null; people: { name: string } | { name: string }[] | null };
+
 export async function getLoans() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("loans")
     .select(
-      `id, person_id, note, status, closed_reason, created_at, people(name),
+      `id, person_id, lender_name, note, status, closed_reason, created_at, people(name),
       loan_entries(id, kind, amount, entry_date, transaction_id, transactions(counterparty_name))`
     )
     .order("created_at", { ascending: false });
@@ -39,8 +41,10 @@ export async function getLoans() {
     const repaid = entries.filter((e) => e.kind === "repay").reduce((s, e) => s + e.amount, 0);
     return {
       id: loan.id as string,
-      personId: loan.person_id as string,
-      personName: (one(loan.people as { name: string } | { name: string }[] | null)?.name ?? "Onbekend") as string,
+      personId: loan.person_id as string | null,
+      personName: (one(loan.people as { name: string } | { name: string }[] | null)?.name ??
+        (loan.lender_name as string | null) ??
+        "Onbekend") as string,
       note: loan.note as string | null,
       status: loan.status as "open" | "closed",
       closedReason: loan.closed_reason as "repaid" | "forgiven" | null,
@@ -62,7 +66,7 @@ export async function getLoanPickerData(transactionIds: string[]) {
     transactionIds.length > 0
       ? supabase
           .from("loan_entries")
-          .select("transaction_id, kind, loans(id, people(name))")
+          .select("transaction_id, kind, loans(id, lender_name, people(name))")
           .in("transaction_id", transactionIds)
       : Promise.resolve({ data: [] as never[] }),
   ]);
@@ -71,13 +75,13 @@ export async function getLoanPickerData(transactionIds: string[]) {
   for (const e of (entries ?? []) as unknown as {
     transaction_id: string;
     kind: string;
-    loans: { id: string; people: { name: string } | { name: string }[] | null } | { id: string; people: { name: string } | { name: string }[] | null }[] | null;
+    loans: LoanRef | LoanRef[] | null;
   }[]) {
     const loan = one(e.loans);
     if (!loan) continue;
     entryByTransaction[e.transaction_id] = {
       loanId: loan.id,
-      personName: one(loan.people)?.name ?? "Onbekend",
+      personName: one(loan.people)?.name ?? loan.lender_name ?? "Onbekend",
       kind: e.kind,
     };
   }
@@ -110,7 +114,7 @@ async function markHandled(transactionId: string) {
 // loan from a person, or more money added to one that's already open.
 export async function markTransactionAsLoan(
   transactionId: string,
-  target: { loanId?: string; personId?: string }
+  target: { loanId?: string; personId?: string; lenderName?: string }
 ) {
   const supabase = await createClient();
   const { data: tx, error: txError } = await supabase
@@ -133,6 +137,14 @@ export async function markTransactionAsLoan(
     const { data, error } = await supabase
       .from("loans")
       .insert({ person_id: target.personId })
+      .select("id")
+      .single();
+    if (error) throw error;
+    loanId = data.id;
+  } else if (target.lenderName?.trim()) {
+    const { data, error } = await supabase
+      .from("loans")
+      .insert({ lender_name: target.lenderName.trim() })
       .select("id")
       .single();
     if (error) throw error;
