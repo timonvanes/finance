@@ -7,6 +7,7 @@ import { ReviewActions } from "./review-actions";
 import { TransactionNote } from "./transaction-note";
 import { ExpenseContribution } from "./expense-contribution";
 import { RecategorizeButton } from "./recategorize-button";
+import { getLoanPickerData } from "@/actions/loans";
 
 export const maxDuration = 60;
 
@@ -77,6 +78,7 @@ export default async function TransactionsPage({
     getIncomeSourceOptions(),
   ]);
 
+  const loanData = await getLoanPickerData((transactions ?? []).map((tx) => tx.id));
   const expenseTxIds = (transactions ?? []).filter((tx) => tx.amount < 0).map((tx) => tx.id);
   const { data: reclaimRows } = await supabase
     .from("reclaims")
@@ -238,6 +240,13 @@ export default async function TransactionsPage({
                   isTransfer={tx.is_transfer}
                   isExpense={tx.amount < 0}
                   hasReclaim={txWithReclaim.has(tx.id)}
+                  loanLabel={
+                    loanData.entryByTransaction[tx.id]
+                      ? `${loanData.entryByTransaction[tx.id].kind === "borrow" ? "Lening van" : "Aflossing aan"} ${loanData.entryByTransaction[tx.id].personName} — bekijk`
+                      : null
+                  }
+                  people={loanData.people}
+                  openLoans={loanData.openLoans}
                 />
               </li>
             );

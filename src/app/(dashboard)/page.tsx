@@ -10,6 +10,7 @@ import {
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections } from "@/actions/bank-connections";
 import { getPotsTotalBalance } from "@/actions/pots";
+import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
 
 const MONTH_NAMES = [
@@ -40,7 +41,7 @@ export default async function DashboardPage({
   const monthsAgo = Math.max(0, parseInt(month ?? "0", 10) || 0);
   const isCurrentMonth = monthsAgo === 0;
 
-  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, potsTotal, freeToSpend] =
+  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, potsTotal, freeToSpend, loans] =
     await Promise.all([
       getDashboardSummary(monthsAgo),
       getMonthlySpendByCategory(monthsAgo),
@@ -50,6 +51,7 @@ export default async function DashboardPage({
       getAccountBalances(),
       getPotsTotalBalance(),
       getFreeToSpendPerMonth(),
+      getOpenLoansTotal(),
     ]);
 
   const now = new Date();
@@ -100,6 +102,17 @@ export default async function DashboardPage({
           </div>
           <p className="text-2xl font-semibold text-gray-900">{euro(Math.max(0, freeToSpend), 0)}</p>
         </section>
+      )}
+
+      {loans.count > 0 && (
+        <Link href="/leningen" className={`${card} flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50`}>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm text-gray-500">Nog af te lossen aan leningen</span>
+            <span className="block text-xs text-gray-400">{loans.count} openstaand</span>
+          </span>
+          <span className="text-2xl font-semibold text-gray-900">{euro(loans.total)}</span>
+          <span className="text-2xl text-gray-300">›</span>
+        </Link>
       )}
 
       {isCurrentMonth && (anomaly || budgetWarnings.length > 0) && (

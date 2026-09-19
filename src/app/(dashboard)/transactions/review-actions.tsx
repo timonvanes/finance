@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { markAsTransfer, markOwnExpense, unreviewTransaction } from "@/actions/reclaims";
+import { removeLoanEntryForTransaction } from "@/actions/loans";
+import { LoanPicker } from "./loan-picker";
 
 export function ReviewActions({
   transactionId,
@@ -12,6 +14,9 @@ export function ReviewActions({
   isTransfer,
   isExpense = true,
   hasReclaim = false,
+  loanLabel = null,
+  people = [],
+  openLoans = [],
 }: {
   transactionId: string;
   reviewed: boolean;
@@ -21,6 +26,9 @@ export function ReviewActions({
   // the "geen kosten" toggle applies to those.
   isExpense?: boolean;
   hasReclaim?: boolean;
+  loanLabel?: string | null;
+  people?: { id: string; name: string }[];
+  openLoans?: { id: string; personName: string; balance: number }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [localReviewed, setLocalReviewed] = useState(reviewed);
@@ -32,7 +40,11 @@ export function ReviewActions({
   if (localReviewed || localIsTransfer || hasReclaim) {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        {localIsTransfer ? (
+        {loanLabel ? (
+          <Link href="/leningen" className="text-sm font-medium text-purple-700 underline">
+            {loanLabel}
+          </Link>
+        ) : localIsTransfer ? (
           <span className="text-sm font-medium text-blue-700">↔ Geen kosten — telt niet mee</span>
         ) : hasReclaim ? (
           <Link
@@ -56,7 +68,8 @@ export function ReviewActions({
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {
-                await unreviewTransaction(transactionId);
+                if (loanLabel) await removeLoanEntryForTransaction(transactionId);
+                else await unreviewTransaction(transactionId);
                 setLocalReviewed(false);
                 setLocalIsTransfer(false);
                 router.refresh();
@@ -116,6 +129,14 @@ export function ReviewActions({
         >
           Bevestigen
         </button>
+      )}
+      {(!isExpense || openLoans.length > 0) && (
+        <LoanPicker
+          transactionId={transactionId}
+          mode={isExpense ? "repay" : "borrow"}
+          people={people}
+          openLoans={openLoans}
+        />
       )}
       <button
         type="button"

@@ -5,6 +5,7 @@ const SECTIONS: { title: string; items: { href: string; label: string; hint?: st
   {
     title: "Overig",
     items: [
+      { href: "/leningen", label: "Leningen", hint: "Geld dat je van iemand hebt geleend" },
       { href: "/pots", label: "Potjes", hint: "Nog in ontwikkeling" },
       { href: "/settings", label: "Instellingen" },
     ],
