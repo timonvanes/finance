@@ -23,6 +23,7 @@ export default async function NieuwPage({
     booking_date: t.booking_date,
     amount: t.amount,
     counterparty_name: t.counterparty_name,
+    raw_description: t.raw_description ?? null,
   }));
 
   const people = peopleRaw.map((p) => ({ id: p.id, name: p.name, isSelf: p.is_self as boolean }));

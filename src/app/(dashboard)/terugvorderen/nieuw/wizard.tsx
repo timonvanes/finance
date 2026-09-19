@@ -9,6 +9,7 @@ interface Tx {
   booking_date: string;
   amount: number;
   counterparty_name: string | null;
+  raw_description: string | null;
 }
 interface Person {
   id: string;
@@ -32,7 +33,7 @@ export function Wizard({
     initialTransactionId ? { [initialTransactionId]: true } : {}
   );
   const [filter, setFilter] = useState("");
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [shares, setShares] = useState<Record<string, number>>({});
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [method, setMethod] = useState<"bank" | "external_app">("bank");
   const [note, setNote] = useState("");
@@ -46,16 +47,22 @@ export function Wizard({
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
   const txCount = Object.values(selectedTx).filter(Boolean).length;
 
-  const checkedIds = people.filter((p) => checked[p.id]).map((p) => p.id);
-  // Anyone whose amount wasn't typed by hand shares what's left evenly.
-  const typedIds = checkedIds.filter((id) => typed[id] !== undefined);
-  const untypedIds = checkedIds.filter((id) => typed[id] === undefined);
-  const typedSum = typedIds.reduce((s, id) => s + (Number(typed[id]) || 0), 0);
-  const share = untypedIds.length > 0 ? Math.max(total - typedSum, 0) / untypedIds.length : 0;
-  const amountFor = (id: string) =>
-    typed[id] !== undefined ? Number(typed[id]) || 0 : share;
+  const checkedIds = people.filter((p) => (shares[p.id] ?? 0) > 0).map((p) => p.id);
+  // Amounts typed by hand stay fixed; the rest is divided over the remaining
+  // people by their number of shares (WBW-style "Aandelen").
+  const fixedIds = checkedIds.filter((id) => typed[id] !== undefined);
+  const flexIds = checkedIds.filter((id) => typed[id] === undefined);
+  const fixedSum = fixedIds.reduce((s, id) => s + (Number(typed[id]) || 0), 0);
+  const flexShares = flexIds.reduce((s, id) => s + (shares[id] ?? 0), 0);
+  const rest = Math.max(total - fixedSum, 0);
+  const amountFor = (id: string) => {
+    if ((shares[id] ?? 0) <= 0) return 0;
+    if (typed[id] !== undefined) return Number(typed[id]) || 0;
+    return flexShares > 0 ? (rest * (shares[id] ?? 0)) / flexShares : 0;
+  };
   const entered = checkedIds.reduce((s, id) => s + amountFor(id), 0);
-  const othersChecked = people.some((p) => checked[p.id] && !p.isSelf);
+  const othersChecked = people.some((p) => (shares[p.id] ?? 0) > 0 && !p.isSelf);
+  const selectedTransactions = transactions.filter((t) => selectedTx[t.id]);
 
   const filtered = filter
     ? transactions.filter((t) =>
@@ -63,10 +70,10 @@ export function Wizard({
       )
     : transactions;
 
-  function togglePerson(id: string) {
-    const next = !checked[id];
-    setChecked((prev) => ({ ...prev, [id]: next }));
-    if (!next) {
+  function changeShares(id: string, delta: number) {
+    const next = Math.max((shares[id] ?? 0) + delta, 0);
+    setShares((prev) => ({ ...prev, [id]: next }));
+    if (next === 0) {
       setTyped((prev) => {
         const copy = { ...prev };
         delete copy[id];
@@ -154,59 +161,108 @@ export function Wizard({
 
       {step === 2 && (
         <>
-          <h2 className="text-xl font-semibold text-gray-900">Wie deelt mee?</h2>
-          <div className="rounded-2xl bg-white p-5 ring-1 ring-gray-200">
-            <p className="text-sm text-gray-500">Totaal van de afschrijving{txCount > 1 ? "en" : ""}</p>
-            <p className="text-3xl font-semibold text-gray-900">{euro(total)}</p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {people.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => togglePerson(p.id)}
-                className={`min-h-[48px] rounded-full px-5 text-base ring-1 ${
-                  checked[p.id] ? "bg-gray-900 text-white ring-gray-900" : "bg-white text-gray-900 ring-gray-300"
-                }`}
-              >
-                {p.isSelf ? "Jij" : p.name}
-              </button>
+          <ul className="space-y-2">
+            {selectedTransactions.map((t) => (
+              <li key={t.id} className="rounded-2xl bg-white p-4 ring-1 ring-gray-200">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-medium text-gray-900">
+                      {t.counterparty_name ?? "Onbekend"}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(t.booking_date).toLocaleDateString("nl-NL")}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-base font-semibold text-gray-900">{euro(Math.abs(t.amount))}</p>
+                </div>
+                {t.raw_description && (
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-500">{t.raw_description}</p>
+                )}
+              </li>
             ))}
+          </ul>
+          <div className="flex items-baseline justify-between rounded-2xl bg-white px-5 py-4 ring-1 ring-gray-200">
+            <span className="text-sm text-gray-500">Totaal</span>
+            <span className="text-3xl font-semibold text-gray-900">{euro(total)}</span>
           </div>
 
-          {checkedIds.length > 0 && (
-            <ul className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
-              {people
-                .filter((p) => checked[p.id])
-                .map((p) => (
-                  <li key={p.id} className="flex min-h-[64px] items-center gap-3 border-b border-gray-100 px-5 last:border-b-0">
-                    <span className="flex-1 text-base text-gray-900">
-                      {p.isSelf ? "Jij (eigen deel)" : p.name}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Verdeel ({checkedIds.length})</h2>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShares(Object.fromEntries(people.map((p) => [p.id, 1])))}
+                className="min-h-[44px] rounded-xl bg-gray-100 px-4 text-sm font-medium text-gray-700"
+              >
+                Iedereen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShares({});
+                  setTyped({});
+                }}
+                className="min-h-[44px] rounded-xl bg-gray-100 px-4 text-sm font-medium text-blue-600"
+              >
+                Wissen
+              </button>
+            </div>
+          </div>
+
+          <ul className="space-y-2">
+            {[...people].sort((a, b) => Number(b.isSelf) - Number(a.isSelf)).map((p) => {
+              const count = shares[p.id] ?? 0;
+              const active = count > 0;
+              return (
+                <li key={p.id} className="flex min-h-[60px] items-center gap-2">
+                  <span
+                    className={`min-w-0 flex-1 truncate text-base ${active ? "font-medium text-gray-900" : "text-gray-400"}`}
+                  >
+                    {p.isSelf ? "Jij" : p.name}
+                  </span>
+                  <div className="flex shrink-0 items-center overflow-hidden rounded-xl bg-gray-100">
+                    <button
+                      type="button"
+                      aria-label={`Minder aandelen voor ${p.name}`}
+                      disabled={!active}
+                      onClick={() => changeShares(p.id, -1)}
+                      className="flex h-12 w-11 items-center justify-center text-xl text-gray-700 disabled:opacity-30"
+                    >
+                      −
+                    </button>
+                    <span className={`w-10 text-center text-base ${active ? "text-gray-900" : "text-gray-400"}`}>
+                      {count}x
                     </span>
+                    <button
+                      type="button"
+                      aria-label={`Meer aandelen voor ${p.name}`}
+                      onClick={() => changeShares(p.id, 1)}
+                      className="flex h-12 w-11 items-center justify-center text-xl text-blue-600"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="flex h-12 w-28 shrink-0 items-center gap-1 rounded-xl bg-gray-100 px-3">
                     <span className="text-gray-400">€</span>
                     <input
                       type="number"
                       inputMode="decimal"
                       step="0.01"
-                      value={typed[p.id] ?? share.toFixed(2)}
+                      disabled={!active}
+                      value={active ? (typed[p.id] ?? amountFor(p.id).toFixed(2)) : ""}
+                      placeholder="0,00"
                       onChange={(e) => setTyped((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                      className="min-h-[48px] w-28 rounded-xl border border-gray-300 px-3 text-right text-base"
+                      className="w-full bg-transparent text-right text-base text-gray-900 outline-none disabled:text-gray-400"
                     />
-                  </li>
-                ))}
-            </ul>
-          )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
 
-          {checkedIds.length > 0 && (
-            <p className="text-center text-sm text-gray-500">
-              Ingevuld {euro(entered)}
-              {Math.abs(total - entered) > 0.01 && (
-                <span className="text-amber-700">
-                  {" "}
-                  · {total > entered ? `nog ${euro(total - entered)} te verdelen` : `${euro(entered - total)} te veel`}
-                </span>
-              )}
+          {checkedIds.length > 0 && Math.abs(total - entered) > 0.01 && (
+            <p className="text-center text-sm text-amber-700">
+              {total > entered ? `Nog ${euro(total - entered)} te verdelen` : `${euro(entered - total)} te veel verdeeld`}
             </p>
           )}
 
