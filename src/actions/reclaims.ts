@@ -216,7 +216,7 @@ export async function createSplitReclaim(formData: FormData) {
   // No longer needs to sit in the "still to split" queue.
   await supabase
     .from("transactions")
-    .update({ flagged_for_reclaim: false })
+    .update({ flagged_for_reclaim: false, reviewed: true })
     .in("id", transactionIds);
 }
 

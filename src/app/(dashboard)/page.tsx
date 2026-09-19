@@ -142,7 +142,7 @@ export default async function DashboardPage({
         <h2 className="px-1 text-lg font-semibold text-gray-900">Te doen</h2>
         <ul className={`${card} overflow-hidden`}>
           {[
-            { href: "/transactions", value: String(summary.unreviewedCount), label: "nog te controleren" },
+            { href: "/transactions?type=unreviewed", value: String(summary.unreviewedCount), label: "nog te controleren" },
             {
               href: "/transactions?type=uncategorized",
               value: String(summary.uncategorizedCount),

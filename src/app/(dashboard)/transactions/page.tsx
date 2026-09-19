@@ -11,19 +11,22 @@ import { RecategorizeButton } from "./recategorize-button";
 export const maxDuration = 60;
 
 const FILTERS = [
+  { value: "all", label: "Alles" },
   { value: "unreviewed", label: "Te controleren" },
   { value: "uncategorized", label: "Te categoriseren" },
-  { value: "all", label: "Alles" },
   { value: "expense", label: "Afschrijvingen" },
   { value: "income", label: "Bijschrijvingen" },
 ] as const;
 
-function buildHref(overrides: { type?: string; sort?: string; q?: string }, current: { type: string; sort: string; q: string }) {
+const PAGE_SIZE = 100;
+
+function buildHref(overrides: { type?: string; sort?: string; q?: string; l?: string }, current: { type: string; sort: string; q: string; l?: string }) {
   const merged = { ...current, ...overrides };
   const params = new URLSearchParams();
-  if (merged.type !== "unreviewed") params.set("type", merged.type);
+  if (merged.type !== "all") params.set("type", merged.type);
   if (merged.sort !== "desc") params.set("sort", merged.sort);
   if (merged.q) params.set("q", merged.q);
+  if (merged.l) params.set("l", merged.l);
   const query = params.toString();
   return query ? `/transactions?${query}` : "/transactions";
 }
@@ -31,12 +34,13 @@ function buildHref(overrides: { type?: string; sort?: string; q?: string }, curr
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string; q?: string }>;
+  searchParams: Promise<{ type?: string; sort?: string; q?: string; l?: string }>;
 }) {
   await ensureDefaultCategories();
 
-  const { type, sort, q } = await searchParams;
-  const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "unreviewed";
+  const { type, sort, q, l } = await searchParams;
+  const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "all";
+  const limit = Math.min(1000, Math.max(PAGE_SIZE, parseInt(l ?? "", 10) || PAGE_SIZE));
   const activeSort = sort === "asc" ? "asc" : "desc";
   const activeQuery = q?.trim() ?? "";
   const current = { type: activeFilter, sort: activeSort, q: activeQuery };
@@ -52,7 +56,7 @@ export default async function TransactionsPage({
       bank_accounts(bank_connections(institution_name))`
     )
     .order("booking_date", { ascending: activeSort === "asc" })
-    .limit(100);
+    .limit(limit);
 
   if (activeFilter === "expense") query = query.lt("amount", 0);
   if (activeFilter === "income") query = query.gt("amount", 0);
@@ -74,6 +78,11 @@ export default async function TransactionsPage({
   ]);
 
   const expenseTxIds = (transactions ?? []).filter((tx) => tx.amount < 0).map((tx) => tx.id);
+  const { data: reclaimRows } = await supabase
+    .from("reclaims")
+    .select("transaction_id")
+    .in("transaction_id", expenseTxIds.length > 0 ? expenseTxIds : ["00000000-0000-0000-0000-000000000000"]);
+  const txWithReclaim = new Set((reclaimRows ?? []).map((r) => r.transaction_id));
   const allContributions = await getContributionsForTransactions(expenseTxIds);
   const contributionsByTx = new Map<string, typeof allContributions>();
   for (const c of allContributions) {
@@ -110,7 +119,7 @@ export default async function TransactionsPage({
       </div>
 
       <form method="get" className="flex items-center gap-2">
-        {activeFilter !== "unreviewed" && <input type="hidden" name="type" value={activeFilter} />}
+        {activeFilter !== "all" && <input type="hidden" name="type" value={activeFilter} />}
         {activeSort !== "desc" && <input type="hidden" name="sort" value={activeSort} />}
         <input
           type="search"
@@ -228,6 +237,7 @@ export default async function TransactionsPage({
                   flaggedForReclaim={tx.flagged_for_reclaim}
                   isTransfer={tx.is_transfer}
                   isExpense={tx.amount < 0}
+                  hasReclaim={txWithReclaim.has(tx.id)}
                 />
               </li>
             );
@@ -258,6 +268,14 @@ export default async function TransactionsPage({
           </a>
           .
         </p>
+      )}
+      {transactions && transactions.length >= limit && (
+        <Link
+          href={buildHref({ l: String(limit + PAGE_SIZE) }, current)}
+          className="flex min-h-[56px] items-center justify-center rounded-2xl bg-white text-base text-teal-700 ring-1 ring-gray-200 active:bg-gray-50"
+        >
+          Toon meer
+        </Link>
       )}
     </div>
   );

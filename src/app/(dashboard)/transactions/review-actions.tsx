@@ -3,12 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  flagTransactionForReclaim,
-  markAsTransfer,
-  markOwnExpense,
-  unreviewTransaction,
-} from "@/actions/reclaims";
+import { markAsTransfer, markOwnExpense, unreviewTransaction } from "@/actions/reclaims";
 
 export function ReviewActions({
   transactionId,
@@ -16,49 +11,60 @@ export function ReviewActions({
   flaggedForReclaim,
   isTransfer,
   isExpense = true,
+  hasReclaim = false,
 }: {
   transactionId: string;
   reviewed: boolean;
   flaggedForReclaim: boolean;
   isTransfer: boolean;
   // Income transactions can't be "eigen uitgave"/"terugvorderen" — only
-  // the transfer toggle applies to those.
+  // the "geen kosten" toggle applies to those.
   isExpense?: boolean;
+  hasReclaim?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [localReviewed, setLocalReviewed] = useState(reviewed);
-  const [localFlagged, setLocalFlagged] = useState(flaggedForReclaim);
   const [localIsTransfer, setLocalIsTransfer] = useState(isTransfer);
   const router = useRouter();
 
-  if (localReviewed || localIsTransfer) {
+  const splitHref = `/terugvorderen/nieuw?transactionId=${transactionId}`;
+
+  if (localReviewed || localIsTransfer || hasReclaim) {
     return (
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {localIsTransfer ? (
-          <span className="text-sm font-medium text-blue-700">↔ Verschuiving eigen rekening</span>
-        ) : localFlagged ? (
-          <Link href="/reclaims" className="text-sm font-medium text-amber-700 underline">
-            In wachtrij om te verdelen — bekijk
+          <span className="text-sm font-medium text-blue-700">↔ Geen kosten — telt niet mee</span>
+        ) : hasReclaim ? (
+          <Link
+            href={`/terugvorderen/t/${transactionId}`}
+            className="text-sm font-medium text-teal-700 underline"
+          >
+            Terugvordering bekijken
+          </Link>
+        ) : flaggedForReclaim ? (
+          <Link href={splitHref} className="text-sm font-medium text-amber-700 underline">
+            Nog te verdelen — verdeel nu
           </Link>
         ) : (
           <span className="text-sm font-medium text-gray-500">✓ Eigen uitgave</span>
         )}
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={() => {
-            startTransition(async () => {
-              await unreviewTransaction(transactionId);
-              setLocalReviewed(false);
-              setLocalFlagged(false);
-              setLocalIsTransfer(false);
-              router.refresh();
-            });
-          }}
-          className="text-sm text-gray-400 underline hover:text-gray-600 disabled:opacity-50"
-        >
-          Ongedaan maken
-        </button>
+        {!hasReclaim && (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              startTransition(async () => {
+                await unreviewTransaction(transactionId);
+                setLocalReviewed(false);
+                setLocalIsTransfer(false);
+                router.refresh();
+              });
+            }}
+            className="min-h-[44px] text-sm text-gray-400 underline disabled:opacity-50"
+          >
+            Ongedaan maken
+          </button>
+        )}
       </div>
     );
   }
@@ -76,31 +82,19 @@ export function ReviewActions({
               startTransition(async () => {
                 await markOwnExpense(formData);
                 setLocalReviewed(true);
-                setLocalFlagged(false);
                 router.refresh();
               });
             }}
-            className="min-h-[44px] rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 active:bg-gray-50 disabled:opacity-50"
           >
             Eigen uitgave
           </button>
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => {
-              const formData = new FormData();
-              formData.set("transactionId", transactionId);
-              startTransition(async () => {
-                await flagTransactionForReclaim(formData);
-                setLocalReviewed(true);
-                setLocalFlagged(true);
-                router.refresh();
-              });
-            }}
-            className="min-h-[44px] rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          <Link
+            href={splitHref}
+            className="flex min-h-[44px] items-center rounded-xl bg-gray-900 px-4 text-sm font-medium text-white active:bg-gray-700"
           >
-            {isPending ? "Bezig…" : "Terugvorderen"}
-          </button>
+            Terugvorderen
+          </Link>
         </>
       )}
       <button
@@ -113,9 +107,9 @@ export function ReviewActions({
             router.refresh();
           });
         }}
-        className="min-h-[44px] rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+        className="min-h-[44px] rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-medium text-blue-700 active:bg-blue-100 disabled:opacity-50"
       >
-        Verschuiving eigen rekening
+        Geen kosten
       </button>
     </div>
   );
