@@ -39,6 +39,9 @@ export async function getLoans() {
       .sort((a, b) => b.date.localeCompare(a.date));
     const borrowed = entries.filter((e) => e.kind === "borrow").reduce((s, e) => s + e.amount, 0);
     const repaid = entries.filter((e) => e.kind === "repay").reduce((s, e) => s + e.amount, 0);
+    const balance = borrowed - repaid;
+    // A loan with nothing left to repay counts as closed, whatever its stored status.
+    const paidOff = loan.status === "open" && balance <= 0.005;
     return {
       id: loan.id as string,
       personId: loan.person_id as string | null,
@@ -46,11 +49,11 @@ export async function getLoans() {
         (loan.lender_name as string | null) ??
         "Onbekend") as string,
       note: loan.note as string | null,
-      status: loan.status as "open" | "closed",
-      closedReason: loan.closed_reason as "repaid" | "forgiven" | null,
+      status: (paidOff ? "closed" : loan.status) as "open" | "closed",
+      closedReason: (paidOff ? "repaid" : loan.closed_reason) as "repaid" | "forgiven" | null,
       borrowed,
       repaid,
-      balance: borrowed - repaid,
+      balance,
       entries,
     };
   });
@@ -249,7 +252,7 @@ export async function removeLoanEntry(entryId: string) {
   const supabase = await createClient();
   const { data: entry } = await supabase
     .from("loan_entries")
-    .select("transaction_id")
+    .select("transaction_id, loan_id")
     .eq("id", entryId)
     .single();
   if (entry?.transaction_id) {
@@ -258,4 +261,5 @@ export async function removeLoanEntry(entryId: string) {
     const { error } = await supabase.from("loan_entries").delete().eq("id", entryId);
     if (error) throw error;
   }
+  if (entry?.loan_id) await autoCloseIfRepaid(entry.loan_id);
 }
