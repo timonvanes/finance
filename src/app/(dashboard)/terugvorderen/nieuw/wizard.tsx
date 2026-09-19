@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSplitReclaim } from "@/actions/reclaims";
+import { TxDetails } from "../tx-details";
 
 interface Tx {
   id: string;
@@ -10,6 +11,7 @@ interface Tx {
   amount: number;
   counterparty_name: string | null;
   raw_description: string | null;
+  counterparty_iban: string | null;
 }
 interface Person {
   id: string;
@@ -97,7 +99,6 @@ export function Wizard({
       try {
         await createSplitReclaim(fd);
         router.push("/terugvorderen");
-        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Opslaan mislukt");
       }
@@ -143,6 +144,16 @@ export function Wizard({
                   </span>
                   <span className="text-base font-semibold">{euro(Math.abs(t.amount))}</span>
                 </button>
+                <TxDetails
+                  label="Details"
+                  tx={{
+                    name: t.counterparty_name,
+                    date: t.booking_date,
+                    amount: t.amount,
+                    description: t.raw_description,
+                    iban: t.counterparty_iban,
+                  }}
+                />
               </li>
             ))}
           </ul>
@@ -175,9 +186,15 @@ export function Wizard({
                   </div>
                   <p className="shrink-0 text-base font-semibold text-gray-900">{euro(Math.abs(t.amount))}</p>
                 </div>
-                {t.raw_description && (
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-500">{t.raw_description}</p>
-                )}
+                <TxDetails
+                  tx={{
+                    name: t.counterparty_name,
+                    date: t.booking_date,
+                    amount: t.amount,
+                    description: t.raw_description,
+                    iban: t.counterparty_iban,
+                  }}
+                />
               </li>
             ))}
           </ul>

@@ -122,6 +122,32 @@ export async function syncNow(bankConnectionId: string) {
   }
 }
 
+// Syncs every linked bank of the signed-in user at once (in parallel), for
+// the refresh button on the dashboard. Per-bank failures are reported, not thrown.
+export async function syncAllNow() {
+  const supabase = await createClient();
+  const { data: connections } = await supabase
+    .from("bank_connections")
+    .select("id, institution_name")
+    .eq("consent_status", "linked");
+
+  return Promise.all(
+    (connections ?? []).map(async (c) => {
+      try {
+        const count = await syncBankConnection(supabase, c.id);
+        return { name: c.institution_name as string, count, error: null as string | null };
+      } catch (err) {
+        console.error("syncAllNow failed for connection", c.id, err);
+        return {
+          name: c.institution_name as string,
+          count: 0,
+          error: err instanceof Error ? err.message : "Sync mislukt",
+        };
+      }
+    })
+  );
+}
+
 // null clears the override, falling back to the default 90-day lookback.
 export async function updateSyncFromDate(bankConnectionId: string, date: string | null) {
   const supabase = await createClient();

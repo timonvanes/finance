@@ -10,6 +10,7 @@ import {
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections } from "@/actions/bank-connections";
 import { getPotsTotalBalance } from "@/actions/pots";
+import { SyncAllButton } from "./sync-all-button";
 
 const MONTH_NAMES = [
   "januari", "februari", "maart", "april", "mei", "juni",
@@ -58,6 +59,9 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-8">
+      <div className="flex justify-end">
+        <SyncAllButton />
+      </div>
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-gray-900">Overzicht</h1>
         <div className="flex items-center gap-2 text-sm">

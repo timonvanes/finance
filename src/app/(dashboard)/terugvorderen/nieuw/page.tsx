@@ -24,6 +24,7 @@ export default async function NieuwPage({
     amount: t.amount,
     counterparty_name: t.counterparty_name,
     raw_description: t.raw_description ?? null,
+    counterparty_iban: t.counterparty_iban ?? null,
   }));
 
   const people = peopleRaw.map((p) => ({ id: p.id, name: p.name, isSelf: p.is_self as boolean }));

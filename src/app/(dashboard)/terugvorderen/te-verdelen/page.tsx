@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TxDetails } from "../tx-details";
 import { getQueuedTransactions, unflagTransactionForReclaim } from "@/actions/reclaims";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -40,6 +41,15 @@ export default async function TeVerdelenPage() {
                   {euro(Math.abs(tx.amount))}
                 </p>
               </div>
+              <TxDetails
+                tx={{
+                  name: tx.counterparty_name,
+                  date: tx.booking_date,
+                  amount: tx.amount,
+                  description: tx.raw_description,
+                  iban: tx.counterparty_iban,
+                }}
+              />
               <Link
                 href={`/terugvorderen/nieuw?transactionId=${tx.id}`}
                 className="flex min-h-[52px] w-full items-center justify-center rounded-xl bg-gray-900 text-base font-medium text-white active:bg-gray-700"

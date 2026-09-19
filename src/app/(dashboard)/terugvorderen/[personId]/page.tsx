@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getReclaims, getUnlinkedIncomingTransactions } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { ItemCard, type OpenItem } from "../item-card";
+import { TxDetails } from "../tx-details";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
@@ -25,6 +26,7 @@ export default async function PersonPage({
     date: string | null;
     description: string | null;
     transactionAmount: number | null;
+    iban: string | null;
     amount: number;
     sourceTotal: number | null;
   };
@@ -58,6 +60,13 @@ export default async function PersonPage({
         sourceTotal: r.source_total_amount,
         method: r.settlement_method === "external_app" ? "external_app" : "bank",
         referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
+        tx: {
+          name: tx?.counterparty_name ?? null,
+          date: tx?.booking_date ?? null,
+          amount: tx?.amount ?? null,
+          description: tx?.raw_description ?? null,
+          iban: tx?.counterparty_iban ?? null,
+        },
       });
     } else {
       const settled = one(r.settled_transaction);
@@ -76,6 +85,7 @@ export default async function PersonPage({
             date: tx?.booking_date ?? null,
             description: tx?.raw_description ?? null,
             transactionAmount: tx?.amount ?? null,
+            iban: tx?.counterparty_iban ?? null,
             amount: r.computed_amount,
             sourceTotal: r.source_total_amount,
           },
@@ -94,6 +104,7 @@ export default async function PersonPage({
         date: ltx?.booking_date ?? null,
         description: ltx?.raw_description ?? null,
         transactionAmount: ltx?.amount ?? null,
+        iban: ltx?.counterparty_iban ?? null,
         amount: l.computed_amount,
         sourceTotal: l.source_total_amount,
       };
@@ -128,6 +139,10 @@ export default async function PersonPage({
   }
 
   const total = open.reduce((s, i) => s + i.amount, 0);
+  const openRequests = open
+    .filter((i) => i.kind === "request")
+    .map((i) => ({ id: i.id, referenceCode: i.referenceCode ?? "", total: i.amount }));
+  const looseBankReclaims = open.filter((i) => i.kind === "reclaim" && i.method === "bank");
 
   return (
     <div className="space-y-5">
@@ -151,7 +166,16 @@ export default async function PersonPage({
       ) : (
         <ul className="space-y-3">
           {open.map((item) => (
-            <ItemCard key={`${item.kind}-${item.id}`} item={item} personName={personName} incoming={incoming} />
+            <ItemCard
+              key={`${item.kind}-${item.id}`}
+              item={item}
+              personName={personName}
+              incoming={incoming}
+              openRequests={openRequests}
+              otherReclaims={looseBankReclaims
+                .filter((r) => r.id !== item.id)
+                .map((r) => ({ id: r.id, label: r.title, amount: r.amount }))}
+            />
           ))}
         </ul>
       )}
@@ -194,12 +218,18 @@ export default async function PersonPage({
                           </div>
                           <p className="shrink-0 text-base font-semibold text-gray-900">{euro(l.amount)}</p>
                         </div>
-                        {l.description && (
-                          <p className="mt-1 line-clamp-2 text-sm text-gray-500">{l.description}</p>
-                        )}
                         {l.sourceTotal != null && Math.abs(l.sourceTotal - l.amount) > 0.01 && (
                           <p className="mt-1 text-sm text-gray-500">van {euro(l.sourceTotal)} totaal</p>
                         )}
+                        <TxDetails
+                          tx={{
+                            name: l.title,
+                            date: l.date,
+                            amount: l.transactionAmount,
+                            description: l.description,
+                            iban: l.iban,
+                          }}
+                        />
                       </div>
                     ))}
                     {d.settledText && (

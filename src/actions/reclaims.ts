@@ -9,7 +9,7 @@ export async function getRecentExpenseTransactions() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("visible_transactions")
-    .select("id, booking_date, amount, counterparty_name, raw_description")
+    .select("id, booking_date, amount, counterparty_name, counterparty_iban, raw_description")
     .lt("amount", 0)
     .eq("is_transfer", false)
     .order("booking_date", { ascending: false })
@@ -24,7 +24,7 @@ export async function getQueuedTransactions() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("visible_transactions")
-    .select("id, booking_date, amount, counterparty_name, raw_description")
+    .select("id, booking_date, amount, counterparty_name, counterparty_iban, raw_description")
     .eq("flagged_for_reclaim", true)
     .order("booking_date", { ascending: false });
   if (error) throw error;
@@ -120,7 +120,7 @@ export async function getReclaims() {
     .select(
       `id, person_id, amount_type, amount_value, computed_amount, source_total_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path, paid_at,
       people(name),
-      transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, raw_description, amount),
+      transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, counterparty_iban, raw_description, amount),
       settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
     .is("payment_request_id", null)
@@ -171,25 +171,23 @@ export async function createSplitReclaim(formData: FormData) {
     .eq("is_self", true)
     .maybeSingle();
 
-  for (const personId of personIds) {
-    // Your own share of the bill isn't a reclaim — it's just accounted for
-    // in the split math so everyone else's amount comes out right.
-    if (selfPerson && personId === selfPerson.id) continue;
+  // One bulk insert per person and all people in parallel — this used to be
+  // one database round trip per (person x transaction), which made the
+  // wizard's confirm step feel stuck.
+  await Promise.all(
+    personIds.map(async (personId) => {
+      // Your own share of the bill isn't a reclaim — it's just accounted for
+      // in the split math so everyone else's amount comes out right.
+      if (selfPerson && personId === selfPerson.id) return;
 
-    const amountValue = Number(formData.get(`amount_${personId}`));
-    if (!amountValue || amountValue <= 0) continue;
+      const amountValue = Number(formData.get(`amount_${personId}`));
+      if (!amountValue || amountValue <= 0) return;
 
-    const code =
-      settlementMethod === "bank" ? sharedCode ?? generateReferenceCode() : null;
-    const createdIds: string[] = [];
-
-    for (const tx of selectedTransactions) {
-      const share = (Math.abs(tx.amount) / totalAmount) * amountValue;
-      if (share <= 0) continue;
-
-      const { data, error } = await supabase
-        .from("reclaims")
-        .insert({
+      const code = settlementMethod === "bank" ? sharedCode ?? generateReferenceCode() : null;
+      const rows = selectedTransactions
+        .map((tx) => ({ tx, share: (Math.abs(tx.amount) / totalAmount) * amountValue }))
+        .filter(({ share }) => share > 0)
+        .map(({ tx, share }) => ({
           transaction_id: tx.id,
           person_id: personId,
           amount_type: "fixed",
@@ -199,20 +197,21 @@ export async function createSplitReclaim(formData: FormData) {
           tikkie_link: tikkieLink,
           settlement_method: settlementMethod,
           reference_code: code,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      createdIds.push(data.id);
-    }
+        }));
+      if (rows.length === 0) return;
 
-    if (createdIds.length > 1) {
-      // combineReclaims also re-checks for an already-arrived payment.
-      await combineReclaims(createdIds);
-    } else if (createdIds.length === 1 && settlementMethod === "bank") {
-      await autoMatchNewReclaim(supabase, createdIds[0]);
-    }
-  }
+      const { data, error } = await supabase.from("reclaims").insert(rows).select("id");
+      if (error) throw error;
+      const createdIds = (data ?? []).map((r) => r.id);
+
+      if (createdIds.length > 1) {
+        // combineReclaims also re-checks for an already-arrived payment.
+        await combineReclaims(createdIds);
+      } else if (createdIds.length === 1 && settlementMethod === "bank") {
+        await autoMatchNewReclaim(supabase, createdIds[0]);
+      }
+    })
+  );
 
   // No longer needs to sit in the "still to split" queue.
   await supabase

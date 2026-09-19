@@ -9,11 +9,14 @@ import {
   writeOffReclaim,
 } from "@/actions/reclaims";
 import {
+  addReclaimToPaymentRequest,
+  combineReclaims,
   linkPaymentRequestToTransaction,
   markPaymentRequestPaid,
   uncombinePaymentRequest,
   writeOffPaymentRequest,
 } from "@/actions/payment-requests";
+import { TxDetails, type TxInfo } from "./tx-details";
 
 interface IncomingTransaction {
   id: string;
@@ -31,11 +34,13 @@ export interface OpenItem {
   sourceTotal: number | null;
   method: "bank" | "external_app";
   referenceCode: string | null;
+  tx?: TxInfo | null;
   lines?: {
     title: string;
     date: string | null;
     description: string | null;
     transactionAmount: number | null;
+    iban: string | null;
     amount: number;
     sourceTotal: number | null;
   }[];
@@ -47,10 +52,14 @@ export function ItemCard({
   item,
   personName,
   incoming,
+  openRequests = [],
+  otherReclaims = [],
 }: {
   item: OpenItem;
   personName: string;
   incoming: IncomingTransaction[];
+  openRequests?: { id: string; referenceCode: string; total: number }[];
+  otherReclaims?: { id: string; label: string; amount: number }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -106,16 +115,24 @@ export function ItemCard({
                 </div>
                 <p className="shrink-0 text-base font-semibold text-gray-900">{euro(l.amount)}</p>
               </div>
-              {l.description && (
-                <p className="mt-1 line-clamp-2 text-sm text-gray-500">{l.description}</p>
-              )}
               {l.sourceTotal != null && Math.abs(l.sourceTotal - l.amount) > 0.01 && (
                 <p className="mt-1 text-sm text-gray-500">van {euro(l.sourceTotal)} totaal</p>
               )}
+              <TxDetails
+                tx={{
+                  name: l.title,
+                  date: l.date,
+                  amount: l.transactionAmount,
+                  description: l.description,
+                  iban: l.iban,
+                }}
+              />
             </li>
           ))}
         </ul>
       )}
+
+      {item.tx && <TxDetails tx={item.tx} />}
 
       {item.referenceCode && (
         <p className="text-sm text-gray-500">
@@ -171,6 +188,51 @@ export function ItemCard({
           >
             Handmatig als ontvangen markeren
           </button>
+        </div>
+      )}
+
+      {item.kind === "reclaim" && item.method === "bank" && (openRequests.length > 0 || otherReclaims.length > 0) && (
+        <div className="space-y-2">
+          {openRequests.length > 0 && (
+            <select
+              disabled={isPending}
+              defaultValue=""
+              onChange={(e) => {
+                const requestId = e.target.value;
+                if (requestId) run(() => addReclaimToPaymentRequest(item.id, requestId));
+              }}
+              className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 disabled:opacity-50"
+            >
+              <option value="" disabled>
+                Toevoegen aan gecombineerd betaalverzoek…
+              </option>
+              {openRequests.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.referenceCode} · {euro(r.total)}
+                </option>
+              ))}
+            </select>
+          )}
+          {otherReclaims.length > 0 && (
+            <select
+              disabled={isPending}
+              defaultValue=""
+              onChange={(e) => {
+                const otherId = e.target.value;
+                if (otherId) run(() => combineReclaims([item.id, otherId]));
+              }}
+              className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 disabled:opacity-50"
+            >
+              <option value="" disabled>
+                Combineren met andere terugvordering…
+              </option>
+              {otherReclaims.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label} · {euro(r.amount)}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
