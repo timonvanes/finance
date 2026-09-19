@@ -311,6 +311,8 @@ export async function linkReclaimToTransaction(
     .eq("id", reclaimId);
   if (error) throw error;
 
+  await supabase.from("transactions").update({ reviewed: true }).eq("id", transactionId);
+
   // A manual link is a confirmed ground truth — learn it for next time.
   await learnPersonAlias(supabase, reclaim.person_id, tx.counterparty_name);
 }

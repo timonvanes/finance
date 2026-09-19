@@ -46,7 +46,9 @@ export function ReviewActions({
             Nog te verdelen — verdeel nu
           </Link>
         ) : (
-          <span className="text-sm font-medium text-gray-500">✓ Eigen uitgave</span>
+          <span className="text-sm font-medium text-gray-500">
+            {isExpense ? "✓ Eigen uitgave" : "✓ Bevestigd"}
+          </span>
         )}
         {!hasReclaim && (
           <button
@@ -96,6 +98,24 @@ export function ReviewActions({
             Terugvorderen
           </Link>
         </>
+      )}
+      {!isExpense && (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => {
+            const formData = new FormData();
+            formData.set("transactionId", transactionId);
+            startTransition(async () => {
+              await markOwnExpense(formData);
+              setLocalReviewed(true);
+              router.refresh();
+            });
+          }}
+          className="min-h-[44px] rounded-xl bg-gray-900 px-4 text-sm font-medium text-white active:bg-gray-700 disabled:opacity-50"
+        >
+          Bevestigen
+        </button>
       )}
       <button
         type="button"

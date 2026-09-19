@@ -69,8 +69,7 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
       supabase
         .from("visible_transactions")
         .select("id", { count: "exact", head: true })
-        .eq("reviewed", false)
-        .lt("amount", 0),
+        .eq("reviewed", false),
       supabase
         .from("visible_transactions")
         .select("id", { count: "exact", head: true })

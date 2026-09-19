@@ -34,6 +34,8 @@ async function settleReclaim(
       paid_at: bookingDate,
     })
     .eq("id", reclaimId);
+  // The incoming payment is accounted for by this reclaim — nothing left to review.
+  await supabase.from("transactions").update({ reviewed: true }).eq("id", transactionId);
 }
 
 interface CandidateTransaction {
@@ -152,6 +154,7 @@ async function settlePaymentRequest(
     .from("reclaims")
     .update({ settled_transaction_id: transactionId, status: "paid", paid_at: bookingDate })
     .in("id", pr.reclaimIds);
+  await supabase.from("transactions").update({ reviewed: true }).eq("id", transactionId);
 }
 
 async function getOpenPaymentRequests(supabase: SupabaseClient): Promise<CandidatePaymentRequest[]> {

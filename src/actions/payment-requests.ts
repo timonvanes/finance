@@ -213,6 +213,7 @@ export async function linkPaymentRequestToTransaction(
     .eq("payment_request_id", paymentRequestId);
   if (updateReclaimsError) throw updateReclaimsError;
 
+  await supabase.from("transactions").update({ reviewed: true }).eq("id", transactionId);
   await learnPersonAlias(supabase, pr.person_id, tx.counterparty_name);
 }
 

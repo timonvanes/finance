@@ -11,9 +11,9 @@ import { RecategorizeButton } from "./recategorize-button";
 export const maxDuration = 60;
 
 const FILTERS = [
-  { value: "all", label: "Alles" },
-  { value: "unreviewed", label: "Te controleren" },
+  { value: "unreviewed", label: "Te doen" },
   { value: "uncategorized", label: "Te categoriseren" },
+  { value: "all", label: "Alles" },
   { value: "expense", label: "Afschrijvingen" },
   { value: "income", label: "Bijschrijvingen" },
 ] as const;
@@ -23,7 +23,7 @@ const PAGE_SIZE = 100;
 function buildHref(overrides: { type?: string; sort?: string; q?: string; l?: string }, current: { type: string; sort: string; q: string; l?: string }) {
   const merged = { ...current, ...overrides };
   const params = new URLSearchParams();
-  if (merged.type !== "all") params.set("type", merged.type);
+  if (merged.type !== "unreviewed") params.set("type", merged.type);
   if (merged.sort !== "desc") params.set("sort", merged.sort);
   if (merged.q) params.set("q", merged.q);
   if (merged.l) params.set("l", merged.l);
@@ -39,7 +39,7 @@ export default async function TransactionsPage({
   await ensureDefaultCategories();
 
   const { type, sort, q, l } = await searchParams;
-  const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "all";
+  const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "unreviewed";
   const limit = Math.min(1000, Math.max(PAGE_SIZE, parseInt(l ?? "", 10) || PAGE_SIZE));
   const activeSort = sort === "asc" ? "asc" : "desc";
   const activeQuery = q?.trim() ?? "";
@@ -60,7 +60,7 @@ export default async function TransactionsPage({
 
   if (activeFilter === "expense") query = query.lt("amount", 0);
   if (activeFilter === "income") query = query.gt("amount", 0);
-  if (activeFilter === "unreviewed") query = query.eq("reviewed", false).lt("amount", 0);
+  if (activeFilter === "unreviewed") query = query.eq("reviewed", false);
   if (activeFilter === "uncategorized")
     query = query.eq("category_source", "none").eq("is_transfer", false);
   if (activeQuery) {
@@ -119,7 +119,7 @@ export default async function TransactionsPage({
       </div>
 
       <form method="get" className="flex items-center gap-2">
-        {activeFilter !== "all" && <input type="hidden" name="type" value={activeFilter} />}
+        {activeFilter !== "unreviewed" && <input type="hidden" name="type" value={activeFilter} />}
         {activeSort !== "desc" && <input type="hidden" name="sort" value={activeSort} />}
         <input
           type="search"
@@ -249,7 +249,7 @@ export default async function TransactionsPage({
         </p>
       ) : activeFilter === "unreviewed" ? (
         <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
-          Niks te controleren — alle afschrijvingen zijn gecontroleerd. Bekijk{" "}
+          Alles is afgehandeld. Bekijk{" "}
           <Link href="/transactions?type=all" className="text-teal-700 underline">
             alle transacties
           </Link>
