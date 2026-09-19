@@ -42,10 +42,12 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Required: revalidates the session token on every request.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Required: refreshes the session token when needed. getClaims() checks
+  // the JWT locally where it can instead of calling Supabase Auth over the
+  // network on every single navigation (that round trip was a big part of
+  // the lag when switching tabs).
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const isPublicPath = PUBLIC_PATHS.some((path) =>
     request.nextUrl.pathname.startsWith(path)
