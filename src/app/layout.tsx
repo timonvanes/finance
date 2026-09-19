@@ -16,10 +16,14 @@ export const metadata: Metadata = {
   title: "Finance",
   description: "Persoonlijk overzicht van uitgaven, terugvorderingen en retouren",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/icon.svg",
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport = {
-  themeColor: "#111827",
+  themeColor: "#0f766e",
 };
 
 export default function RootLayout({
