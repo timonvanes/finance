@@ -132,25 +132,27 @@ export async function updateTransactionCategory(
     .single();
   if (txError) throw txError;
 
-  const { error: updateError } = await supabase
-    .from("transactions")
-    .update({ category_id: categoryId, category_source: "manual" })
-    .eq("id", transactionId);
-  if (updateError) throw updateError;
-
+  // Assigning the category and learning the rule don't depend on each other.
   const normalized = counterpartyKey(tx.counterparty_name);
-  if (normalized) {
-    const { error: ruleError } = await supabase.from("category_rules").upsert(
-      {
-        match_pattern: normalized,
-        match_type: "counterparty",
-        category_id: categoryId,
-        last_applied_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,match_pattern,match_type" }
-    );
-    if (ruleError) throw ruleError;
-  }
+  const [{ error: updateError }, ruleResult] = await Promise.all([
+    supabase
+      .from("transactions")
+      .update({ category_id: categoryId, category_source: "manual" })
+      .eq("id", transactionId),
+    normalized
+      ? supabase.from("category_rules").upsert(
+          {
+            match_pattern: normalized,
+            match_type: "counterparty",
+            category_id: categoryId,
+            last_applied_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,match_pattern,match_type" }
+        )
+      : Promise.resolve({ error: null }),
+  ]);
+  if (updateError) throw updateError;
+  if (ruleResult.error) throw ruleResult.error;
 }
 
 export async function updateTransactionNote(transactionId: string, note: string) {

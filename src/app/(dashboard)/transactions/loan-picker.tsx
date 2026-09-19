@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { markTransactionAsLoan, markTransactionAsRepayment } from "@/actions/loans";
+import { hideRow } from "./review-actions";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -11,11 +12,13 @@ export function LoanPicker({
   mode,
   people,
   openLoans,
+  hideWhenHandled = false,
 }: {
   transactionId: string;
   mode: "borrow" | "repay";
   people: { id: string; name: string }[];
   openLoans: { id: string; personName: string; balance: number }[];
+  hideWhenHandled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState("");
@@ -24,12 +27,13 @@ export function LoanPicker({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  function confirm() {
+  function confirm(target: HTMLElement) {
     if (!choice || (choice === "other" && !otherName.trim())) {
       setError(mode === "borrow" ? "Kies of vul in van wie de lening is." : "Kies een lening.");
       return;
     }
     setError(null);
+    const showAgain = hideRow(target, hideWhenHandled);
     startTransition(async () => {
       try {
         if (mode === "repay") {
@@ -43,6 +47,7 @@ export function LoanPicker({
         }
         router.refresh();
       } catch (e) {
+        showAgain();
         setError(e instanceof Error ? e.message : "Opslaan mislukt");
       }
     });
@@ -104,7 +109,7 @@ export function LoanPicker({
         <button
           type="button"
           disabled={isPending}
-          onClick={confirm}
+          onClick={(e) => confirm(e.currentTarget)}
           className="min-h-[44px] flex-1 rounded-xl bg-purple-700 text-sm font-medium text-white active:bg-purple-800 disabled:opacity-50"
         >
           {isPending ? "Bezig…" : "Opslaan"}

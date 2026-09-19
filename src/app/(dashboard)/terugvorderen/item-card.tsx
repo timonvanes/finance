@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   deleteReclaim,
@@ -63,15 +63,20 @@ export function ItemCard({
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const cardRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
 
-  function run(fn: () => Promise<unknown>) {
+  // hide = the card should disappear from this list once the action succeeds;
+  // it goes away immediately and comes back only if the action fails.
+  function run(fn: () => Promise<unknown>, hide = false) {
     setError(null);
+    if (hide) cardRef.current?.classList.add("hidden");
     startTransition(async () => {
       try {
         await fn();
         router.refresh();
       } catch (e) {
+        cardRef.current?.classList.remove("hidden");
         setError(e instanceof Error ? e.message : "Er ging iets mis");
       }
     });
@@ -83,7 +88,7 @@ export function ItemCard({
   const isWbw = item.method === "external_app";
 
   return (
-    <li className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
+    <li ref={cardRef} className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-lg font-medium text-gray-900">{item.title}</p>
@@ -144,7 +149,7 @@ export function ItemCard({
         <button
           type="button"
           disabled={isPending}
-          onClick={() => run(() => markReclaimPaid(item.id))}
+          onClick={() => run(() => markReclaimPaid(item.id), true)}
           className="min-h-[52px] w-full rounded-xl bg-gray-900 text-base font-medium text-white active:bg-gray-700 disabled:opacity-50"
         >
           {isPending ? "Bezig…" : "Gezet in WieBetaaltWat"}
@@ -160,7 +165,8 @@ export function ItemCard({
               run(() =>
                 item.kind === "reclaim"
                   ? linkReclaimToTransaction(item.id, txId)
-                  : linkPaymentRequestToTransaction(item.id, txId)
+                  : linkPaymentRequestToTransaction(item.id, txId),
+                true
               );
             }}
             className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 disabled:opacity-50"
@@ -181,7 +187,8 @@ export function ItemCard({
             disabled={isPending}
             onClick={() =>
               run(() =>
-                item.kind === "reclaim" ? markReclaimPaid(item.id) : markPaymentRequestPaid(item.id)
+                item.kind === "reclaim" ? markReclaimPaid(item.id) : markPaymentRequestPaid(item.id),
+                true
               )
             }
             className="min-h-[52px] w-full rounded-xl border border-gray-300 text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
@@ -249,7 +256,8 @@ export function ItemCard({
             onClick={() => {
               if (!confirm(`"${personName}" niet meer proberen te innen? Dit wordt dan als eigen kosten beschouwd.`)) return;
               run(() =>
-                item.kind === "reclaim" ? writeOffReclaim(item.id) : writeOffPaymentRequest(item.id)
+                item.kind === "reclaim" ? writeOffReclaim(item.id) : writeOffPaymentRequest(item.id),
+                true
               );
             }}
             className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-gray-700 disabled:opacity-50"
@@ -275,7 +283,7 @@ export function ItemCard({
               disabled={isPending}
               onClick={() => {
                 if (!confirm("Deze terugvordering verwijderen?")) return;
-                run(() => deleteReclaim(item.id));
+                run(() => deleteReclaim(item.id), true);
               }}
               className="min-h-[44px] rounded-xl border border-red-200 px-4 text-red-600 disabled:opacity-50"
             >

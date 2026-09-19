@@ -208,6 +208,7 @@ export default async function TransactionsPage({
                     transactionId={tx.id}
                     categoryId={tx.category_id}
                     categorySource={tx.category_source}
+                    hideWhenCategorized={activeFilter === "uncategorized"}
                     categories={categories.filter((c) =>
                       tx.amount > 0 ? c.kind === "income" : c.kind === "expense"
                     )}
@@ -247,6 +248,7 @@ export default async function TransactionsPage({
                   }
                   people={loanData.people}
                   openLoans={loanData.openLoans}
+                  hideWhenHandled={activeFilter === "unreviewed"}
                 />
               </li>
             );

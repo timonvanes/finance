@@ -7,6 +7,14 @@ import { markAsTransfer, markOwnExpense, unreviewTransaction } from "@/actions/r
 import { removeLoanEntryForTransaction } from "@/actions/loans";
 import { LoanPicker } from "./loan-picker";
 
+// Hides the list row right away (when the current filter would drop it anyway)
+// instead of waiting for the server round trip; returns an undo for errors.
+export function hideRow(target: HTMLElement, enabled: boolean) {
+  const li = enabled ? target.closest("li") : null;
+  li?.classList.add("hidden");
+  return () => li?.classList.remove("hidden");
+}
+
 export function ReviewActions({
   transactionId,
   reviewed,
@@ -17,6 +25,7 @@ export function ReviewActions({
   loanLabel = null,
   people = [],
   openLoans = [],
+  hideWhenHandled = false,
 }: {
   transactionId: string;
   reviewed: boolean;
@@ -29,11 +38,33 @@ export function ReviewActions({
   loanLabel?: string | null;
   people?: { id: string; name: string }[];
   openLoans?: { id: string; personName: string; balance: number }[];
+  hideWhenHandled?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [localReviewed, setLocalReviewed] = useState(reviewed);
   const [localIsTransfer, setLocalIsTransfer] = useState(isTransfer);
   const router = useRouter();
+
+  function handle(target: HTMLElement, kind: "own" | "transfer") {
+    const showAgain = hideRow(target, hideWhenHandled);
+    if (kind === "own") setLocalReviewed(true);
+    else setLocalIsTransfer(true);
+    startTransition(async () => {
+      try {
+        if (kind === "own") {
+          const formData = new FormData();
+          formData.set("transactionId", transactionId);
+          await markOwnExpense(formData);
+        } else {
+          await markAsTransfer(transactionId);
+        }
+      } catch {
+        showAgain();
+        if (kind === "own") setLocalReviewed(false);
+        else setLocalIsTransfer(false);
+      }
+    });
+  }
 
   const splitHref = `/terugvorderen/nieuw?transactionId=${transactionId}`;
 
@@ -67,11 +98,11 @@ export function ReviewActions({
             type="button"
             disabled={isPending}
             onClick={() => {
+              setLocalReviewed(false);
+              setLocalIsTransfer(false);
               startTransition(async () => {
                 if (loanLabel) await removeLoanEntryForTransaction(transactionId);
                 else await unreviewTransaction(transactionId);
-                setLocalReviewed(false);
-                setLocalIsTransfer(false);
                 router.refresh();
               });
             }}
@@ -91,15 +122,7 @@ export function ReviewActions({
           <button
             type="button"
             disabled={isPending}
-            onClick={() => {
-              const formData = new FormData();
-              formData.set("transactionId", transactionId);
-              startTransition(async () => {
-                await markOwnExpense(formData);
-                setLocalReviewed(true);
-                router.refresh();
-              });
-            }}
+            onClick={(e) => handle(e.currentTarget, "own")}
             className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 active:bg-gray-50 disabled:opacity-50"
           >
             Eigen uitgave
@@ -116,15 +139,7 @@ export function ReviewActions({
         <button
           type="button"
           disabled={isPending}
-          onClick={() => {
-            const formData = new FormData();
-            formData.set("transactionId", transactionId);
-            startTransition(async () => {
-              await markOwnExpense(formData);
-              setLocalReviewed(true);
-              router.refresh();
-            });
-          }}
+          onClick={(e) => handle(e.currentTarget, "own")}
           className="min-h-[44px] rounded-xl bg-gray-900 px-4 text-sm font-medium text-white active:bg-gray-700 disabled:opacity-50"
         >
           Bevestigen
@@ -136,18 +151,13 @@ export function ReviewActions({
           mode={isExpense ? "repay" : "borrow"}
           people={people}
           openLoans={openLoans}
+          hideWhenHandled={hideWhenHandled}
         />
       )}
       <button
         type="button"
         disabled={isPending}
-        onClick={() => {
-          startTransition(async () => {
-            await markAsTransfer(transactionId);
-            setLocalIsTransfer(true);
-            router.refresh();
-          });
-        }}
+        onClick={(e) => handle(e.currentTarget, "transfer")}
         className="min-h-[44px] rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-medium text-blue-700 active:bg-blue-100 disabled:opacity-50"
       >
         Geen kosten

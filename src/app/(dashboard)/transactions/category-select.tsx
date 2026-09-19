@@ -1,7 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { updateTransactionCategory } from "@/actions/transactions";
 
 interface Category {
@@ -23,28 +22,37 @@ export function CategorySelect({
   categoryId,
   categorySource,
   categories,
+  hideWhenCategorized = false,
 }: {
   transactionId: string;
   categoryId: string | null;
   categorySource: string;
   categories: Category[];
+  hideWhenCategorized?: boolean;
 }) {
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [source, setSource] = useState(categorySource);
 
   return (
     <select
       defaultValue={categoryId ?? ""}
-      disabled={isPending}
       onChange={(e) => {
         const newCategoryId = e.target.value;
         if (!newCategoryId) return;
+        const previous = source;
+        setSource("manual");
+        const li = hideWhenCategorized ? e.currentTarget.closest("li") : null;
+        li?.classList.add("hidden");
         startTransition(async () => {
-          await updateTransactionCategory(transactionId, newCategoryId);
-          router.refresh();
+          try {
+            await updateTransactionCategory(transactionId, newCategoryId);
+          } catch {
+            setSource(previous);
+            li?.classList.remove("hidden");
+          }
         });
       }}
-      className={`rounded-md border px-2 py-1 text-xs text-gray-700 disabled:opacity-50 ${SOURCE_STYLE[categorySource] ?? SOURCE_STYLE.none}`}
+      className={`rounded-md border px-2 py-1 text-xs text-gray-700 ${SOURCE_STYLE[source] ?? SOURCE_STYLE.none}`}
     >
       <option value="" disabled>
         Categorie…
