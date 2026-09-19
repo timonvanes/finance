@@ -207,6 +207,12 @@ export default async function ReclaimsPage({
     <div className="space-y-8">
       <div>
         <h1 className="text-lg font-semibold text-gray-900">Terugvorderingen</h1>
+        <Link
+          href="/terugvorderen"
+          className="mt-2 inline-flex min-h-[44px] items-center rounded-md bg-blue-50 px-4 text-sm font-medium text-blue-700"
+        >
+          Probeer de nieuwe app-versie ›
+        </Link>
         <p className="mt-1 text-sm text-gray-500">
           Nog openstaand: <span className="font-medium text-gray-900">€{outstandingTotal.toFixed(2)}</span>
         </p>
