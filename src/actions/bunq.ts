@@ -35,26 +35,29 @@ export async function createBunqPaymentLink(kind: "reclaim" | "request", id: str
 
   let amount = 0;
   let code: string | null = null;
+  let personName: string | null = null;
   if (kind === "reclaim") {
     const { data, error } = await supabase
       .from("reclaims")
-      .select("computed_amount, reference_code, status")
+      .select("computed_amount, reference_code, status, people(name)")
       .eq("id", id)
       .single();
     if (error) throw error;
     if (data.status !== "requested") throw new Error("Deze terugvordering staat niet meer open.");
     amount = Number(data.computed_amount);
+    personName = (Array.isArray(data.people) ? data.people[0] : data.people)?.name ?? null;
     code = data.reference_code;
   } else {
     const { data, error } = await supabase
       .from("payment_requests")
-      .select("reference_code, status, reclaims(computed_amount)")
+      .select("reference_code, status, people(name), reclaims(computed_amount)")
       .eq("id", id)
       .single();
     if (error) throw error;
     if (data.status !== "requested") throw new Error("Dit verzoek staat niet meer open.");
     amount = (Array.isArray(data.reclaims) ? data.reclaims : []).reduce((s, r) => s + Number(r.computed_amount), 0);
     code = data.reference_code;
+    personName = (Array.isArray(data.people) ? data.people[0] : data.people)?.name ?? null;
   }
   amount = Math.round(amount * 100) / 100;
   if (!(amount > 0)) throw new Error("Geen bedrag om terug te vragen.");
@@ -78,6 +81,7 @@ export async function createBunqPaymentLink(kind: "reclaim" | "request", id: str
     share_url: tab.url,
     amount,
     reference_code: code,
+    person_name: personName,
   });
   if (insertError) throw insertError;
   revalidatePath("/", "layout");
