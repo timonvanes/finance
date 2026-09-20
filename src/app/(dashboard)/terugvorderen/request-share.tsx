@@ -59,6 +59,7 @@ export function RequestShare({
   const [showSettings, setShowSettings] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [desc, setDesc] = useState(description);
   const [bunqUrl, setBunqUrl] = useState<string | null>(
     bunqLink && Math.abs(bunqLink.amount - amount) < 0.005 ? bunqLink.url : null
   );
@@ -67,7 +68,7 @@ export function RequestShare({
     setBusy(true);
     setNotice(null);
     try {
-      const r = await createBunqPaymentLink(kind, id, description);
+      const r = await createBunqPaymentLink(kind, id, desc.trim() || description);
       setBunqUrl(r.url);
       router.refresh();
       // Straight into WhatsApp with the finished message; a share sheet would
@@ -126,20 +127,20 @@ export function RequestShare({
   }
 
   function message(linkOverride?: string) {
+    const text = desc.trim() || description;
     const link =
-      linkOverride ?? bunqUrl ?? buildLink(settings.link, amount, referenceCode ? `${description} ${referenceCode}` : description);
-    const lines = [`Hoi ${personName}, ik heb ${euro(amount)} voor je voorgeschoten (${description}).`];
-    if (link) {
-      lines.push(`Je kunt het hier betalen: ${link}`);
-    } else if (settings.iban.trim()) {
+      linkOverride ?? bunqUrl ?? buildLink(settings.link, amount, referenceCode ? `${text} ${referenceCode}` : text);
+    if (link) return `${text}
+${link}`;
+    const lines = [`${text} (${euro(amount)})`];
+    if (settings.iban.trim()) {
       lines.push(
-        `Wil je het overmaken naar ${settings.iban.trim()}${settings.holder.trim() ? ` t.n.v. ${settings.holder.trim()}` : ""}?`
+        `Maak het over naar ${settings.iban.trim()}${settings.holder.trim() ? ` t.n.v. ${settings.holder.trim()}` : ""}.`
       );
-    } else {
-      lines.push("Wil je het naar me overmaken?");
     }
     if (referenceCode) lines.push(`Zet "${referenceCode}" erbij in de omschrijving.`);
-    return lines.join("\n");
+    return lines.join("
+");
   }
 
   async function share() {
@@ -158,6 +159,13 @@ export function RequestShare({
 
   return (
     <div className="space-y-2">
+      <input
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        disabled={Boolean(bunqUrl)}
+        placeholder="Omschrijving voor het bericht"
+        className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base disabled:bg-gray-50 disabled:text-gray-500"
+      />
       <div className="flex gap-2">
         <button
           type="button"
