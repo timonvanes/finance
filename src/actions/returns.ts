@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { extractOrderFromEmailText } from "@/lib/anthropic/extract-order";
+import { extractReturnFromEmailText, type ExtractedReturn } from "@/lib/anthropic/extract-return";
 
 export async function extractOrderPreview(emailText: string) {
   return extractOrderFromEmailText(emailText);
@@ -160,4 +161,147 @@ export async function updateOrderCosts(orderId: string, refundedShipping: number
     })
     .eq("id", orderId);
   if (error) throw error;
+}
+
+const norm = (t: string) =>
+  t.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+const words = (t: string) => new Set(norm(t).split(" ").filter((w) => w.length >= 3));
+
+function similarity(a: string, b: string): number {
+  const wa = words(a);
+  const wb = words(b);
+  if (wa.size === 0 || wb.size === 0) return 0;
+  let shared = 0;
+  wa.forEach((w) => wb.has(w) && shared++);
+  return shared / Math.min(wa.size, wb.size);
+}
+
+function merchantScore(orderMerchant: string, mailMerchant: string): number {
+  const a = norm(orderMerchant);
+  const b = norm(mailMerchant);
+  if (!a || !b) return 0;
+  if (a.includes(b) || b.includes(a)) return 3;
+  const shared = [...words(a)].some((w) => words(b).has(w));
+  return shared ? 2 : 0;
+}
+
+// Marks the matching order items as returned, stores refunded shipping and a
+// held-back fee, and — if a refund of exactly the expected amount has
+// already arrived from that shop — links it right away.
+async function applyReturnToOrderInternal(orderId: string, ex: ExtractedReturn) {
+  const supabase = await createClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("id, merchant_name, order_items(id, description, price, quantity, returned)")
+    .eq("id", orderId)
+    .single();
+  if (error) throw error;
+
+  const items = (order.order_items ?? []) as { id: string; description: string; price: number; quantity: number; returned: boolean }[];
+  const used = new Set<string>();
+  const matchedIds: string[] = [];
+  for (const returned of ex.returned_items) {
+    let best: { id: string; score: number } | null = null;
+    for (const item of items) {
+      if (used.has(item.id)) continue;
+      const score = similarity(item.description, returned.description);
+      if (score >= 0.35 && (!best || score > best.score)) best = { id: item.id, score };
+    }
+    if (best) {
+      used.add(best.id);
+      matchedIds.push(best.id);
+    }
+  }
+
+  if (matchedIds.length > 0) {
+    const { error: itemsError } = await supabase.from("order_items").update({ returned: true }).in("id", matchedIds);
+    if (itemsError) throw itemsError;
+  }
+
+  const shipping = Math.max(0, ex.shipping_refunded ?? 0);
+  const fee = Math.max(0, ex.return_fee ?? 0);
+  const { error: orderError } = await supabase
+    .from("orders")
+    .update({ refunded_shipping: shipping, return_fee: fee, refund_status: "pending" })
+    .eq("id", orderId);
+  if (orderError) throw orderError;
+
+  const returnedTotal = items
+    .filter((i) => i.returned || matchedIds.includes(i.id))
+    .reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const expected = Math.max(0, returnedTotal + shipping - fee);
+
+  // Has the money already arrived?
+  let linked = false;
+  const { data: incoming } = await supabase
+    .from("visible_transactions")
+    .select("id, amount, counterparty_name, raw_description")
+    .gt("amount", 0)
+    .eq("is_transfer", false)
+    .order("booking_date", { ascending: false })
+    .limit(150);
+  const { data: taken } = await supabase.from("orders").select("refund_transaction_id").not("refund_transaction_id", "is", null);
+  const takenIds = new Set((taken ?? []).map((o) => o.refund_transaction_id));
+  const target = ex.refund_total ?? expected;
+  const hit = (incoming ?? []).find(
+    (tx) =>
+      !takenIds.has(tx.id) &&
+      Math.abs(Number(tx.amount) - target) < 0.01 &&
+      merchantScore(`${tx.counterparty_name ?? ""} ${tx.raw_description ?? ""}`, order.merchant_name) > 0
+  );
+  if (hit) {
+    await supabase.from("orders").update({ refund_transaction_id: hit.id, refund_status: "refunded" }).eq("id", orderId);
+    linked = true;
+  }
+
+  return {
+    orderId,
+    merchant: order.merchant_name as string,
+    itemsMatched: matchedIds.length,
+    itemsInMail: ex.returned_items.length,
+    shipping,
+    fee,
+    expected,
+    mailTotal: ex.refund_total,
+    linked,
+  };
+}
+
+// Paste a return confirmation / credit note: finds the order it belongs to
+// and fills in the returned items, shipping and fee. When several orders
+// could fit, the candidates come back so you can pick one.
+export async function processReturnEmail(emailText: string) {
+  const extraction = await extractReturnFromEmailText(emailText);
+
+  const supabase = await createClient();
+  const { data: orders, error } = await supabase
+    .from("orders")
+    .select("id, merchant_name, order_date, refund_status, order_items(description)")
+    .neq("refund_status", "refunded");
+  if (error) throw error;
+
+  const scored = (orders ?? [])
+    .map((o) => {
+      const m = merchantScore(o.merchant_name, extraction.merchant_name);
+      const itemHits = extraction.returned_items.filter((r) =>
+        ((o.order_items ?? []) as { description: string }[]).some((i) => similarity(i.description, r.description) >= 0.35)
+      ).length;
+      return { id: o.id as string, merchant_name: o.merchant_name as string, order_date: o.order_date as string | null, score: m > 0 ? m * 10 + itemHits * 3 : 0 };
+    })
+    .filter((o) => o.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) {
+    return { status: "none" as const, extraction, candidates: [] };
+  }
+  const confident = scored.length === 1 || scored[0].score - scored[1].score >= 3;
+  if (confident) {
+    const result = await applyReturnToOrderInternal(scored[0].id, extraction);
+    return { status: "applied" as const, extraction, candidates: [], result };
+  }
+  return { status: "choose" as const, extraction, candidates: scored.slice(0, 5) };
+}
+
+export async function applyReturnToOrder(orderId: string, extraction: ExtractedReturn) {
+  return applyReturnToOrderInternal(orderId, extraction);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { InfoButton } from "../info-button";
 import { useRouter } from "next/navigation";
 import {
   deleteOrder,
@@ -133,7 +134,20 @@ export function OrderRow({
 
       {order.refund_status !== "not_returned" && (
         <div className="space-y-3 rounded-xl bg-gray-50 p-4">
-          <p className="text-sm font-medium text-gray-700">Kosten en verzending</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700">Kosten en verzending</p>
+            <InfoButton>
+              <p>
+                <span className="font-medium">Verzendkosten terug</span>: verzendkosten van de
+                oorspronkelijke bestelling die de winkel terugbetaalt (meestal bij een volledige retour).
+              </p>
+              <p>
+                <span className="font-medium">Retourkosten ingehouden</span>: kosten die de winkel van je
+                terugbetaling aftrekt, bijvoorbeeld voor het retourlabel.
+              </p>
+              <p>Verwacht terug = geretourneerde artikelen + verzendkosten terug − retourkosten.</p>
+            </InfoButton>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="mb-1 block text-sm text-gray-500">Verzendkosten terug</span>
