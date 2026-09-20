@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   addPotEntry,
-  checkPotBalance,
   deletePot,
   deletePotEntry,
   setPotMonthlyAmount,
@@ -49,7 +48,7 @@ export function MonthlyPlanForm({ potId, initial }: { potId: string; initial: nu
   return (
     <div className="space-y-3">
       <div>
-        <label className={label}>Bedrag per maand</label>
+        <label className={label}>Bedrag per maand dat je wilt sparen</label>
         <label className="flex h-[52px] items-center gap-2 rounded-xl border border-gray-300 px-4">
           <span className="text-gray-400">€</span>
           <input
@@ -125,91 +124,6 @@ export function EntryForm({ potId }: { potId: string }) {
         >
           Opnemen
         </button>
-      </div>
-      <Message message={message} />
-    </div>
-  );
-}
-
-export function CheckForm({
-  potId,
-  expected,
-  last,
-}: {
-  potId: string;
-  expected: number;
-  last: { actual: number; expected: number; corrected: boolean; checkedAt: string } | null;
-}) {
-  const [actual, setActual] = useState("");
-  const { isPending, message, run } = useRun();
-
-  const value = Number(actual);
-  const hasValue = actual !== "" && !Number.isNaN(value);
-  const difference = hasValue ? value - expected : 0;
-
-  return (
-    <div className="space-y-3">
-      {last && (
-        <p className="text-sm text-gray-500">
-          Laatst gecontroleerd op {new Date(last.checkedAt).toLocaleDateString("nl-NL")}:{" "}
-          {Math.abs(last.actual - last.expected) < 0.005
-            ? "klopte"
-            : `${euro(Math.abs(last.actual - last.expected))} verschil${last.corrected ? ", gecorrigeerd" : ""}`}
-        </p>
-      )}
-      <div>
-        <label className={label}>Saldo dat je nu bij je bank ziet</label>
-        <label className="flex h-[52px] items-center gap-2 rounded-xl border border-gray-300 px-4">
-          <span className="text-gray-400">€</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            value={actual}
-            onChange={(e) => setActual(e.target.value)}
-            placeholder={expected.toFixed(2)}
-            className="h-full min-w-0 flex-1 bg-transparent text-lg outline-none"
-          />
-        </label>
-      </div>
-      {hasValue && (
-        <p className={`text-base ${Math.abs(difference) < 0.005 ? "text-teal-700" : "text-amber-700"}`}>
-          {Math.abs(difference) < 0.005
-            ? "Klopt precies met de administratie."
-            : `De app denkt ${euro(expected)}: ${euro(Math.abs(difference))} ${difference > 0 ? "minder" : "meer"} dan bij je bank.`}
-        </p>
-      )}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={isPending || !hasValue}
-          onClick={() =>
-            run(async () => {
-              await checkPotBalance(potId, value, true);
-              setActual("");
-              return Math.abs(difference) < 0.005 ? "Gecontroleerd: klopt." : "Gecontroleerd en gecorrigeerd.";
-            })
-          }
-          className={`${primary} flex-1`}
-        >
-          {isPending ? "Bezig…" : Math.abs(difference) < 0.005 || !hasValue ? "Controleer" : "Corrigeer"}
-        </button>
-        {hasValue && Math.abs(difference) >= 0.005 && (
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() =>
-              run(async () => {
-                await checkPotBalance(potId, value, false);
-                setActual("");
-                return "Verschil genoteerd, niets aangepast.";
-              })
-            }
-            className="min-h-[52px] flex-1 rounded-xl border border-gray-300 text-base text-gray-900 active:bg-gray-50 disabled:opacity-50"
-          >
-            Alleen noteren
-          </button>
-        )}
       </div>
       <Message message={message} />
     </div>

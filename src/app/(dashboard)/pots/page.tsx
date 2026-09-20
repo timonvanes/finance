@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getLastChecks, getPots, getSavingsInbox } from "@/actions/pots";
+import { getPots, getSavingsInbox } from "@/actions/pots";
 import { getDashboardSummary } from "@/actions/dashboard";
 import { computePotBalance } from "@/lib/pots/balance";
 import { computeSchedule, depositedInPeriod } from "@/lib/pots/insights";
@@ -13,12 +13,10 @@ import { LeftoverCard } from "./leftover-card";
 import { AutoDetect } from "./auto-detect";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
-const STALE_CHECK_DAYS = 45;
 
 export default async function PotsPage() {
-  const [pots, checks, inbox, startDay] = await Promise.all([
+  const [pots, inbox, startDay] = await Promise.all([
     getPots(),
-    getLastChecks(),
     getSavingsInbox(),
     getMonthStartDay(),
   ]);
@@ -41,12 +39,6 @@ export default async function PotsPage() {
     ? summary.monthIncome - summary.monthExpense - Math.max(plannedTotal, depositedTotal)
     : 0;
 
-  const now = Date.now();
-  const staleCount = pots.filter((p) => {
-    const c = checks.get(p.id);
-    return !c || now - new Date(c.checkedAt).getTime() > STALE_CHECK_DAYS * 86400000;
-  }).length;
-
   return (
     <div className="space-y-5">
       <AutoDetect />
@@ -65,10 +57,6 @@ export default async function PotsPage() {
               Spaarrekening) is dat het nummer achter de naam, bv. Z16377129. Bij Rabobank de
               naam die je zelf aan het potje gaf.
             </p>
-            <p>
-              Met <span className="font-medium">Saldo controleren</span> vergelijk je het saldo
-              hier met het echte saldo bij je bank en corrigeer je verschillen.
-            </p>
           </InfoButton>
         </div>
         <Link
@@ -84,12 +72,6 @@ export default async function PotsPage() {
         <p className="mt-1 text-4xl font-semibold text-gray-900">{euro(totalBalance)}</p>
         {plannedTotal > 0 && (
           <p className="mt-1 text-sm text-gray-500">{euro(plannedTotal)} per maand gepland</p>
-        )}
-        {staleCount > 0 && (
-          <p className="mt-2 text-sm text-amber-700">
-            {staleCount === pots.length ? "Nog niet" : `${staleCount} potje${staleCount > 1 ? "s" : ""} niet recent`}{" "}
-            gecontroleerd met je bank — open een potje en kies Saldo controleren.
-          </p>
         )}
       </div>
 

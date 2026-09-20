@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLastChecks, getPots } from "@/actions/pots";
+import { getPots } from "@/actions/pots";
 import { computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 import { averageMonthlyNet, computeSchedule, depositedInPeriod, projectedFinish } from "@/lib/pots/insights";
 import { getMonthStartDay } from "@/lib/settings";
 import { InfoButton } from "../../info-button";
-import { CheckForm, EntryForm, EntryList, MonthlyPlanForm, SettingsForms } from "../pot-detail-forms";
+import { EntryForm, EntryList, MonthlyPlanForm, SettingsForms } from "../pot-detail-forms";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
 export default async function PotPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [pots, checks, startDay] = await Promise.all([getPots(), getLastChecks(), getMonthStartDay()]);
+  const [pots, startDay] = await Promise.all([getPots(), getMonthStartDay()]);
   const pot = pots.find((p) => p.id === id);
   if (!pot) notFound();
 
@@ -91,32 +91,6 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
       </div>
 
       <section className="space-y-2">
-        <h2 className="px-1 text-lg font-semibold text-gray-900">Maandelijks inleggen</h2>
-        <div className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
-          {pot.monthly_amount && (
-            <p className="text-sm text-gray-500">
-              Deze periode ingelegd: {euro(deposited)} van {euro(Number(pot.monthly_amount))}
-            </p>
-          )}
-          <MonthlyPlanForm potId={pot.id} initial={pot.monthly_amount != null ? Number(pot.monthly_amount) : null} />
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="px-1 text-lg font-semibold text-gray-900">Inleggen of opnemen</h2>
-        <div className="rounded-2xl bg-white p-5 ring-1 ring-gray-200">
-          <EntryForm potId={pot.id} />
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="px-1 text-lg font-semibold text-gray-900">Saldo controleren</h2>
-        <div className="rounded-2xl bg-white p-5 ring-1 ring-gray-200">
-          <CheckForm potId={pot.id} expected={balance} last={checks.get(pot.id) ?? null} />
-        </div>
-      </section>
-
-      <section className="space-y-2">
         <h2 className="px-1 text-lg font-semibold text-gray-900">Geschiedenis ({entries.length})</h2>
         <EntryList entries={entries} />
       </section>
@@ -125,7 +99,24 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
         <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
           Instellingen van dit potje
         </summary>
-        <div className="p-5 pt-2">
+        <div className="space-y-6 p-5 pt-2">
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-gray-900">Maandplan</h3>
+            <p className="text-sm text-gray-500">
+              Hoeveel je per maand in dit potje wilt zetten.
+              {pot.monthly_amount &&
+                ` Deze periode ingelegd: ${euro(deposited)} van ${euro(Number(pot.monthly_amount))}.`}
+            </p>
+            <MonthlyPlanForm potId={pot.id} initial={pot.monthly_amount != null ? Number(pot.monthly_amount) : null} />
+          </div>
+          <div className="space-y-3 border-t border-gray-100 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900">Saldo handmatig aanpassen</h3>
+            <p className="text-sm text-gray-500">
+              Alleen nodig als een overboeking niet automatisch werd herkend, of voor geld dat niet via je bank liep.
+            </p>
+            <EntryForm potId={pot.id} />
+          </div>
+          <div className="border-t border-gray-100 pt-6">
           <SettingsForms
             potId={pot.id}
             matchText={pot.match_text}
@@ -134,6 +125,7 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
             openingBalance={Number(pot.opening_balance)}
             openingBalanceDate={pot.opening_balance_date}
           />
+          </div>
         </div>
       </details>
     </div>
