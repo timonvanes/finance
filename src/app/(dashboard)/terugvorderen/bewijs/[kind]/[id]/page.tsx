@@ -77,38 +77,24 @@ export default async function BewijsPage({
           <p className="text-lg font-semibold text-gray-900">Overzicht betaalverzoek{personName && ` · ${personName}`}</p>
           {reference && <p className="text-sm text-gray-500">Referentie {reference}</p>}
         </div>
-        <table className="w-full text-left text-base">
-          <thead>
-            <tr className="border-b border-gray-200 text-sm text-gray-500">
-              <th className="py-2 font-medium">Datum</th>
-              <th className="py-2 font-medium">Omschrijving</th>
-              <th className="py-2 text-right font-medium">Bedrag</th>
-              <th className="py-2 text-right font-medium">Jouw deel</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={i} className="border-b border-gray-100">
-                <td className="py-2 pr-2 align-top whitespace-nowrap">
+        <ul className="divide-y divide-gray-100 border-y border-gray-200">
+          {lines.map((l, i) => (
+            <li key={i} className="flex items-start justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="text-base text-gray-900">{l.name}</p>
+                <p className="text-sm text-gray-500">
                   {l.date ? new Date(l.date).toLocaleDateString("nl-NL") : ""}
-                </td>
-                <td className="py-2 pr-2 align-top">{l.name}</td>
-                <td className="py-2 pr-2 text-right align-top whitespace-nowrap">
-                  {l.total != null ? euro(l.total) : ""}
-                </td>
-                <td className="py-2 text-right align-top font-medium whitespace-nowrap">{euro(l.share)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={3} className="pt-3 font-semibold">
-                Totaal
-              </td>
-              <td className="pt-3 text-right text-lg font-semibold whitespace-nowrap">{euro(total)}</td>
-            </tr>
-          </tfoot>
-        </table>
+                  {l.total != null && Math.abs(l.total - l.share) > 0.01 && ` · totaal ${euro(l.total)}`}
+                </p>
+              </div>
+              <p className="shrink-0 text-base font-medium text-gray-900">{euro(l.share)}</p>
+            </li>
+          ))}
+        </ul>
+        <div className="flex items-center justify-between">
+          <p className="text-base font-semibold text-gray-900">Totaal</p>
+          <p className="text-xl font-semibold text-gray-900">{euro(total)}</p>
+        </div>
       </div>
 
       <PrintButton />
