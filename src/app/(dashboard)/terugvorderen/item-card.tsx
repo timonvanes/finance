@@ -6,7 +6,7 @@ import {
   deleteReclaim,
   linkReclaimToTransaction,
   markReclaimPaid,
-  writeOffReclaim,
+  writeOffPartOfReclaim,
 } from "@/actions/reclaims";
 import {
   addReclaimToPaymentRequest,
@@ -19,6 +19,7 @@ import {
 import { TxDetails, type TxInfo } from "./tx-details";
 import { ReferenceCode } from "./reference-code";
 import { RequestShare } from "./request-share";
+import { WriteOffForm } from "./write-off-form";
 
 interface IncomingTransaction {
   id: string;
@@ -148,6 +149,15 @@ export function ItemCard({
                   Uit combinatie halen
                 </button>
               )}
+              {item.kind === "request" && l.id && (
+                <div className="mt-1">
+                  <WriteOffForm
+                    max={l.amount}
+                    disabled={isPending}
+                    onConfirm={(amount) => run(() => writeOffPartOfReclaim(l.id!, amount))}
+                  />
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -276,20 +286,25 @@ export function ItemCard({
           Meer opties
         </summary>
         <div className="flex flex-wrap gap-2 pb-1">
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => {
-              if (!confirm(`"${personName}" niet meer proberen te innen? Dit wordt dan als eigen kosten beschouwd.`)) return;
-              run(() =>
-                item.kind === "reclaim" ? writeOffReclaim(item.id) : writeOffPaymentRequest(item.id),
-                true
-              );
-            }}
-            className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-gray-700 disabled:opacity-50"
-          >
-            Niet inbaar
-          </button>
+          {item.kind === "reclaim" ? (
+            <WriteOffForm
+              max={item.amount}
+              disabled={isPending}
+              onConfirm={(amount) => run(() => writeOffPartOfReclaim(item.id, amount), amount >= item.amount - 0.005)}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                if (!confirm(`Alles van "${personName}" in dit verzoek als niet inbaar aanmerken? Dit wordt dan een eigen kost.`)) return;
+                run(() => writeOffPaymentRequest(item.id), true);
+              }}
+              className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-gray-700 disabled:opacity-50"
+            >
+              Alles niet inbaar
+            </button>
+          )}
           {item.kind === "reclaim" && (
             <button
               type="button"

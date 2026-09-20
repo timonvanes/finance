@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
 import { generateReferenceCode } from "@/lib/reclaims/reference-code";
-import { combineReclaims } from "@/actions/payment-requests";
+import { combineReclaims, removeReclaimFromPaymentRequest } from "@/actions/payment-requests";
 
 export async function getRecentExpenseTransactions() {
   const supabase = await createClient();
@@ -243,6 +243,46 @@ export async function writeOffReclaim(reclaimId: string) {
     .update({ status: "written_off" })
     .eq("id", reclaimId);
   if (error) throw error;
+}
+
+// Writes off only part of a reclaim (or all of it when the amount covers it).
+// The uncollectable part becomes its own written-off row on the same
+// transaction so spend netting stays correct for the rest.
+export async function writeOffPartOfReclaim(reclaimId: string, amount: number) {
+  if (!(amount > 0)) throw new Error("Vul een bedrag in.");
+  const supabase = await createClient();
+  const { data: r, error } = await supabase
+    .from("reclaims")
+    .select("transaction_id, person_id, computed_amount, source_total_amount, settlement_method, payment_request_id")
+    .eq("id", reclaimId)
+    .single();
+  if (error) throw error;
+
+  if (r.payment_request_id) await removeReclaimFromPaymentRequest(reclaimId);
+
+  if (amount >= r.computed_amount - 0.005) {
+    await writeOffReclaim(reclaimId);
+    return;
+  }
+
+  const remaining = Math.round((r.computed_amount - amount) * 100) / 100;
+  const { error: updateError } = await supabase
+    .from("reclaims")
+    .update({ amount_type: "fixed", amount_value: remaining, computed_amount: remaining })
+    .eq("id", reclaimId);
+  if (updateError) throw updateError;
+
+  const { error: insertError } = await supabase.from("reclaims").insert({
+    transaction_id: r.transaction_id,
+    person_id: r.person_id,
+    amount_type: "fixed",
+    amount_value: amount,
+    computed_amount: amount,
+    source_total_amount: r.source_total_amount,
+    settlement_method: r.settlement_method,
+    status: "written_off",
+  });
+  if (insertError) throw insertError;
 }
 
 export async function undoWriteOffReclaim(reclaimId: string) {
