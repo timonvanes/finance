@@ -55,11 +55,21 @@ export function computeSchedule(pot: PotForInsights, balance: number, now = new 
   if (!pot.target_amount || !pot.target_date) return { status: "none", difference: 0, expectedNow: balance };
   if (balance >= pot.target_amount) return { status: "done", difference: balance - pot.target_amount, expectedNow: pot.target_amount };
 
-  const start = new Date(pot.opening_balance_date || pot.created_at || now.toISOString());
+  // The plan starts when the pot was created, from whatever it held then.
+  // (The opening-balance date can lie far in the past — e.g. pulled back to
+  // the first matching transaction — and must not make a brand-new pot look
+  // months behind.)
+  const createdAt = pot.created_at ? new Date(pot.created_at) : now;
+  const createdDay = createdAt.toISOString().slice(0, 10);
+  const startBalance =
+    pot.opening_balance +
+    counted(pot)
+      .filter((e) => e.entry_date <= createdDay)
+      .reduce((sum, e) => sum + e.amount, 0);
   const end = new Date(pot.target_date);
-  const span = end.getTime() - start.getTime();
-  const fraction = span <= 0 ? 1 : Math.min(1, Math.max(0, (now.getTime() - start.getTime()) / span));
-  const expectedNow = pot.opening_balance + (pot.target_amount - pot.opening_balance) * fraction;
+  const span = end.getTime() - createdAt.getTime();
+  const fraction = span <= 0 ? 1 : Math.min(1, Math.max(0, (now.getTime() - createdAt.getTime()) / span));
+  const expectedNow = startBalance + (pot.target_amount - startBalance) * fraction;
   const difference = balance - expectedNow;
   const tolerance = Math.max(5, pot.target_amount * 0.02);
   const status: ScheduleStatus =
