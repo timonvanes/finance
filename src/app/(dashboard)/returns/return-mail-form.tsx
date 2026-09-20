@@ -110,6 +110,14 @@ export function ReturnMailForm() {
             )}
           </p>
           {applied.linked && <p>De restitutie is al binnen en automatisch gekoppeld.</p>}
+          {applied.klarnaCredited != null && (
+            <p>
+              Klarna heeft {euro(applied.klarnaCredited)} verrekend
+              {Math.abs(applied.klarnaCredited - applied.expected) < 0.01
+                ? ": dat klopt met wat je terug zou krijgen."
+                : ` — dat wijkt ${euro(Math.abs(applied.klarnaCredited - applied.expected))} af van wat je verwachtte.`}
+            </p>
+          )}
         </div>
       )}
       {message && <p className="text-base text-gray-700">{message}</p>}

@@ -4,8 +4,11 @@ import { useState, useTransition } from "react";
 import { InfoButton } from "../info-button";
 import { useRouter } from "next/navigation";
 import {
+  clearKlarnaCredit,
   deleteOrder,
   linkRefundToOrder,
+  recordKlarnaCredit,
+  setOrderPaymentMethod,
   toggleItemReturned,
   unlinkRefund,
   updateOrderCosts,
@@ -51,6 +54,8 @@ export function OrderRow({
     total_amount: number | null;
     refunded_shipping: number;
     return_fee: number;
+    payment_method: string;
+    credited_amount: number | null;
     refund_status: string;
     order_items: Item[];
     refund_transaction: {
@@ -64,6 +69,7 @@ export function OrderRow({
   const [isPending, startTransition] = useTransition();
   const [shipping, setShipping] = useState(order.refunded_shipping ? String(order.refunded_shipping) : "");
   const [fee, setFee] = useState(order.return_fee ? String(order.return_fee) : "");
+  const [klarnaAmount, setKlarnaAmount] = useState("");
   const router = useRouter();
 
   const itemsTotal = order.order_items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -100,9 +106,14 @@ export function OrderRow({
             {order.total_amount != null && ` · ${euro(order.total_amount)}`}
           </p>
         </div>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLE[order.refund_status]}`}>
-          {STATUS_LABEL[order.refund_status]}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLE[order.refund_status]}`}>
+            {STATUS_LABEL[order.refund_status]}
+          </span>
+          {order.payment_method === "klarna" && (
+            <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700">Klarna</span>
+          )}
+        </div>
       </div>
 
       {order.order_items.length > 0 && (
@@ -283,6 +294,94 @@ export function OrderRow({
           )}
         </div>
       )}
+
+      {order.payment_method === "klarna" && order.refund_status !== "not_returned" && (
+        <div className="space-y-2 rounded-xl bg-pink-50 p-4">
+          <p className="text-sm font-medium text-pink-900">Betaald via Klarna</p>
+          {order.credited_amount != null ? (
+            <>
+              <p className="text-base text-pink-950">
+                Klarna heeft <span className="font-semibold">{euro(order.credited_amount)}</span> verrekend of
+                terugbetaald.
+              </p>
+              {Math.abs(order.credited_amount - expectedRefund) < 0.01 ? (
+                <p className="text-base font-medium text-teal-700">Dat klopt met wat je terug zou krijgen.</p>
+              ) : (
+                <p className="text-base font-medium text-amber-800">
+                  {euro(Math.abs(order.credited_amount - expectedRefund))}{" "}
+                  {order.credited_amount < expectedRefund ? "minder" : "meer"} dan verwacht ({euro(expectedRefund)}).
+                  {order.credited_amount < expectedRefund && " Vraag Klarna of de winkel waar het verschil blijft."}
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await clearKlarnaCredit(order.id);
+                    router.refresh();
+                  })
+                }
+                className="min-h-[44px] rounded-xl border border-pink-200 bg-white px-4 text-sm font-medium text-gray-700 active:bg-gray-50 disabled:opacity-50"
+              >
+                Weer op &quot;wacht op restitutie&quot; zetten
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-pink-900">
+                Klarna verrekent een retour meestal met wat je nog moet betalen (of betaalt het uit). Vul in
+                wat Klarna zegt te hebben verrekend, dan controleert de app of het klopt.
+              </p>
+              <div className="flex gap-2">
+                <label className="flex h-[48px] min-w-0 flex-1 items-center gap-1 rounded-xl border border-gray-300 bg-white px-3">
+                  <span className="text-gray-400">€</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={klarnaAmount}
+                    onChange={(e) => setKlarnaAmount(e.target.value)}
+                    placeholder={expectedRefund.toFixed(2)}
+                    className="h-full w-full min-w-0 bg-transparent text-lg outline-none"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={isPending || !klarnaAmount}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await recordKlarnaCredit(order.id, Number(klarnaAmount));
+                      setKlarnaAmount("");
+                      router.refresh();
+                    })
+                  }
+                  className="min-h-[48px] rounded-xl bg-pink-700 px-4 text-base font-medium text-white active:bg-pink-800 disabled:opacity-50"
+                >
+                  Vastleggen
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              await setOrderPaymentMethod(order.id, order.payment_method === "klarna" ? "direct" : "klarna");
+              router.refresh();
+            })
+          }
+          className="min-h-[44px] text-sm text-gray-600 underline disabled:opacity-50"
+        >
+          {order.payment_method === "klarna" ? "Niet via Klarna betaald" : "Betaald via Klarna"}
+        </button>
+      </div>
 
       <button
         type="button"

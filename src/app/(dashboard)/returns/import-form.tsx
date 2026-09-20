@@ -18,6 +18,7 @@ export function ImportForm() {
   const [orderDate, setOrderDate] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<"direct" | "klarna">("direct");
   const [step, setStep] = useState<"paste" | "review">("paste");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -30,6 +31,7 @@ export function ImportForm() {
     setTotalAmount("");
     setItems([]);
     setStep("paste");
+    setPaymentMethod("direct");
     setError(null);
   }
 
@@ -68,6 +70,7 @@ export function ImportForm() {
         orderDate: orderDate || null,
         totalAmount: totalAmount ? Number(totalAmount) : null,
         sourceText: emailText,
+        paymentMethod,
         items: items
           .filter((i) => i.description.trim() && i.price)
           .map((i) => ({
@@ -142,6 +145,26 @@ export function ImportForm() {
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {(
+          [
+            ["direct", "Direct betaald"],
+            ["klarna", "Via Klarna"],
+          ] as const
+        ).map(([key, text]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setPaymentMethod(key)}
+            className={`min-h-[48px] rounded-xl text-base ring-1 ${
+              paymentMethod === key ? "bg-gray-900 text-white ring-gray-900" : "bg-white text-gray-800 ring-gray-300"
+            }`}
+          >
+            {text}
+          </button>
+        ))}
       </div>
 
       <div className="space-y-2">

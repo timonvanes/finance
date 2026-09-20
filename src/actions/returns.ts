@@ -13,6 +13,7 @@ export async function createOrder(input: {
   orderDate: string | null;
   totalAmount: number | null;
   sourceText: string;
+  paymentMethod?: "direct" | "klarna";
   items: { description: string; price: number; quantity: number }[];
 }) {
   const supabase = await createClient();
@@ -24,6 +25,7 @@ export async function createOrder(input: {
       order_date: input.orderDate,
       total_amount: input.totalAmount,
       source_text: input.sourceText || null,
+      payment_method: input.paymentMethod ?? "direct",
     })
     .select("id")
     .single();
@@ -47,7 +49,7 @@ export async function getOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, refund_status, refund_transaction_id, created_at,
+      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, refund_status, refund_transaction_id, created_at,
       order_items(id, description, price, quantity, returned),
       refund_transaction:transactions!orders_refund_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
@@ -220,9 +222,16 @@ async function applyReturnToOrderInternal(orderId: string, ex: ExtractedReturn) 
 
   const shipping = Math.max(0, ex.shipping_refunded ?? 0);
   const fee = Math.max(0, ex.return_fee ?? 0);
+  const klarnaCredit = ex.via_klarna && ex.klarna_credit_confirmed && ex.refund_total ? ex.refund_total : null;
   const { error: orderError } = await supabase
     .from("orders")
-    .update({ refunded_shipping: shipping, return_fee: fee, refund_status: "pending" })
+    .update({
+      refunded_shipping: shipping,
+      return_fee: fee,
+      refund_status: klarnaCredit ? "refunded" : "pending",
+      ...(ex.via_klarna ? { payment_method: "klarna" } : {}),
+      ...(klarnaCredit ? { credited_amount: klarnaCredit } : {}),
+    })
     .eq("id", orderId);
   if (orderError) throw orderError;
 
@@ -264,6 +273,7 @@ async function applyReturnToOrderInternal(orderId: string, ex: ExtractedReturn) 
     expected,
     mailTotal: ex.refund_total,
     linked,
+    klarnaCredited: klarnaCredit,
   };
 }
 
@@ -304,4 +314,32 @@ export async function processReturnEmail(emailText: string) {
 
 export async function applyReturnToOrder(orderId: string, extraction: ExtractedReturn) {
   return applyReturnToOrderInternal(orderId, extraction);
+}
+
+export async function setOrderPaymentMethod(orderId: string, method: "direct" | "klarna") {
+  const supabase = await createClient();
+  const { error } = await supabase.from("orders").update({ payment_method: method }).eq("id", orderId);
+  if (error) throw error;
+}
+
+// Klarna says it credited/refunded this amount for the return.
+export async function recordKlarnaCredit(orderId: string, amount: number) {
+  if (!(amount > 0)) throw new Error("Vul het bedrag in dat Klarna heeft verrekend.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("orders")
+    .update({ credited_amount: amount, refund_status: "refunded" })
+    .eq("id", orderId);
+  if (error) throw error;
+}
+
+export async function clearKlarnaCredit(orderId: string) {
+  const supabase = await createClient();
+  const { data: items } = await supabase.from("order_items").select("returned").eq("order_id", orderId);
+  const anyReturned = (items ?? []).some((i) => i.returned);
+  const { error } = await supabase
+    .from("orders")
+    .update({ credited_amount: null, refund_status: anyReturned ? "pending" : "not_returned" })
+    .eq("id", orderId);
+  if (error) throw error;
 }

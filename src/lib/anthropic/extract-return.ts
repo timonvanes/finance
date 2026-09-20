@@ -3,7 +3,9 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 const ReturnExtractionSchema = z.object({
-  merchant_name: z.string().describe("Naam van de webshop/verkoper"),
+  merchant_name: z
+    .string()
+    .describe("Naam van de webshop waar de bestelling is geplaatst (bij een Klarna-mail dus de winkel, niet Klarna zelf)"),
   order_reference: z.string().nullable().describe("Ordernummer of referentie als die genoemd wordt, anders null"),
   returned_items: z.array(
     z.object({
@@ -21,6 +23,12 @@ const ReturnExtractionSchema = z.object({
     .nullable()
     .describe("Retourkosten die worden ingehouden op het terug te betalen bedrag, positief getal, of null"),
   refund_total: z.number().nullable().describe("Totaal terug te betalen bedrag in euro's, of null"),
+  via_klarna: z
+    .boolean()
+    .describe("true als de bestelling via Klarna is betaald of de mail van/over Klarna gaat"),
+  klarna_credit_confirmed: z
+    .boolean()
+    .describe("true als deze mail bevestigt dat Klarna het bedrag heeft verrekend, gecrediteerd of terugbetaald"),
 });
 
 export type ExtractedReturn = z.infer<typeof ReturnExtractionSchema>;
