@@ -19,6 +19,7 @@ import {
 } from "@/actions/payment-requests";
 import { TxDetails, type TxInfo } from "./tx-details";
 import { ReferenceCode } from "./reference-code";
+import { RequestShare } from "./request-share";
 
 interface IncomingTransaction {
   id: string;
@@ -173,6 +174,16 @@ export function ItemCard({
         <div className="flex items-center gap-2 text-sm text-gray-500">
           Referentiecode <ReferenceCode code={item.referenceCode} />
         </div>
+      )}
+
+      {!isWbw && (
+        <RequestShare
+          personName={personName}
+          amount={item.amount}
+          referenceCode={item.referenceCode}
+          description={item.kind === "request" ? (item.lines ?? []).map((l) => l.title).join(", ") : item.title}
+          proofHref={`/terugvorderen/bewijs/${item.kind}/${item.id}`}
+        />
       )}
 
       {isWbw ? (

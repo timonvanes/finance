@@ -93,7 +93,7 @@ export function TabBar() {
   if (pathname.startsWith("/terugvorderen/nieuw")) return null;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-40 print:hidden border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <ul className="mx-auto flex max-w-4xl">
         {TABS.map((tab) => {
           const active = tab.match(pathname);

@@ -379,8 +379,22 @@ export default async function DashboardPage({
       {isCurrentMonth && (
         <section className="space-y-2">
           <h2 className="px-1 text-lg font-semibold text-gray-900">Vaste lasten</h2>
-          {recurring.length > 0 ? (
+          {recurring.length > 0 || reservations.length > 0 ? (
             <ul className={`${card} overflow-hidden`}>
+              {reservations.map((r) => (
+                <li key={`pot-${r.id}`} className="border-b border-gray-100 last:border-b-0">
+                  <Link
+                    href={`/pots/${r.id}`}
+                    className="flex min-h-[64px] items-center justify-between gap-3 px-5 py-3 active:bg-gray-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-medium text-gray-900">Sparen · {r.name}</p>
+                      <p className="text-sm text-gray-500">maandelijks plan</p>
+                    </div>
+                    <span className="shrink-0 text-base font-medium text-gray-900">{euro(r.amount)}</span>
+                  </Link>
+                </li>
+              ))}
               {recurring.map((r) => (
                 <li
                   key={r.counterpartyName}
