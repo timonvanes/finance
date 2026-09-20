@@ -219,6 +219,11 @@ export async function linkPaymentRequestToTransaction(
 
 export async function unlinkPaymentRequest(paymentRequestId: string) {
   const supabase = await createClient();
+  const { data: current } = await supabase
+    .from("payment_requests")
+    .select("settled_transaction_id")
+    .eq("id", paymentRequestId)
+    .single();
   const { error: prError } = await supabase
     .from("payment_requests")
     .update({ settled_transaction_id: null, status: "requested", paid_at: null })
@@ -230,4 +235,11 @@ export async function unlinkPaymentRequest(paymentRequestId: string) {
     .update({ settled_transaction_id: null, status: "requested", paid_at: null })
     .eq("payment_request_id", paymentRequestId);
   if (reclaimsError) throw reclaimsError;
+
+  if (current?.settled_transaction_id) {
+    await supabase
+      .from("transactions")
+      .update({ reviewed: false })
+      .eq("id", current.settled_transaction_id);
+  }
 }

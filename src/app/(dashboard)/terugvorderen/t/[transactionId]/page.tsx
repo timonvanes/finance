@@ -3,6 +3,7 @@ import { getReclaims, getUnlinkedIncomingTransactions } from "@/actions/reclaims
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { ItemCard, type OpenItem } from "../../item-card";
 import { TxDetails } from "../../tx-details";
+import { DoneActions } from "../../done-actions";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
@@ -128,12 +129,15 @@ export default async function TransactionReclaimsPage({
           <h2 className="px-1 text-lg font-semibold text-gray-900">Afgerond</h2>
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {done.map((d) => (
-              <li key={d.id} className="flex min-h-[56px] items-center justify-between px-5 text-base text-gray-700">
-                <span>
-                  {d.person}
-                  {d.status === "written_off" && " · niet inbaar"}
-                </span>
-                <span className="font-medium text-gray-900">{euro(d.amount)}</span>
+              <li key={d.id} className="space-y-2 px-5 py-3 text-base text-gray-700">
+                <div className="flex min-h-[44px] items-center justify-between">
+                  <span>
+                    {d.person}
+                    {d.status === "written_off" && " · niet inbaar"}
+                  </span>
+                  <span className="font-medium text-gray-900">{euro(d.amount)}</span>
+                </div>
+                <DoneActions kind="reclaim" id={d.id} status={d.status} />
               </li>
             ))}
           </ul>

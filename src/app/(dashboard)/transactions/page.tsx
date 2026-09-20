@@ -85,6 +85,22 @@ export default async function TransactionsPage({
     .select("transaction_id")
     .in("transaction_id", expenseTxIds.length > 0 ? expenseTxIds : ["00000000-0000-0000-0000-000000000000"]);
   const txWithReclaim = new Set((reclaimRows ?? []).map((r) => r.transaction_id));
+
+  // Incoming payments that settle a reclaim (so they can be unlinked here).
+  const allTxIds = (transactions ?? []).map((tx) => tx.id);
+  const { data: settledRows } = await supabase
+    .from("reclaims")
+    .select("id, payment_request_id, settled_transaction_id, people(name)")
+    .in("settled_transaction_id", allTxIds.length > 0 ? allTxIds : ["00000000-0000-0000-0000-000000000000"]);
+  const settledBy = new Map<string, { kind: "reclaim" | "request"; id: string; label: string }>();
+  for (const r of settledRows ?? []) {
+    const person = Array.isArray(r.people) ? r.people[0] : r.people;
+    settledBy.set(r.settled_transaction_id as string, {
+      kind: r.payment_request_id ? "request" : "reclaim",
+      id: (r.payment_request_id ?? r.id) as string,
+      label: `Betaling van ${person?.name ?? "onbekend"} voor een terugvordering`,
+    });
+  }
   const allContributions = await getContributionsForTransactions(expenseTxIds);
   const contributionsByTx = new Map<string, typeof allContributions>();
   for (const c of allContributions) {
@@ -249,6 +265,7 @@ export default async function TransactionsPage({
                   people={loanData.people}
                   openLoans={loanData.openLoans}
                   hideWhenHandled={activeFilter === "unreviewed"}
+                  settledBy={settledBy.get(tx.id) ?? null}
                 />
               </li>
             );

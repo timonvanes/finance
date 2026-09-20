@@ -17,6 +17,7 @@ import {
   writeOffPaymentRequest,
 } from "@/actions/payment-requests";
 import { TxDetails, type TxInfo } from "./tx-details";
+import { ReferenceCode } from "../reclaims/reference-code";
 
 interface IncomingTransaction {
   id: string;
@@ -140,9 +141,9 @@ export function ItemCard({
       {item.tx && <TxDetails tx={item.tx} />}
 
       {item.referenceCode && (
-        <p className="text-sm text-gray-500">
-          Code: <span className="font-mono text-gray-900">{item.referenceCode}</span>
-        </p>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          Referentiecode <ReferenceCode code={item.referenceCode} />
+        </div>
       )}
 
       {isWbw ? (

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getReclaims } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { TxDetails } from "../tx-details";
+import { DoneActions } from "../done-actions";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
@@ -21,6 +22,7 @@ export default async function AfgerondPage() {
   const [reclaims, paymentRequests] = await Promise.all([getReclaims(), getPaymentRequests()]);
 
   const items: {
+    kind: "reclaim" | "request";
     id: string;
     person: string;
     title: string;
@@ -37,6 +39,7 @@ export default async function AfgerondPage() {
     const tx = one(r.transactions);
     const settled = one(r.settled_transaction);
     items.push({
+      kind: "reclaim",
       id: r.id,
       person: one(r.people)?.name ?? "Onbekend",
       title: tx?.counterparty_name ?? "Onbekend",
@@ -77,6 +80,7 @@ export default async function AfgerondPage() {
       };
     });
     items.push({
+      kind: "request",
       id: pr.id,
       person: one(pr.people)?.name ?? "Onbekend",
       title: `Gecombineerd · ${lines.length} afschrijvingen`,
@@ -163,6 +167,7 @@ export default async function AfgerondPage() {
                   {d.settledText && (
                     <p className="text-sm text-gray-500">Gekoppelde betaling: {d.settledText}</p>
                   )}
+                  <DoneActions kind={d.kind} id={d.id} status={d.status} />
                 </div>
               </details>
             </li>

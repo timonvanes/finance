@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { descriptionHasCode } from "./reference-code";
 
 const AMOUNT_TOLERANCE = 0.01;
 
@@ -69,7 +70,7 @@ function findMatch(
   // one code, several people) — narrow down with amount, then name, before
   // giving up as ambiguous.
   const byCode = openReclaims.filter(
-    (r) => r.reference_code && description.includes(r.reference_code)
+    (r) => r.reference_code && descriptionHasCode(description, r.reference_code)
   );
   if (byCode.length === 1) return byCode[0];
   if (byCode.length > 1) {
@@ -189,7 +190,7 @@ function findPaymentRequestMatch(
 ): CandidatePaymentRequest | null {
   const description = (tx.raw_description ?? "").toUpperCase();
 
-  const byCode = openPaymentRequests.filter((pr) => description.includes(pr.reference_code));
+  const byCode = openPaymentRequests.filter((pr) => descriptionHasCode(description, pr.reference_code));
   if (byCode.length === 1) return byCode[0];
   if (byCode.length > 1) return null; // ambiguous — leave for the manual dropdown
 

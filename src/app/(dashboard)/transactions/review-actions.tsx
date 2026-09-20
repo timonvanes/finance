@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { markAsTransfer, markOwnExpense, unreviewTransaction } from "@/actions/reclaims";
 import { removeLoanEntryForTransaction } from "@/actions/loans";
+import { unlinkReclaim } from "@/actions/reclaims";
+import { unlinkPaymentRequest } from "@/actions/payment-requests";
 import { LoanPicker } from "./loan-picker";
 
 // Hides the list row right away (when the current filter would drop it anyway)
@@ -26,6 +28,7 @@ export function ReviewActions({
   people = [],
   openLoans = [],
   hideWhenHandled = false,
+  settledBy = null,
 }: {
   transactionId: string;
   reviewed: boolean;
@@ -39,6 +42,7 @@ export function ReviewActions({
   people?: { id: string; name: string }[];
   openLoans?: { id: string; personName: string; balance: number }[];
   hideWhenHandled?: boolean;
+  settledBy?: { kind: "reclaim" | "request"; id: string; label: string } | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [localReviewed, setLocalReviewed] = useState(reviewed);
@@ -71,7 +75,26 @@ export function ReviewActions({
   if (localReviewed || localIsTransfer || hasReclaim) {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        {loanLabel ? (
+        {settledBy ? (
+          <>
+            <span className="text-sm font-medium text-teal-700">↔ {settledBy.label}</span>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                if (!confirm("Ontkoppelen? De terugvordering staat dan weer open.")) return;
+                startTransition(async () => {
+                  if (settledBy.kind === "request") await unlinkPaymentRequest(settledBy.id);
+                  else await unlinkReclaim(settledBy.id);
+                  router.refresh();
+                });
+              }}
+              className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 active:bg-gray-50 disabled:opacity-50"
+            >
+              Ontkoppelen
+            </button>
+          </>
+        ) : loanLabel ? (
           <Link href="/leningen" className="text-sm font-medium text-purple-700 underline">
             {loanLabel}
           </Link>
@@ -93,7 +116,7 @@ export function ReviewActions({
             {isExpense ? "✓ Eigen uitgave" : "✓ Bevestigd"}
           </span>
         )}
-        {!hasReclaim && (
+        {!hasReclaim && !settledBy && (
           <button
             type="button"
             disabled={isPending}

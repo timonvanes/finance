@@ -319,11 +319,24 @@ export async function linkReclaimToTransaction(
 
 export async function unlinkReclaim(reclaimId: string) {
   const supabase = await createClient();
+  const { data: current } = await supabase
+    .from("reclaims")
+    .select("settled_transaction_id")
+    .eq("id", reclaimId)
+    .single();
   const { error } = await supabase
     .from("reclaims")
     .update({ settled_transaction_id: null, status: "requested", paid_at: null })
     .eq("id", reclaimId);
   if (error) throw error;
+
+  // The incoming payment is no longer accounted for — back on the to-do list.
+  if (current?.settled_transaction_id) {
+    await supabase
+      .from("transactions")
+      .update({ reviewed: false })
+      .eq("id", current.settled_transaction_id);
+  }
 }
 
 export async function updateReclaimNote(reclaimId: string, note: string) {
