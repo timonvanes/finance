@@ -14,9 +14,11 @@ export default async function TerugvorderenPage() {
     getQueuedTransactions(),
   ]);
 
-  const perPerson = new Map<string, { name: string; total: number }>();
-  const add = (personId: string, name: string, amount: number) => {
-    const entry = perPerson.get(personId) ?? { name, total: 0 };
+  type PersonRef = { name: string; person_groups: { name: string } | { name: string }[] | null };
+  const groupOf = (person: PersonRef | null) => one(person?.person_groups ?? null)?.name ?? "Overig";
+  const perPerson = new Map<string, { name: string; group: string; total: number }>();
+  const add = (personId: string, name: string, group: string, amount: number) => {
+    const entry = perPerson.get(personId) ?? { name, group, total: 0 };
     entry.total += amount;
     perPerson.set(personId, entry);
   };
@@ -36,8 +38,9 @@ export default async function TerugvorderenPage() {
 
   for (const r of reclaims) {
     if (r.status !== "requested") continue;
-    const personName = one(r.people)?.name ?? "Onbekend";
-    add(r.person_id, personName, r.computed_amount);
+    const personRef = one(r.people as PersonRef | PersonRef[] | null);
+    const personName = personRef?.name ?? "Onbekend";
+    add(r.person_id, personName, groupOf(personRef), r.computed_amount);
 
     const tx = one(r.transactions);
     const group: TxGroup = byTransaction.get(r.transaction_id) ?? {
@@ -67,10 +70,11 @@ export default async function TerugvorderenPage() {
   const openRequests: { id: string; person: string; personId: string; total: number; count: number }[] = [];
   for (const pr of paymentRequests) {
     if (pr.status !== "requested") continue;
-    const personName = one(pr.people)?.name ?? "Onbekend";
+    const personRef = one(pr.people as PersonRef | PersonRef[] | null);
+    const personName = personRef?.name ?? "Onbekend";
     const lines = Array.isArray(pr.reclaims) ? pr.reclaims : [];
     const total = lines.reduce((sum, r) => sum + r.computed_amount, 0);
-    add(pr.person_id, personName, total);
+    add(pr.person_id, personName, groupOf(personRef), total);
     openRequests.push({ id: pr.id, person: personName, personId: pr.person_id, total, count: lines.length });
   }
 
@@ -80,6 +84,12 @@ export default async function TerugvorderenPage() {
 
   const people = [...perPerson.entries()].sort((a, b) => b[1].total - a[1].total);
   const outstanding = people.reduce((sum, [, p]) => sum + p.total, 0);
+  const groupMap = new Map<string, [string, { name: string; group: string; total: number }][]>();
+  for (const entry of people) {
+    if (!groupMap.has(entry[1].group)) groupMap.set(entry[1].group, []);
+    groupMap.get(entry[1].group)!.push(entry);
+  }
+  const groups = [...groupMap.entries()].sort(([a], [b]) => (a === "Overig" ? 1 : b === "Overig" ? -1 : a.localeCompare(b)));
   const transactions = [...byTransaction.values()].sort((a, b) =>
     (b.date ?? "").localeCompare(a.date ?? "")
   );
@@ -102,19 +112,31 @@ export default async function TerugvorderenPage() {
         <p className="text-sm text-gray-500">Nog te ontvangen</p>
         <p className="mt-1 text-4xl font-semibold text-gray-900">{euro(outstanding)}</p>
         {people.length > 0 && (
-          <ul className="mt-4 flex flex-wrap gap-2">
-            {people.map(([personId, p]) => (
-              <li key={personId}>
-                <Link
-                  href={`/terugvorderen/${personId}`}
-                  prefetch
-                  className="flex min-h-[44px] items-center rounded-full bg-gray-100 px-4 text-base text-gray-800 active:bg-gray-200"
-                >
-                  {p.name} · <span className="ml-1 font-semibold">{euro(p.total)}</span>
-                </Link>
-              </li>
+          <div className="mt-4 space-y-3">
+            {groups.map(([groupName, members]) => (
+              <div key={groupName}>
+                {groups.length > 1 && (
+                  <p className="mb-1 flex items-baseline justify-between text-sm text-gray-500">
+                    <span>{groupName}</span>
+                    <span>{euro(members.reduce((sum, [, m]) => sum + m.total, 0))}</span>
+                  </p>
+                )}
+                <ul className="flex flex-wrap gap-2">
+                  {members.map(([personId, p]) => (
+                    <li key={personId}>
+                      <Link
+                        href={`/terugvorderen/${personId}`}
+                        prefetch
+                        className="flex min-h-[44px] items-center rounded-full bg-gray-100 px-4 text-base text-gray-800 active:bg-gray-200"
+                      >
+                        {p.name} · <span className="ml-1 font-semibold">{euro(p.total)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 

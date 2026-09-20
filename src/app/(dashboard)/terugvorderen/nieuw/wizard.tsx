@@ -17,6 +17,7 @@ interface Person {
   id: string;
   name: string;
   isSelf: boolean;
+  groupName: string | null;
 }
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -104,6 +105,83 @@ export function Wizard({
       }
     });
   }
+
+  // You first, then people per group (with a "hele groep" shortcut each).
+  const sections = (() => {
+    const result: { name: string | null; people: Person[] }[] = [];
+    const self = people.filter((p) => p.isSelf);
+    if (self.length > 0) result.push({ name: null, people: self });
+    const byGroup = new Map<string, Person[]>();
+    for (const p of people.filter((x) => !x.isSelf)) {
+      const key = p.groupName ?? "Overig";
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key)!.push(p);
+    }
+    [...byGroup.entries()]
+      .sort(([a], [b]) => (a === "Overig" ? 1 : b === "Overig" ? -1 : a.localeCompare(b)))
+      .forEach(([name, list]) => result.push({ name, people: list }));
+    return result;
+  })();
+
+  function setGroupShares(list: Person[], count: number) {
+    setShares((prev) => ({ ...prev, ...Object.fromEntries(list.map((p) => [p.id, count])) }));
+    if (count === 0) {
+      setTyped((prev) => {
+        const copy = { ...prev };
+        list.forEach((p) => delete copy[p.id]);
+        return copy;
+      });
+    }
+  }
+
+  const renderPerson = (p: Person) => {
+      const count = shares[p.id] ?? 0;
+      const active = count > 0;
+      return (
+        <li key={p.id} className="flex min-h-[60px] items-center gap-2">
+          <span
+            className={`min-w-0 flex-1 truncate text-base ${active ? "font-medium text-gray-900" : "text-gray-400"}`}
+          >
+            {p.isSelf ? "Jij" : p.name}
+          </span>
+          <div className="flex shrink-0 items-center overflow-hidden rounded-xl bg-gray-100">
+            <button
+              type="button"
+              aria-label={`Minder aandelen voor ${p.name}`}
+              disabled={!active}
+              onClick={() => changeShares(p.id, -1)}
+              className="flex h-12 w-11 items-center justify-center text-xl text-gray-700 disabled:opacity-30"
+            >
+              −
+            </button>
+            <span className={`w-10 text-center text-base ${active ? "text-gray-900" : "text-gray-400"}`}>
+              {count}x
+            </span>
+            <button
+              type="button"
+              aria-label={`Meer aandelen voor ${p.name}`}
+              onClick={() => changeShares(p.id, 1)}
+              className="flex h-12 w-11 items-center justify-center text-xl text-blue-600"
+            >
+              +
+            </button>
+          </div>
+          <div className="flex h-12 w-28 shrink-0 items-center gap-1 rounded-xl bg-gray-100 px-3">
+            <span className="text-gray-400">€</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              disabled={!active}
+              value={active ? (typed[p.id] ?? amountFor(p.id).toFixed(2)) : ""}
+              placeholder="0,00"
+              onChange={(e) => setTyped((prev) => ({ ...prev, [p.id]: e.target.value }))}
+              className="w-full bg-transparent text-right text-base text-gray-900 outline-none disabled:text-gray-400"
+            />
+          </div>
+        </li>
+      );
+  };
 
   const primary =
     "min-h-[56px] w-full rounded-2xl bg-gray-900 text-lg font-medium text-white active:bg-gray-700 disabled:opacity-40";
@@ -226,56 +304,34 @@ export function Wizard({
             </div>
           </div>
 
-          <ul className="space-y-2">
-            {[...people].sort((a, b) => Number(b.isSelf) - Number(a.isSelf)).map((p) => {
-              const count = shares[p.id] ?? 0;
-              const active = count > 0;
-              return (
-                <li key={p.id} className="flex min-h-[60px] items-center gap-2">
-                  <span
-                    className={`min-w-0 flex-1 truncate text-base ${active ? "font-medium text-gray-900" : "text-gray-400"}`}
-                  >
-                    {p.isSelf ? "Jij" : p.name}
-                  </span>
-                  <div className="flex shrink-0 items-center overflow-hidden rounded-xl bg-gray-100">
-                    <button
-                      type="button"
-                      aria-label={`Minder aandelen voor ${p.name}`}
-                      disabled={!active}
-                      onClick={() => changeShares(p.id, -1)}
-                      className="flex h-12 w-11 items-center justify-center text-xl text-gray-700 disabled:opacity-30"
-                    >
-                      −
-                    </button>
-                    <span className={`w-10 text-center text-base ${active ? "text-gray-900" : "text-gray-400"}`}>
-                      {count}x
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Meer aandelen voor ${p.name}`}
-                      onClick={() => changeShares(p.id, 1)}
-                      className="flex h-12 w-11 items-center justify-center text-xl text-blue-600"
-                    >
-                      +
-                    </button>
+          <div className="space-y-3">
+            {sections.map((section) => (
+              <section key={section.name ?? "self"} className="space-y-1">
+                {section.name && (
+                  <div className="flex items-center justify-between pt-1">
+                    <h3 className="text-sm font-medium text-gray-500">{section.name}</h3>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setGroupShares(section.people, 1)}
+                        className="min-h-[44px] rounded-xl bg-gray-100 px-3 text-sm font-medium text-gray-700 active:bg-gray-200"
+                      >
+                        Hele groep
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGroupShares(section.people, 0)}
+                        className="min-h-[44px] px-3 text-sm text-blue-600"
+                      >
+                        Wissen
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex h-12 w-28 shrink-0 items-center gap-1 rounded-xl bg-gray-100 px-3">
-                    <span className="text-gray-400">€</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      disabled={!active}
-                      value={active ? (typed[p.id] ?? amountFor(p.id).toFixed(2)) : ""}
-                      placeholder="0,00"
-                      onChange={(e) => setTyped((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                      className="w-full bg-transparent text-right text-base text-gray-900 outline-none disabled:text-gray-400"
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                )}
+                <ul className="space-y-2">{section.people.map(renderPerson)}</ul>
+              </section>
+            ))}
+          </div>
 
           {checkedIds.length > 0 && Math.abs(total - entered) > 0.01 && (
             <p className="text-center text-sm text-amber-700">

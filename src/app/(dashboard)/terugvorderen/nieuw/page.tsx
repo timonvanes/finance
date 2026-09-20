@@ -27,7 +27,10 @@ export default async function NieuwPage({
     counterparty_iban: t.counterparty_iban ?? null,
   }));
 
-  const people = peopleRaw.map((p) => ({ id: p.id, name: p.name, isSelf: p.is_self as boolean }));
+  const people = peopleRaw.map((p) => {
+    const group = Array.isArray(p.person_groups) ? p.person_groups[0] : p.person_groups;
+    return { id: p.id, name: p.name, isSelf: p.is_self as boolean, groupName: (group?.name ?? null) as string | null };
+  });
 
   return (
     <div className="space-y-5">
