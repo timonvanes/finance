@@ -111,6 +111,14 @@ export async function reauthorizeBankLink(formData: FormData) {
 // Returns a result object rather than throwing — an uncaught error here
 // (e.g. an expired Enable Banking session) surfaced to the user as a
 // generic "page couldn't load" crash instead of a readable message.
+function friendlySyncError(err: unknown) {
+  const message = err instanceof Error ? err.message : "Sync mislukt";
+  if (/\b429\b|Too many requests/i.test(message)) {
+    return "De bank laat maar een paar verversingen per dag toe en dat maximum is bereikt. Probeer het later opnieuw.";
+  }
+  return message;
+}
+
 export async function syncNow(bankConnectionId: string) {
   const supabase = await createClient();
   try {
@@ -118,7 +126,7 @@ export async function syncNow(bankConnectionId: string) {
     return { count, error: null as string | null };
   } catch (err) {
     console.error("syncNow failed for connection", bankConnectionId, err);
-    return { count: 0, error: err instanceof Error ? err.message : "Sync mislukt" };
+    return { count: 0, error: friendlySyncError(err) };
   }
 }
 
@@ -141,7 +149,7 @@ export async function syncAllNow() {
         return {
           name: c.institution_name as string,
           count: 0,
-          error: err instanceof Error ? err.message : "Sync mislukt",
+          error: friendlySyncError(err),
         };
       }
     })
@@ -158,7 +166,9 @@ export async function updateSyncFromDate(bankConnectionId: string, date: string 
   if (error) throw error;
 }
 
-const AUTO_SYNC_STALE_MS = 60 * 60 * 1000; // 1 hour
+// Banks only allow a handful of unattended data requests per day (PSD2), so
+// background syncs stay well below that; the manual refresh is for more.
+const AUTO_SYNC_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // Called (via next/server's `after`) when the dashboard loads, so banks stay
 // fresh without needing a manual "Sync now" click every time — throttled so

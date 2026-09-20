@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { assignTransactionToPot } from "@/actions/pots";
-import { InfoButton } from "./info-button";
+import { InfoButton } from "../info-button";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 

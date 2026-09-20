@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getAvailableBanks, startBankLink } from "@/actions/bank-connections";
+import { InfoButton } from "../../info-button";
 import { SyncButton } from "./sync-button";
 import { SyncFromDate } from "./sync-from-date";
 import { DeleteConnectionButton } from "./delete-button";
@@ -52,37 +53,46 @@ export default async function BankConnectionsPage({
 
   return (
     <div className="space-y-5">
-      <div>
-<div className="flex items-center gap-2">
-        <Link
-          href="/settings"
-          aria-label="Terug"
-          className="flex h-12 w-12 items-center justify-center rounded-full text-2xl text-gray-700 active:bg-gray-100"
-        >
-          ‹
-        </Link>
-        <h1 className="text-2xl font-semibold text-gray-900">Bankkoppelingen</h1>
-      </div>
-        <p className="mt-2 text-sm text-gray-500">
-          Blijft een koppeling op &quot;Bezig met koppelen…&quot; staan? Dat betekent dat de
-          laatste stap bij de bank niet is afgerond (tab gesloten, 2FA verlopen, of een
-          fout bij de bank). Na 15 minuten wordt dat hier aangegeven met een knop om het
-          opnieuw te proberen — dat gebeurt zonder je bestaande transacties/categorisatie
-          kwijt te raken. Verwijderen is alleen nodig als je de bank echt wilt loskoppelen.
-        </p>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Link
+            href="/settings"
+            aria-label="Terug"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl text-gray-700 active:bg-gray-100"
+          >
+            ‹
+          </Link>
+          <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold text-gray-900">Bankkoppelingen</h1>
+          <InfoButton>
+            <p>
+              Blijft een koppeling op &quot;Bezig met koppelen…&quot; staan? Dan is de laatste stap bij
+              de bank niet afgerond (tab gesloten, 2FA verlopen of een fout bij de bank). Na 15
+              minuten verschijnt hier een knop om het opnieuw te proberen, zonder dat je
+              transacties of categorieën verloren gaan.
+            </p>
+            <p>
+              Verwijderen is alleen nodig als je een bank echt wilt loskoppelen; dan verdwijnen ook de
+              bijbehorende transacties.
+            </p>
+            <p>
+              Banken staan maar een paar verversingen per dag toe. De app ververst zelf een paar keer
+              per dag; met de knop Verversen kun je zelf extra ophalen.
+            </p>
+          </InfoButton>
+        </div>
         {linked && !warning && (
-          <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          <p className="rounded-2xl bg-green-50 p-4 text-base text-green-700">
             Bank gekoppeld.
           </p>
         )}
         {warning === "no_accounts" && (
-          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="rounded-2xl bg-amber-50 p-4 text-base text-amber-800">
             Koppeling gelukt, maar de bank heeft geen enkele rekening vrijgegeven. Koppel
             opnieuw en let bij de bank op een stap waar je een rekening moet aanvinken/selecteren.
           </p>
         )}
         {error && (
-          <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-2xl bg-red-50 p-4 text-base text-red-700 [overflow-wrap:anywhere]">
             Koppelen mislukt ({error}).
           </p>
         )}
@@ -111,35 +121,44 @@ export default async function BankConnectionsPage({
               // categorization survive) is the way forward.
               const canReauthorize = c.consent_status === "expired" || isStalePending || hasNoAccounts;
               return (
-                <li key={c.id} className="flex flex-col gap-3 px-5 py-4 text-base">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">{c.institution_name}</p>
-                      <p className={hasNoAccounts || isStalePending ? "text-amber-700" : "text-gray-500"}>
-                        {isStalePending
-                          ? "Koppelen niet afgerond of mislukt — probeer opnieuw"
-                          : hasNoAccounts
-                            ? "Gekoppeld, maar 0 rekeningen gevonden — probeer opnieuw"
-                            : STATUS_LABELS[c.consent_status] ?? c.consent_status}
-                        {c.last_synced_at &&
-                          !hasNoAccounts &&
-                          // Rendered server-side (UTC on Vercel) — without an
-                          // explicit timezone this shows 1-2h behind NL.
-                          ` · laatst gesynchroniseerd ${new Date(
-                            c.last_synced_at
-                          ).toLocaleString("nl-NL", { timeZone: "Europe/Amsterdam" })}`}
+                <li key={c.id} className="space-y-3 px-5 py-4 text-base">
+                  <div>
+                    <p className="text-lg font-medium text-gray-900">{c.institution_name}</p>
+                    <p className={`text-sm ${hasNoAccounts || isStalePending ? "text-amber-700" : "text-gray-500"}`}>
+                      {isStalePending
+                        ? "Koppelen niet afgerond of mislukt — probeer opnieuw"
+                        : hasNoAccounts
+                          ? "Gekoppeld, maar 0 rekeningen gevonden — probeer opnieuw"
+                          : STATUS_LABELS[c.consent_status] ?? c.consent_status}
+                    </p>
+                    {c.last_synced_at && !hasNoAccounts && (
+                      <p className="text-sm text-gray-500">
+                        Laatst ververst{" "}
+                        {new Date(c.last_synced_at).toLocaleString("nl-NL", {
+                          timeZone: "Europe/Amsterdam",
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {c.consent_status === "linked" && !hasNoAccounts && (
-                        <SyncButton bankConnectionId={c.id} />
-                      )}
-                      {canReauthorize && <ReauthorizeButton bankConnectionId={c.id} />}
-                      <DeleteConnectionButton bankConnectionId={c.id} />
-                    </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-start gap-2">
+                    {c.consent_status === "linked" && !hasNoAccounts && (
+                      <SyncButton bankConnectionId={c.id} />
+                    )}
+                    {canReauthorize && <ReauthorizeButton bankConnectionId={c.id} />}
+                    <DeleteConnectionButton bankConnectionId={c.id} />
                   </div>
                   {c.consent_status === "linked" && !hasNoAccounts && (
-                    <SyncFromDate bankConnectionId={c.id} syncFromDate={c.sync_from_date} />
+                    <details className="group">
+                      <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1 text-sm text-blue-600 [&::-webkit-details-marker]:hidden">
+                        <span className="inline-block transition-transform group-open:rotate-90">›</span>
+                        Historie beperken
+                      </summary>
+                      <SyncFromDate bankConnectionId={c.id} syncFromDate={c.sync_from_date} />
+                    </details>
                   )}
                 </li>
               );

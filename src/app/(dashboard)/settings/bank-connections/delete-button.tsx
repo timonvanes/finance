@@ -19,7 +19,7 @@ export function DeleteConnectionButton({ bankConnectionId }: { bankConnectionId:
           router.refresh();
         });
       }}
-      className="text-xs text-red-400 underline hover:text-red-600 disabled:opacity-50"
+      className="min-h-[48px] rounded-xl border border-red-200 px-5 text-base text-red-600 active:bg-red-50 disabled:opacity-50"
     >
       Verwijderen
     </button>

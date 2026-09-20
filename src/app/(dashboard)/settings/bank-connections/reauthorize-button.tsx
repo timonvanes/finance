@@ -6,7 +6,7 @@ export function ReauthorizeButton({ bankConnectionId }: { bankConnectionId: stri
       <input type="hidden" name="bankConnectionId" value={bankConnectionId} />
       <button
         type="submit"
-        className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+        className="min-h-[48px] rounded-xl bg-teal-700 px-5 text-base font-medium text-white active:bg-teal-800"
       >
         Opnieuw koppelen
       </button>

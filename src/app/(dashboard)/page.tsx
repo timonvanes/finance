@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { after } from "next/server";
+import { headers } from "next/headers";
 import {
   getAccountBalances,
   getDashboardSummary,
@@ -36,7 +37,11 @@ export default async function DashboardPage({
 }) {
   // Keeps bank data fresh without blocking the page — runs after the
   // response is sent, throttled to once per hour per connection.
-  after(() => autoSyncStaleConnections());
+  // Tab prefetches render this page too — those must not hit the bank API.
+  const requestHeaders = await headers();
+  const isPrefetch =
+    requestHeaders.has("next-router-prefetch") || requestHeaders.get("purpose") === "prefetch";
+  if (!isPrefetch) after(() => autoSyncStaleConnections());
 
   const { month } = await searchParams;
   // 0 = this month, 1 = previous month, etc. — can't navigate into the future.

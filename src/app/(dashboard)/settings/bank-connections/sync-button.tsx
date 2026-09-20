@@ -11,7 +11,7 @@ export function SyncButton({ bankConnectionId }: { bankConnectionId: string }) {
   const router = useRouter();
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex min-w-0 max-w-full flex-col items-start gap-1">
       <button
         type="button"
         disabled={isPending}
@@ -29,12 +29,12 @@ export function SyncButton({ bankConnectionId }: { bankConnectionId: string }) {
             router.refresh();
           });
         }}
-        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        className="min-h-[48px] rounded-xl border border-gray-300 px-5 text-base font-medium text-gray-800 active:bg-gray-50 disabled:opacity-50"
       >
-        {isPending ? "Bezig…" : "Sync now"}
+        {isPending ? "Bezig…" : "Verversen"}
       </button>
       {result && (
-        <span className={`max-w-[200px] text-right text-xs ${isError ? "text-red-600" : "text-gray-500"}`}>
+        <span className={`text-sm [overflow-wrap:anywhere] ${isError ? "text-red-600" : "text-gray-500"}`}>
           {result}
         </span>
       )}

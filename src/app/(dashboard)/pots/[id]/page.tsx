@@ -4,7 +4,7 @@ import { getLastChecks, getPots } from "@/actions/pots";
 import { computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 import { averageMonthlyNet, computeSchedule, depositedInPeriod, projectedFinish } from "@/lib/pots/insights";
 import { getMonthStartDay } from "@/lib/settings";
-import { InfoButton } from "../info-button";
+import { InfoButton } from "../../info-button";
 import { CheckForm, EntryForm, EntryList, MonthlyPlanForm, SettingsForms } from "../pot-detail-forms";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });

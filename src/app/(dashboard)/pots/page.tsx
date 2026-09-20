@@ -6,7 +6,7 @@ import { computeSchedule, depositedInPeriod } from "@/lib/pots/insights";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { InvestmentCalculator } from "./investment-calculator";
-import { InfoButton } from "./info-button";
+import { InfoButton } from "../info-button";
 import { PlanRow } from "./plan-row";
 import { SavingsInbox } from "./inbox";
 import { LeftoverCard } from "./leftover-card";
