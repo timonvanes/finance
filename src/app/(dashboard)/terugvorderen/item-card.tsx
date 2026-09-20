@@ -11,6 +11,7 @@ import {
 import {
   addReclaimToPaymentRequest,
   combineReclaims,
+  removeReclaimFromPaymentRequest,
   linkPaymentRequestToTransaction,
   markPaymentRequestPaid,
   uncombinePaymentRequest,
@@ -37,6 +38,7 @@ export interface OpenItem {
   referenceCode: string | null;
   tx?: TxInfo | null;
   lines?: {
+    id?: string;
     title: string;
     date: string | null;
     description: string | null;
@@ -133,9 +135,36 @@ export function ItemCard({
                   iban: l.iban,
                 }}
               />
+              {item.kind === "request" && l.id && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => {
+                    if (!confirm("Deze terugvordering uit de combinatie halen?")) return;
+                    run(() => removeReclaimFromPaymentRequest(l.id!));
+                  }}
+                  className="mt-1 min-h-[44px] rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 active:bg-gray-50 disabled:opacity-50"
+                >
+                  Uit combinatie halen
+                </button>
+              )}
             </li>
           ))}
         </ul>
+      )}
+
+      {item.kind === "request" && (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => {
+            if (!confirm("Alles ontkoppelen? De terugvorderingen blijven los bestaan.")) return;
+            run(() => uncombinePaymentRequest(item.id));
+          }}
+          className="min-h-[48px] w-full rounded-xl border border-gray-300 text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
+        >
+          Alles ontkoppelen
+        </button>
       )}
 
       {item.tx && <TxDetails tx={item.tx} />}

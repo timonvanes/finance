@@ -101,6 +101,40 @@ export async function addReclaimToPaymentRequest(reclaimId: string, paymentReque
   if (updateError) throw updateError;
 }
 
+// Takes ONE reclaim out of a combined request, leaving the rest combined.
+// A request left with fewer than two reclaims isn't a combination any more,
+// so it's dissolved entirely.
+export async function removeReclaimFromPaymentRequest(reclaimId: string) {
+  const supabase = await createClient();
+
+  const { data: reclaim, error: fetchError } = await supabase
+    .from("reclaims")
+    .select("payment_request_id, status")
+    .eq("id", reclaimId)
+    .single();
+  if (fetchError) throw fetchError;
+  if (!reclaim.payment_request_id) return;
+  if (reclaim.status !== "requested") {
+    throw new Error("Deze terugvordering is al betaald of niet inbaar — maak dat eerst ongedaan.");
+  }
+  const requestId = reclaim.payment_request_id as string;
+
+  const { error: detachError } = await supabase
+    .from("reclaims")
+    .update({ payment_request_id: null })
+    .eq("id", reclaimId);
+  if (detachError) throw detachError;
+
+  const { data: remaining } = await supabase
+    .from("reclaims")
+    .select("id")
+    .eq("payment_request_id", requestId);
+  if ((remaining ?? []).length < 2) {
+    await supabase.from("reclaims").update({ payment_request_id: null }).eq("payment_request_id", requestId);
+    await supabase.from("payment_requests").delete().eq("id", requestId);
+  }
+}
+
 // Splits a payment request back into individually-tracked reclaims — only
 // while still open; a paid one should be unlinked first if it needs undoing.
 export async function uncombinePaymentRequest(paymentRequestId: string) {

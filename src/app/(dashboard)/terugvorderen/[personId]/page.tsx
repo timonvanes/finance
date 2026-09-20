@@ -100,6 +100,7 @@ export default async function PersonPage({
     const lines = (Array.isArray(pr.reclaims) ? pr.reclaims : []).map((l) => {
       const ltx = one(l.transactions);
       return {
+        id: l.id,
         title: ltx?.counterparty_name ?? "Onbekend",
         date: ltx?.booking_date ?? null,
         description: ltx?.raw_description ?? null,
