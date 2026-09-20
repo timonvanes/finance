@@ -101,6 +101,7 @@ export function TabBar() {
             <li key={tab.href} className="flex-1">
               <Link
                 href={tab.href}
+                prefetch
                 className={`flex min-h-[60px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
                   active ? "text-teal-700" : "text-gray-500"
                 }`}

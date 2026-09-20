@@ -37,8 +37,6 @@ export default async function TransactionsPage({
 }: {
   searchParams: Promise<{ type?: string; sort?: string; q?: string; l?: string }>;
 }) {
-  await ensureDefaultCategories();
-
   const { type, sort, q, l } = await searchParams;
   const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "unreviewed";
   const limit = Math.min(1000, Math.max(PAGE_SIZE, parseInt(l ?? "", 10) || PAGE_SIZE));
@@ -72,26 +70,32 @@ export default async function TransactionsPage({
     );
   }
 
+  // Categories only need to exist before they're read; everything else runs
+  // at the same time instead of one round trip after another.
+  const categoriesPromise = ensureDefaultCategories().then(() => getCategories());
   const [{ data: transactions }, categories, incomeSources] = await Promise.all([
     query,
-    getCategories(),
+    categoriesPromise,
     getIncomeSourceOptions(),
   ]);
 
-  const loanData = await getLoanPickerData((transactions ?? []).map((tx) => tx.id));
-  const expenseTxIds = (transactions ?? []).filter((tx) => tx.amount < 0).map((tx) => tx.id);
-  const { data: reclaimRows } = await supabase
-    .from("reclaims")
-    .select("transaction_id")
-    .in("transaction_id", expenseTxIds.length > 0 ? expenseTxIds : ["00000000-0000-0000-0000-000000000000"]);
-  const txWithReclaim = new Set((reclaimRows ?? []).map((r) => r.transaction_id));
-
-  // Incoming payments that settle a reclaim (so they can be unlinked here).
   const allTxIds = (transactions ?? []).map((tx) => tx.id);
-  const { data: settledRows } = await supabase
-    .from("reclaims")
-    .select("id, payment_request_id, settled_transaction_id, people(name)")
-    .in("settled_transaction_id", allTxIds.length > 0 ? allTxIds : ["00000000-0000-0000-0000-000000000000"]);
+  const expenseTxIds = (transactions ?? []).filter((tx) => tx.amount < 0).map((tx) => tx.id);
+  const NONE = ["00000000-0000-0000-0000-000000000000"];
+  const [loanData, { data: reclaimRows }, { data: settledRows }, allContributions] = await Promise.all([
+    getLoanPickerData(allTxIds),
+    supabase
+      .from("reclaims")
+      .select("transaction_id")
+      .in("transaction_id", expenseTxIds.length > 0 ? expenseTxIds : NONE),
+    // Incoming payments that settle a reclaim (so they can be unlinked here).
+    supabase
+      .from("reclaims")
+      .select("id, payment_request_id, settled_transaction_id, people(name)")
+      .in("settled_transaction_id", allTxIds.length > 0 ? allTxIds : NONE),
+    getContributionsForTransactions(expenseTxIds),
+  ]);
+  const txWithReclaim = new Set((reclaimRows ?? []).map((r) => r.transaction_id));
   const settledBy = new Map<string, { kind: "reclaim" | "request"; id: string; label: string }>();
   for (const r of settledRows ?? []) {
     const person = Array.isArray(r.people) ? r.people[0] : r.people;
@@ -101,7 +105,6 @@ export default async function TransactionsPage({
       label: `Betaling van ${person?.name ?? "onbekend"} voor een terugvordering`,
     });
   }
-  const allContributions = await getContributionsForTransactions(expenseTxIds);
   const contributionsByTx = new Map<string, typeof allContributions>();
   for (const c of allContributions) {
     if (!contributionsByTx.has(c.expense_transaction_id)) contributionsByTx.set(c.expense_transaction_id, []);

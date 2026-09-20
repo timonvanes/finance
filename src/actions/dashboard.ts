@@ -56,7 +56,9 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
   const startDay = await getMonthStartDay();
   const { start, end } = periodRange(monthsAgo, startDay);
 
-  const [{ count: unreviewedCount }, { count: uncategorizedCount }, { data: openReclaims }, { data: monthTx }] =
+  const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
+
+  const [{ count: unreviewedCount }, { count: uncategorizedCount }, { data: openReclaims }, { data: monthTx }, { data: prevMonthTx }] =
     await Promise.all([
       supabase
         .from("visible_transactions")
@@ -75,6 +77,13 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
         .eq("is_transfer", false)
         .gte("booking_date", start)
         .lt("booking_date", end),
+      // For the "t.o.v. vorige maand" comparison.
+      supabase
+        .from("visible_transactions")
+        .select("id, amount")
+        .eq("is_transfer", false)
+        .gte("booking_date", prevStart)
+        .lt("booking_date", prevEnd),
     ]);
 
   const outstandingReclaimsTotal = (openReclaims ?? []).reduce(
@@ -82,26 +91,16 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
     0
   );
 
-  const adjustments = await getContributionAdjustments(supabase, (monthTx ?? []).map((tx) => tx.id));
+  const [adjustments, prevAdjustments] = await Promise.all([
+    getContributionAdjustments(supabase, (monthTx ?? []).map((tx) => tx.id)),
+    getContributionAdjustments(supabase, (prevMonthTx ?? []).map((tx) => tx.id)),
+  ]);
   const monthIncome = (monthTx ?? [])
     .filter((tx) => tx.amount > 0)
     .reduce((sum, tx) => sum + netIncomeAmount(tx.id, tx.amount, adjustments), 0);
   const monthExpense = (monthTx ?? [])
     .filter((tx) => tx.amount < 0)
     .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0);
-
-  // For the "t.o.v. vorige maand" comparison.
-  const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
-  const { data: prevMonthTx } = await supabase
-    .from("visible_transactions")
-    .select("id, amount")
-    .eq("is_transfer", false)
-    .gte("booking_date", prevStart)
-    .lt("booking_date", prevEnd);
-  const prevAdjustments = await getContributionAdjustments(
-    supabase,
-    (prevMonthTx ?? []).map((tx) => tx.id)
-  );
   const previousMonthExpense = (prevMonthTx ?? [])
     .filter((tx) => tx.amount < 0)
     .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, prevAdjustments), 0);
