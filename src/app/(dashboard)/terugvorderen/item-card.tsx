@@ -14,7 +14,6 @@ import {
   removeReclaimFromPaymentRequest,
   linkPaymentRequestToTransaction,
   markPaymentRequestPaid,
-  uncombinePaymentRequest,
   writeOffPaymentRequest,
 } from "@/actions/payment-requests";
 import { TxDetails, type TxInfo } from "./tx-details";
@@ -154,20 +153,6 @@ export function ItemCard({
         </ul>
       )}
 
-      {item.kind === "request" && (
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={() => {
-            if (!confirm("Alles ontkoppelen? De terugvorderingen blijven los bestaan.")) return;
-            run(() => uncombinePaymentRequest(item.id));
-          }}
-          className="min-h-[48px] w-full rounded-xl border border-gray-300 text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
-        >
-          Alles ontkoppelen
-        </button>
-      )}
-
       {item.tx && <TxDetails tx={item.tx} />}
 
       {item.referenceCode && (
@@ -305,19 +290,6 @@ export function ItemCard({
           >
             Niet inbaar
           </button>
-          {item.kind === "request" && (
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={() => {
-                if (!confirm("Deze combinatie ontbinden? De terugvorderingen blijven los bestaan.")) return;
-                run(() => uncombinePaymentRequest(item.id));
-              }}
-              className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-gray-700 disabled:opacity-50"
-            >
-              Ontbinden
-            </button>
-          )}
           {item.kind === "reclaim" && (
             <button
               type="button"
