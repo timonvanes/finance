@@ -116,7 +116,7 @@ export function RequestShare({
           onClick={bunqEnabled && !bunqUrl ? makeLink : share}
           className="min-h-[52px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
         >
-          {busy ? "Bezig…" : bunqEnabled && !bunqUrl ? "Maak link en stuur via WhatsApp" : "Vraag terug"}
+          {busy ? "Bezig…" : bunqEnabled && !bunqUrl ? "Maak betaalverzoek" : "Vraag terug"}
         </button>
         <Link
           href={proofHref}
