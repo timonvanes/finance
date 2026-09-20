@@ -77,6 +77,7 @@ export default async function SettingsPage() {
               <li key={item.href} className="border-b border-gray-100 last:border-b-0">
                 <Link
                   href={item.href}
+                  prefetch
                   className="flex min-h-[68px] items-center gap-3 px-5 py-3 active:bg-gray-50"
                 >
                   <span className="min-w-0 flex-1">

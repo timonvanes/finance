@@ -91,6 +91,7 @@ export default async function TerugvorderenPage() {
         <h1 className="text-2xl font-semibold text-gray-900">Terugvorderen</h1>
         <Link
           href="/terugvorderen/nieuw"
+          prefetch
           className="flex min-h-[48px] items-center rounded-full bg-gray-900 px-5 text-base font-medium text-white active:bg-gray-700"
         >
           + Nieuw
@@ -106,6 +107,7 @@ export default async function TerugvorderenPage() {
               <li key={personId}>
                 <Link
                   href={`/terugvorderen/${personId}`}
+                  prefetch
                   className="flex min-h-[44px] items-center rounded-full bg-gray-100 px-4 text-base text-gray-800 active:bg-gray-200"
                 >
                   {p.name} · <span className="ml-1 font-semibold">{euro(p.total)}</span>
@@ -119,6 +121,7 @@ export default async function TerugvorderenPage() {
       {queued.length > 0 && (
         <Link
           href="/terugvorderen/te-verdelen"
+          prefetch
           className="flex min-h-[64px] items-center gap-3 rounded-2xl bg-amber-50 px-5 py-4 ring-1 ring-amber-200 active:bg-amber-100"
         >
           <span className="flex-1 text-lg font-medium text-amber-900">
@@ -200,6 +203,7 @@ export default async function TerugvorderenPage() {
 
       <Link
         href="/terugvorderen/afgerond"
+        prefetch
         className="flex min-h-[64px] items-center gap-3 rounded-2xl bg-white px-5 py-3 ring-1 ring-gray-200 active:bg-gray-50"
       >
         <span className="flex-1 text-lg text-gray-900">Afgerond ({doneCount})</span>

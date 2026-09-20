@@ -117,7 +117,7 @@ export default async function DashboardPage({
       )}
 
       {loans.count > 0 && (
-        <Link href="/leningen" className={`${card} flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50`}>
+        <Link href="/leningen" prefetch className={`${card} flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50`}>
           <span className="min-w-0 flex-1">
             <span className="block text-sm text-gray-500">Nog af te lossen aan leningen</span>
             <span className="block text-xs text-gray-400">{loans.count} openstaand</span>
@@ -180,7 +180,7 @@ export default async function DashboardPage({
             },
           ].map((row) => (
             <li key={row.href} className="border-b border-gray-100 last:border-b-0">
-              <Link href={row.href} className="flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50">
+              <Link href={row.href} prefetch className="flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50">
                 <span className="w-24 shrink-0 text-xl font-semibold text-gray-900">{row.value}</span>
                 <span className="flex-1 text-base text-gray-600">{row.label}</span>
                 <span className="text-2xl text-gray-300">›</span>
