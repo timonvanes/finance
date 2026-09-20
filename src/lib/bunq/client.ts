@@ -26,14 +26,10 @@ function apiKey() {
   return key;
 }
 
-function signRequest(method: string, path: string, headers: Record<string, string>, body: string, privateKey: string) {
-  const names = Object.keys(headers)
-    .filter((k) => (k === "Cache-Control" || k === "User-Agent" || k.startsWith("X-Bunq-")) && k !== "X-Bunq-Client-Signature")
-    .sort();
-  const headerLines = names.map((k) => `${k}: ${headers[k]}`).join("\n");
-  const data = `${method} ${path}\n${headerLines}\n\n${body}`;
+// bunq's current scheme signs only the exact request body (empty for GETs).
+function signRequest(body: string, privateKey: string) {
   const signer = createSign("RSA-SHA256");
-  signer.update(data);
+  signer.update(body, "utf8");
   return signer.sign(privateKey, "base64");
 }
 
@@ -54,7 +50,7 @@ async function rawRequest(
   };
   if (opts.token) headers["X-Bunq-Client-Authentication"] = opts.token;
   if (opts.privateKey) {
-    headers["X-Bunq-Client-Signature"] = signRequest(method, path, headers, body, opts.privateKey);
+    headers["X-Bunq-Client-Signature"] = signRequest(body, opts.privateKey);
   }
   const res = await fetch(`${BASE}${path}`, { method, headers, body: body || undefined, cache: "no-store" });
   const json = await res.json().catch(() => ({}));
