@@ -125,3 +125,61 @@ export async function detectBunqPayments(userId: string): Promise<{ detected: nu
   }
   return { detected };
 }
+
+// Forwards received payments to the payout IBAN from the environment. Only
+// links whose payment was actually seen arriving (status "paid" with an
+// incoming payment id) are swept, each for exactly its own amount and at most
+// once: the row is claimed ("sweeping") before the payment is made.
+export async function sweepBunqPayments(userId: string): Promise<{ swept: number; error?: string }> {
+  const payoutIban = process.env.BUNQ_PAYOUT_IBAN?.replace(/\s+/g, "");
+  const payoutName = process.env.BUNQ_PAYOUT_NAME || "Rekeninghouder";
+  if (!payoutIban) return { swept: 0 };
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("bunq_payment_links")
+    .select("id, amount, reference_code")
+    .eq("user_id", userId)
+    .eq("status", "paid")
+    .not("incoming_payment_id", "is", null);
+  const links = data ?? [];
+  if (links.length === 0) return { swept: 0 };
+
+  let swept = 0;
+  try {
+    const acc = await getBunqAccount(userId);
+    const path = `/v1/user/${acc.userId}/monetary-account/${acc.accountId}/payment`;
+    for (const link of links) {
+      const { data: claimed } = await admin
+        .from("bunq_payment_links")
+        .update({ status: "sweeping", error: null })
+        .eq("id", link.id)
+        .eq("status", "paid")
+        .select("id");
+      if (!claimed || claimed.length === 0) continue;
+
+      try {
+        await bunqApi(userId, "POST", path, {
+          amount: { value: money(Number(link.amount)), currency: "EUR" },
+          counterparty_alias: { type: "IBAN", value: payoutIban, name: payoutName },
+          description: `${link.reference_code ?? "Terugvordering"} doorgestort`.slice(0, 135),
+        });
+        await admin
+          .from("bunq_payment_links")
+          .update({ status: "swept", swept_at: new Date().toISOString() })
+          .eq("id", link.id);
+        swept++;
+      } catch (e) {
+        // The money is still in bunq; put it back so a later run retries.
+        await admin
+          .from("bunq_payment_links")
+          .update({ status: "paid", error: e instanceof Error ? e.message : "Overmaken mislukt" })
+          .eq("id", link.id);
+        throw e;
+      }
+    }
+  } catch (e) {
+    return { swept, error: e instanceof Error ? e.message : "bunq-fout" };
+  }
+  return { swept };
+}

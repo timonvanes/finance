@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getBunqAccount, isBunqConfigured } from "@/lib/bunq/client";
-import { createBunqTab, detectBunqPayments } from "@/lib/bunq/links";
+import { createBunqTab, detectBunqPayments, sweepBunqPayments } from "@/lib/bunq/links";
 
 async function requireUserId() {
   const supabase = await createClient();
@@ -131,8 +131,9 @@ export async function checkBunqPayments() {
         .eq("status", "requested");
     }
   }
+  const sweep = await sweepBunqPayments(userId);
   if ((paid ?? []).length > 0) revalidatePath("/", "layout");
-  return result;
+  return { ...result, error: result.error ?? sweep.error };
 }
 
 export async function getBunqLinks() {

@@ -129,7 +129,7 @@ export function RequestShare({
         <div className="flex items-center justify-between gap-3 rounded-xl bg-teal-50 px-4 py-3 text-sm text-teal-900">
           <span>
             {bunqLink?.status === "paid"
-              ? "Betaald via bunq. Het bedrag staat op je bunq-rekening."
+              ? "Betaald via bunq. Het bedrag wordt doorgestort naar je ING."
               : "Betaallink klaar. Wacht op betaling via bunq."}
           </span>
           {bunqLink?.status !== "paid" && (
