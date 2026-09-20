@@ -7,18 +7,7 @@ const SECTIONS: { title: string; items: { href: string; label: string; hint?: st
     items: [
       { href: "/leningen", label: "Leningen", hint: "Geld dat je van iemand hebt geleend" },
       { href: "/pots", label: "Potjes", hint: "Nog in ontwikkeling" },
-      { href: "/settings", label: "Instellingen" },
-    ],
-  },
-  {
-    title: "Instellingen",
-    items: [
-      { href: "/settings/month", label: "Begin van de maand", hint: "Bijvoorbeeld de dag dat je salaris komt" },
-      { href: "/settings/bank-connections", label: "Bankkoppelingen" },
-      { href: "/settings/budgets", label: "Budgetdoelen" },
-      { href: "/settings/categories", label: "Categorieën" },
-      { href: "/settings/people", label: "Personen" },
-      { href: "/settings/own-ibans", label: "Eigen rekeningnummers" },
+      { href: "/settings", label: "Instellingen", hint: "Maandstart, budgetten, categorieën, banken, personen" },
     ],
   },
   {

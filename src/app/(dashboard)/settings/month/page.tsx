@@ -9,7 +9,7 @@ export default async function MonthSettingsPage() {
     <div className="space-y-5">
       <div className="flex items-center gap-2">
         <Link
-          href="/meer"
+          href="/settings"
           aria-label="Terug"
           className="flex h-12 w-12 items-center justify-center rounded-full text-2xl text-gray-700 active:bg-gray-100"
         >

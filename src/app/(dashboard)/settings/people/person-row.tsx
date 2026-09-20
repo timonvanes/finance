@@ -40,7 +40,7 @@ export function PersonRow({
           type="text"
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
-          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="min-h-[48px] min-w-0 flex-1 rounded-xl border border-gray-300 px-3 text-base"
           autoFocus
         />
         <button
@@ -53,7 +53,7 @@ export function PersonRow({
               router.refresh();
             });
           }}
-          className="text-xs font-medium text-gray-900 underline"
+          className="min-h-[44px] px-2 text-sm font-medium text-teal-700"
         >
           Opslaan
         </button>
@@ -63,7 +63,7 @@ export function PersonRow({
             setNameInput(name);
             setIsEditing(false);
           }}
-          className="text-xs text-gray-400 underline"
+          className="min-h-[44px] px-2 text-sm text-gray-500"
         >
           Annuleren
         </button>
@@ -91,14 +91,14 @@ export function PersonRow({
               router.refresh();
             });
           }}
-          className="text-xs text-gray-500 underline hover:text-gray-700 disabled:opacity-50"
+          className="min-h-[44px] px-2 text-sm text-teal-700 disabled:opacity-50"
         >
           {isSelf ? "Niet meer ik" : "Dit ben ik"}
         </button>
         <button
           type="button"
           onClick={() => setIsEditing(true)}
-          className="text-xs text-gray-500 underline hover:text-gray-700"
+          className="min-h-[44px] px-2 text-sm text-teal-700"
         >
           Naam wijzigen
         </button>
@@ -134,7 +134,7 @@ export function PersonRow({
               }
             });
           }}
-          className="text-xs text-red-400 underline hover:text-red-600 disabled:opacity-50"
+          className="min-h-[44px] px-2 text-sm text-red-500 disabled:opacity-50"
         >
           Verwijderen
         </button>

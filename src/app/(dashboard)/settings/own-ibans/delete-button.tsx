@@ -19,7 +19,7 @@ export function DeleteButton({ id }: { id: string }) {
           router.refresh();
         });
       }}
-      className="text-xs text-red-400 underline hover:text-red-600 disabled:opacity-50"
+      className="min-h-[44px] px-2 text-sm text-red-500 disabled:opacity-50"
     >
       Verwijderen
     </button>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getAvailableBanks, startBankLink } from "@/actions/bank-connections";
 import { SyncButton } from "./sync-button";
@@ -50,10 +51,19 @@ export default async function BankConnectionsPage({
   const now = Date.now();
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-semibold text-gray-900">Bankkoppelingen</h1>
-        <p className="mt-1 text-xs text-gray-400">
+<div className="flex items-center gap-2">
+        <Link
+          href="/settings"
+          aria-label="Terug"
+          className="flex h-12 w-12 items-center justify-center rounded-full text-2xl text-gray-700 active:bg-gray-100"
+        >
+          ‹
+        </Link>
+        <h1 className="text-2xl font-semibold text-gray-900">Bankkoppelingen</h1>
+      </div>
+        <p className="mt-2 text-sm text-gray-500">
           Blijft een koppeling op &quot;Bezig met koppelen…&quot; staan? Dat betekent dat de
           laatste stap bij de bank niet is afgerond (tab gesloten, 2FA verlopen, of een
           fout bij de bank). Na 15 minuten wordt dat hier aangegeven met een knop om het
@@ -101,7 +111,7 @@ export default async function BankConnectionsPage({
               // categorization survive) is the way forward.
               const canReauthorize = c.consent_status === "expired" || isStalePending || hasNoAccounts;
               return (
-                <li key={c.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
+                <li key={c.id} className="flex flex-col gap-3 px-5 py-4 text-base">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-900">{c.institution_name}</p>
@@ -136,7 +146,7 @@ export default async function BankConnectionsPage({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-gray-500">Nog geen bank gekoppeld.</p>
+          <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">Nog geen bank gekoppeld.</p>
         )}
       </section>
 
@@ -146,7 +156,7 @@ export default async function BankConnectionsPage({
           {banks.map((bank) => (
             <li
               key={`${bank.name}-${bank.country}`}
-              className="flex items-center justify-between px-4 py-3 text-sm"
+              className="flex min-h-[60px] items-center justify-between px-5 py-3 text-base"
             >
               <span className="text-gray-900">{bank.name}</span>
               <form action={startBankLink}>
@@ -154,7 +164,7 @@ export default async function BankConnectionsPage({
                 <input type="hidden" name="aspspCountry" value={bank.country} />
                 <button
                   type="submit"
-                  className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+                  className="min-h-[44px] rounded-xl bg-teal-700 px-4 text-sm font-medium text-white active:bg-teal-800"
                 >
                   Koppelen
                 </button>

@@ -17,7 +17,7 @@ export function CategoryRow({ categoryId, name }: { categoryId: string; name: st
           type="text"
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
-          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="min-h-[48px] min-w-0 flex-1 rounded-xl border border-gray-300 px-3 text-base"
           autoFocus
         />
         <button
@@ -30,7 +30,7 @@ export function CategoryRow({ categoryId, name }: { categoryId: string; name: st
               router.refresh();
             });
           }}
-          className="text-xs font-medium text-gray-900 underline"
+          className="min-h-[44px] px-2 text-sm font-medium text-teal-700"
         >
           Opslaan
         </button>
@@ -40,7 +40,7 @@ export function CategoryRow({ categoryId, name }: { categoryId: string; name: st
             setNameInput(name);
             setIsEditing(false);
           }}
-          className="text-xs text-gray-400 underline"
+          className="min-h-[44px] px-2 text-sm text-gray-500"
         >
           Annuleren
         </button>
@@ -55,7 +55,7 @@ export function CategoryRow({ categoryId, name }: { categoryId: string; name: st
         <button
           type="button"
           onClick={() => setIsEditing(true)}
-          className="text-xs text-gray-500 underline hover:text-gray-700"
+          className="min-h-[44px] px-2 text-sm text-teal-700"
         >
           Wijzigen
         </button>
@@ -74,7 +74,7 @@ export function CategoryRow({ categoryId, name }: { categoryId: string; name: st
               router.refresh();
             });
           }}
-          className="text-xs text-red-400 underline hover:text-red-600 disabled:opacity-50"
+          className="min-h-[44px] px-2 text-sm text-red-500 disabled:opacity-50"
         >
           Verwijderen
         </button>

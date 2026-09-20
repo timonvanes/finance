@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   createPerson,
   createPersonGroup,
@@ -10,17 +11,26 @@ export default async function PeoplePage() {
   const [people, groups] = await Promise.all([getPeopleWithGroups(), getPersonGroups()]);
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-semibold text-gray-900">Personen</h1>
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <Link
+          href="/settings"
+          aria-label="Terug"
+          className="flex h-12 w-12 items-center justify-center rounded-full text-2xl text-gray-700 active:bg-gray-100"
+        >
+          ‹
+        </Link>
+        <h1 className="text-2xl font-semibold text-gray-900">Personen</h1>
+      </div>
 
       <section>
         <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Groepen</h2>
         <form
           action={createPersonGroup}
-          className="flex items-end gap-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4"
+          className="flex flex-col gap-4 rounded-2xl bg-white p-5 ring-1 ring-gray-200"
         >
           <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-sm text-gray-500">
               Naam
             </label>
             <input
@@ -28,12 +38,12 @@ export default async function PeoplePage() {
               name="name"
               required
               placeholder="bv. Vrienden, Familie, Sportclub"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="min-h-[52px] w-full rounded-xl border border-gray-300 px-4 text-base"
             />
           </div>
           <button
             type="submit"
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            className="min-h-[52px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800"
           >
             Toevoegen
           </button>
@@ -51,10 +61,10 @@ export default async function PeoplePage() {
         </h2>
         <form
           action={createPerson}
-          className="flex items-end gap-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4"
+          className="flex flex-col gap-4 rounded-2xl bg-white p-5 ring-1 ring-gray-200"
         >
           <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-sm text-gray-500">
               Naam
             </label>
             <input
@@ -62,17 +72,17 @@ export default async function PeoplePage() {
               name="name"
               required
               placeholder="bv. Sanne"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="min-h-[52px] w-full rounded-xl border border-gray-300 px-4 text-base"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-sm text-gray-500">
               Groep
             </label>
             <select
               name="personGroupId"
               defaultValue=""
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-4 text-base"
             >
               <option value="">Geen groep</option>
               {groups.map((g) => (
@@ -84,7 +94,7 @@ export default async function PeoplePage() {
           </div>
           <button
             type="submit"
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            className="min-h-[52px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800"
           >
             Toevoegen
           </button>
@@ -96,7 +106,7 @@ export default async function PeoplePage() {
         {people.length > 0 ? (
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {people.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+              <li key={p.id} className="flex min-h-[60px] items-center gap-3 px-5 py-2 text-base">
                 <PersonRow
                   personId={p.id}
                   name={p.name}
@@ -108,7 +118,7 @@ export default async function PeoplePage() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-gray-500">
+          <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
             Nog niemand toegevoegd. Voeg hierboven iemand toe zodat je 'm bij
             terugvorderingen kunt aanvinken.
           </p>
