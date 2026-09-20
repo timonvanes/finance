@@ -70,6 +70,9 @@ export function RequestShare({
       const r = await createBunqPaymentLink(kind, id, description);
       setBunqUrl(r.url);
       router.refresh();
+      // Straight into WhatsApp with the finished message; a share sheet would
+      // be rejected here because the tap's permission expires during the request.
+      window.location.href = `https://wa.me/?text=${encodeURIComponent(message(r.url))}`;
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Betaallink maken mislukt.");
     } finally {
@@ -122,9 +125,9 @@ export function RequestShare({
     } catch {}
   }
 
-  function message() {
+  function message(linkOverride?: string) {
     const link =
-      bunqUrl ?? buildLink(settings.link, amount, referenceCode ? `${description} ${referenceCode}` : description);
+      linkOverride ?? bunqUrl ?? buildLink(settings.link, amount, referenceCode ? `${description} ${referenceCode}` : description);
     const lines = [`Hoi ${personName}, ik heb ${euro(amount)} voor je voorgeschoten (${description}).`];
     if (link) {
       lines.push(`Je kunt het hier betalen: ${link}`);
@@ -162,7 +165,7 @@ export function RequestShare({
           onClick={bunqEnabled && !bunqUrl ? makeLink : share}
           className="min-h-[52px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
         >
-          {busy ? "Bezig…" : bunqEnabled && !bunqUrl ? "Maak betaallink" : "Vraag terug"}
+          {busy ? "Bezig…" : bunqEnabled && !bunqUrl ? "Maak link en stuur via WhatsApp" : "Vraag terug"}
         </button>
         <Link
           href={proofHref}
