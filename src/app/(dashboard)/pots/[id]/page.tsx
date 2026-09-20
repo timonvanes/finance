@@ -131,6 +131,8 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
               auto={!!pot.monthly_auto}
               autoAmount={autoAmount}
               canAuto={canAuto}
+              remaining={pot.target_amount != null ? Number(pot.target_amount) - balance : null}
+              requiredMonthly={required}
             />
           </div>
           <div className="space-y-3 border-t border-gray-100 pt-6">

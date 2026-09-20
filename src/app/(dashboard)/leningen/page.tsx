@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { getLoans } from "@/actions/loans";
+import { getLoanPickerData, getLoans } from "@/actions/loans";
 import { LoanCard } from "./loan-card";
+import { NewLoanForm } from "./new-loan-form";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
 export default async function LeningenPage() {
-  const loans = await getLoans();
+  const [loans, pickerData] = await Promise.all([getLoans(), getLoanPickerData([])]);
   const open = loans.filter((l) => l.status === "open");
   const closed = loans.filter((l) => l.status === "closed");
   const total = open.reduce((s, l) => s + Math.max(l.balance, 0), 0);
@@ -28,11 +29,7 @@ export default async function LeningenPage() {
         <p className="mt-1 text-4xl font-semibold text-gray-900">{euro(total)}</p>
       </div>
 
-      <p className="px-1 text-sm text-gray-500">
-        Een lening maak je aan bij een bijschrijving op de Transacties-pagina (knop{" "}
-        <span className="font-medium">Lening</span>). Aflossingen koppel je bij een afschrijving met{" "}
-        <span className="font-medium">Aflossing lening</span>.
-      </p>
+      <NewLoanForm people={pickerData.people} />
 
       {open.length === 0 ? (
         <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">

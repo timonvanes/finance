@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  addManualBorrow,
   addManualRepayment,
   closeLoan,
   removeLoanEntry,
@@ -33,6 +34,7 @@ export function LoanCard({ loan }: { loan: LoanView }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
+  const [extra, setExtra] = useState("");
   const router = useRouter();
 
   function run(fn: () => Promise<unknown>) {
@@ -142,6 +144,31 @@ export function LoanCard({ loan }: { loan: LoanView }) {
               className="min-h-[48px] rounded-xl border border-gray-300 px-4 text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
             >
               Afgelost
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              value={extra}
+              onChange={(e) => setExtra(e.target.value)}
+              placeholder="Erbij geleend: bedrag"
+              className="min-h-[48px] min-w-0 flex-1 rounded-xl border border-gray-300 px-3 text-base"
+            />
+            <button
+              type="button"
+              disabled={isPending || !extra}
+              onClick={() => {
+                const value = Number(extra);
+                run(async () => {
+                  await addManualBorrow(loan.id, value);
+                  setExtra("");
+                });
+              }}
+              className="min-h-[48px] rounded-xl border border-gray-300 px-4 text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
+            >
+              Erbij
             </button>
           </div>
           <div className="flex flex-wrap gap-2">

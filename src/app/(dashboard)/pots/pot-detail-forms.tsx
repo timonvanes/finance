@@ -48,12 +48,17 @@ export function MonthlyPlanForm({
   auto,
   autoAmount,
   canAuto,
+  remaining,
+  requiredMonthly,
 }: {
   potId: string;
   initial: number | null;
   auto: boolean;
   autoAmount: number | null;
   canAuto: boolean;
+  // Still to save for the goal, and what per month would reach it on time.
+  remaining: number | null;
+  requiredMonthly: number | null;
 }) {
   const [mode, setMode] = useState<"auto" | "fixed">(canAuto && (auto || initial == null) ? "auto" : "fixed");
   const [value, setValue] = useState(initial != null ? String(initial) : "");
@@ -116,12 +121,28 @@ export function MonthlyPlanForm({
         </div>
       )}
 
+      {mode === "fixed" && canAuto && remaining != null && Number(value) > 0 && (
+        <p className="rounded-xl bg-gray-50 p-4 text-base text-gray-700">
+          {remaining <= 0
+            ? "Je doel is al gehaald."
+            : (() => {
+                const months = Math.ceil(remaining / Number(value));
+                const finish = new Date(new Date().getFullYear(), new Date().getMonth() + months, 1);
+                const enough = requiredMonthly != null && Number(value) >= requiredMonthly;
+                return `Met €${Number(value)} per maand ben je klaar rond ${finish.toLocaleDateString("nl-NL", { month: "long", year: "numeric" })}. ${
+                  enough ? "Dat is op tijd." : requiredMonthly != null ? `Voor op tijd heb je €${Math.ceil(requiredMonthly)} per maand nodig.` : ""
+                }`;
+              })()}
+        </p>
+      )}
+
       <button
         type="button"
         disabled={isPending || unchanged}
         onClick={() =>
           run(async () => {
             await setPotMonthlyPlan(potId, mode === "fixed" && value ? Number(value) : null, mode === "auto" && canAuto);
+            return mode === "auto" ? "Opgeslagen: automatisch maandbedrag." : value ? `Opgeslagen: €${Number(value)} per maand.` : "Opgeslagen: geen maandplan.";
           })
         }
         className={primary}

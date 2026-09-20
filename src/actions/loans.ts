@@ -218,6 +218,52 @@ export async function addManualRepayment(loanId: string, amount: number) {
   await autoCloseIfRepaid(loanId);
 }
 
+// A loan that never showed up as a bank transaction (cash, an old loan…).
+export async function createManualLoan(input: {
+  personId?: string;
+  lenderName?: string;
+  amount: number;
+  date: string;
+  note?: string;
+}) {
+  if (!(input.amount > 0)) throw new Error("Vul het geleende bedrag in.");
+  if (!input.personId && !input.lenderName?.trim()) throw new Error("Kies of vul in van wie de lening is.");
+
+  const supabase = await createClient();
+  const { data: loan, error } = await supabase
+    .from("loans")
+    .insert({
+      ...(input.personId ? { person_id: input.personId } : { lender_name: input.lenderName!.trim() }),
+      note: input.note?.trim() || null,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+
+  const { error: entryError } = await supabase.from("loan_entries").insert({
+    loan_id: loan.id,
+    kind: "borrow",
+    amount: input.amount,
+    entry_date: input.date || new Date().toISOString().slice(0, 10),
+  });
+  if (entryError) throw entryError;
+}
+
+// More borrowed on an existing loan without a matching transaction.
+export async function addManualBorrow(loanId: string, amount: number) {
+  if (!(amount > 0)) throw new Error("Vul een bedrag in.");
+  const supabase = await createClient();
+  const { error } = await supabase.from("loan_entries").insert({
+    loan_id: loanId,
+    kind: "borrow",
+    amount,
+    entry_date: new Date().toISOString().slice(0, 10),
+  });
+  if (error) throw error;
+  // Borrowing more reopens a closed loan.
+  await supabase.from("loans").update({ status: "open", closed_reason: null }).eq("id", loanId);
+}
+
 export async function closeLoan(loanId: string, reason: "repaid" | "forgiven") {
   const supabase = await createClient();
   const { error } = await supabase
