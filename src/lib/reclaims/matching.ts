@@ -204,17 +204,20 @@ function findPaymentRequestMatch(
   return null;
 }
 
-// The app forwards money received on bunq to the bank as "<code> doorgestort".
-// When that transfer shows up here, link it to the reclaim it settles so it
-// counts as the paid-back amount instead of loose income.
+// Links bunq payment-link payments to the reclaims they settle, so the money
+// counts as paid back instead of loose income. Two shapes can show up:
+//  - the payer's own payment on a connected bunq account (preferred), or
+//  - when bunq is not connected here, the "<code> doorgestort" transfer
+//    arriving at the bank.
+// Transfers between your own accounts (flagged is_transfer) are never used.
 export async function matchBunqSweeps(supabase: SupabaseClient) {
   const { data: links } = await supabase
     .from("bunq_payment_links")
     .select(
       "id, reference_code, amount, reclaim_id, payment_request_id, reclaims(settled_transaction_id), payment_requests(settled_transaction_id)"
     )
-    .eq("status", "swept")
-    .order("swept_at", { ascending: true });
+    .in("status", ["paid", "sweeping", "swept"])
+    .order("created_at", { ascending: true });
 
   const unsettled = (links ?? []).filter((l) => {
     const rc = Array.isArray(l.reclaims) ? l.reclaims[0] : l.reclaims;
@@ -229,8 +232,8 @@ export async function matchBunqSweeps(supabase: SupabaseClient) {
       .from("transactions")
       .select("id, amount, raw_description")
       .gt("amount", 0)
-      .gte("booking_date", since)
-      .ilike("raw_description", "%doorgestort%"),
+      .eq("is_transfer", false)
+      .gte("booking_date", since),
     supabase.from("reclaims").select("settled_transaction_id").not("settled_transaction_id", "is", null),
     supabase.from("payment_requests").select("settled_transaction_id").not("settled_transaction_id", "is", null),
   ]);
@@ -241,12 +244,14 @@ export async function matchBunqSweeps(supabase: SupabaseClient) {
 
   for (const link of unsettled) {
     if (!link.reference_code) continue;
-    const tx = (txs ?? []).find(
+    const fits = (txs ?? []).filter(
       (t) =>
         !used.has(t.id) &&
         Math.abs(Number(t.amount) - Number(link.amount)) < AMOUNT_TOLERANCE &&
         descriptionHasCode((t.raw_description ?? "").toUpperCase(), link.reference_code!)
     );
+    const tx =
+      fits.find((t) => !/doorgestort/i.test(t.raw_description ?? "")) ?? fits[0];
     if (!tx) continue;
     used.add(tx.id);
     if (link.reclaim_id) {
