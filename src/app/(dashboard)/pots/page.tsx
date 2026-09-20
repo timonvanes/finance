@@ -10,6 +10,7 @@ import { InfoButton } from "./info-button";
 import { PlanRow } from "./plan-row";
 import { SavingsInbox } from "./inbox";
 import { LeftoverCard } from "./leftover-card";
+import { AutoDetect } from "./auto-detect";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const STALE_CHECK_DAYS = 45;
@@ -48,6 +49,7 @@ export default async function PotsPage() {
 
   return (
     <div className="space-y-5">
+      <AutoDetect />
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-semibold text-gray-900">Potjes</h1>

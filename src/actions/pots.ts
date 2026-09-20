@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { rematchPotHistory } from "@/lib/pots/matching";
+import { matchPotTransfers, rematchPotHistory } from "@/lib/pots/matching";
+import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
 import { computePotBalance } from "@/lib/pots/balance";
 
 export async function getPots() {
@@ -28,22 +29,42 @@ export async function createPot(formData: FormData) {
   const targetRaw = formData.get("targetAmount") as string;
   const targetAmount = targetRaw ? Number(targetRaw) : null;
   const targetDate = (formData.get("targetDate") as string) || null;
+  const matchText = ((formData.get("matchText") as string) || "").trim() || null;
   const monthlyRaw = formData.get("monthlyAmount") as string;
   const monthlyAmount = monthlyRaw ? Number(monthlyRaw) : null;
   const openingBalanceRaw = formData.get("openingBalance") as string;
   const openingBalanceDate = (formData.get("openingBalanceDate") as string) || undefined;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("pots").insert({
+
+  // With a recognition text and no explicit start date, start at the first
+  // matching transaction so older deposits count towards the balance.
+  let startDate = openingBalanceDate;
+  if (matchText && !startDate) {
+    const safe = matchText.replace(/[,()]/g, "");
+    const { data: first } = await supabase
+      .from("transactions")
+      .select("booking_date")
+      .or(`counterparty_name.ilike.%${safe}%,raw_description.ilike.%${safe}%`)
+      .order("booking_date", { ascending: true })
+      .limit(1);
+    startDate = first?.[0]?.booking_date;
+  }
+
+  const { data: created, error } = await supabase.from("pots").insert({
     name,
     kind,
+    match_text: matchText,
     monthly_amount: monthlyAmount && monthlyAmount > 0 ? monthlyAmount : null,
     target_amount: targetAmount && targetAmount > 0 ? targetAmount : null,
     target_date: targetAmount && targetAmount > 0 ? targetDate : null,
     opening_balance: openingBalanceRaw ? Number(openingBalanceRaw) : 0,
-    ...(openingBalanceDate ? { opening_balance_date: openingBalanceDate } : {}),
-  });
+    ...(startDate ? { opening_balance_date: startDate } : {}),
+  }).select("id").single();
   if (error) throw error;
+
+  // Pick up transfers that already happened.
+  if (matchText) await rematchPotHistory(supabase, created.id);
 }
 
 export async function updatePotTarget(potId: string, targetAmount: number | null, targetDate: string | null) {
@@ -254,4 +275,25 @@ export async function assignTransactionToPot(transactionId: string, potId: strin
       await supabase.from("pots").update({ match_text: tx.counterparty_name.trim() }).eq("id", potId);
     }
   }
+}
+
+// Finds savings account numbers in past transactions, creates a pot for each
+// new one and links their transfers as deposits/withdrawals. Safe to repeat.
+export async function autoDetectPots() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { created: 0 };
+
+  const { data: txs } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("is_transfer", false)
+    .or("counterparty_name.ilike.%spaarrekening%,raw_description.ilike.%spaarrekening%")
+    .limit(500);
+  const ids = (txs ?? []).map((t) => t.id as string);
+  const created = await ensurePotsForSavingsIds(supabase, ids, user.id);
+  if (created > 0) await matchPotTransfers(supabase, ids, user.id);
+  return { created };
 }

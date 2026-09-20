@@ -43,6 +43,18 @@ export function NewPotForm() {
         </select>
       </div>
       <div>
+        <label className={label}>Herkenningstekst (voor automatisch inleggen)</label>
+        <input
+          type="text"
+          name="matchText"
+          placeholder="bv. Z16377129 of de naam van het potje"
+          className={input}
+        />
+        <p className="mt-1 text-xs text-gray-400">
+          Overboekingen die deze tekst bevatten worden vanzelf als inleg of opname geboekt.
+        </p>
+      </div>
+      <div>
         <label className={label}>Bedrag per maand (optioneel)</label>
         <input type="number" name="monthlyAmount" inputMode="decimal" step="1" min="0" placeholder="€" className={input} />
       </div>

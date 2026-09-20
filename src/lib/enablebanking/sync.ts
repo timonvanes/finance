@@ -3,6 +3,7 @@ import { enableBankingFetch } from "./client";
 import { applyCategoryRules } from "@/lib/categorization/engine";
 import { autoMatchIncomingTransactions } from "@/lib/reclaims/matching";
 import { matchPotTransfers } from "@/lib/pots/matching";
+import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
 
 interface AccountIdentification {
   identification?: string;
@@ -342,6 +343,7 @@ export async function syncBankConnection(
         // safe to run the rule matcher / reclaim auto-linker on exactly those.
         const insertedIds = (inserted ?? []).map((row) => row.id);
         await markOwnTransfers(supabase, insertedIds);
+        await ensurePotsForSavingsIds(supabase, insertedIds, userId);
         await matchPotTransfers(supabase, insertedIds, userId);
         await applyCategoryRules(supabase, insertedIds, userId);
         await autoMatchIncomingTransactions(supabase, insertedIds);

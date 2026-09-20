@@ -51,6 +51,9 @@ export function PlanRow({
         <div className={`h-2 rounded-full ${done ? "bg-teal-600" : "bg-teal-400"}`} style={{ width: `${pct}%` }} />
       </div>
       {!done && (
+        <p className="text-sm text-gray-500">Wordt vanzelf afgevinkt zodra de overboeking binnenkomt.</p>
+      )}
+      {!done && (
         <button
           type="button"
           disabled={isPending}
@@ -65,9 +68,9 @@ export function PlanRow({
               }
             });
           }}
-          className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-800 active:bg-gray-50 disabled:opacity-50"
+          className="min-h-[44px] rounded-xl px-1 text-sm text-gray-500 underline disabled:opacity-50"
         >
-          {isPending ? "Bezig…" : `Ik heb ${euro(missing)} ingelegd`}
+          {isPending ? "Bezig…" : `Handmatig noteren: ${euro(missing)} ingelegd`}
         </button>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
