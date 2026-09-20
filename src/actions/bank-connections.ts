@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listAspsps, startAuthorization } from "@/lib/enablebanking/auth";
 import { syncBankConnection } from "@/lib/enablebanking/sync";
+import type { PsuContext } from "@/lib/enablebanking/client";
 
 const CONSENT_DAYS = 90;
 
@@ -23,6 +24,17 @@ async function getSiteUrl() {
   const host = headersList.get("host");
   const protocol = headersList.get("x-forwarded-proto") ?? "https";
   return `${protocol}://${host}`;
+}
+
+// The user's IP and browser, passed to the bank so it treats the request as
+// made with the user present (no daily background-fetch limit).
+export async function getPsuContext(): Promise<PsuContext> {
+  const headersList = await headers();
+  const forwarded = headersList.get("x-forwarded-for");
+  return {
+    ipAddress: forwarded ? forwarded.split(",")[0].trim() : headersList.get("x-real-ip"),
+    userAgent: headersList.get("user-agent"),
+  };
 }
 
 export async function getAvailableBanks() {
@@ -121,8 +133,9 @@ function friendlySyncError(err: unknown) {
 
 export async function syncNow(bankConnectionId: string) {
   const supabase = await createClient();
+  const psu = await getPsuContext();
   try {
-    const count = await syncBankConnection(supabase, bankConnectionId);
+    const count = await syncBankConnection(supabase, bankConnectionId, psu);
     return { count, error: null as string | null };
   } catch (err) {
     console.error("syncNow failed for connection", bankConnectionId, err);
@@ -138,11 +151,12 @@ export async function syncAllNow() {
     .from("bank_connections")
     .select("id, institution_name")
     .eq("consent_status", "linked");
+  const psu = await getPsuContext();
 
   return Promise.all(
     (connections ?? []).map(async (c) => {
       try {
-        const count = await syncBankConnection(supabase, c.id);
+        const count = await syncBankConnection(supabase, c.id, psu);
         return { name: c.institution_name as string, count, error: null as string | null };
       } catch (err) {
         console.error("syncAllNow failed for connection", c.id, err);
@@ -168,7 +182,7 @@ export async function updateSyncFromDate(bankConnectionId: string, date: string 
 
 // Banks only allow a handful of unattended data requests per day (PSD2), so
 // background syncs stay well below that; the manual refresh is for more.
-const AUTO_SYNC_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
+const AUTO_SYNC_STALE_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 // Called (via next/server's `after`) when the dashboard loads, so banks stay
 // fresh without needing a manual "Sync now" click every time — throttled so
@@ -181,7 +195,7 @@ const AUTO_SYNC_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
 // ALL users in one background pass, not just the current session's user.
 // Since there's no auth.uid() session context on this client, syncBankConnection
 // must stamp user_id explicitly on every insert it makes (transactions, pot_entries).
-export async function autoSyncStaleConnections() {
+export async function autoSyncStaleConnections(psu?: PsuContext) {
   const supabase = createAdminClient();
   const staleBefore = new Date(Date.now() - AUTO_SYNC_STALE_MS).toISOString();
 
@@ -193,7 +207,7 @@ export async function autoSyncStaleConnections() {
 
   for (const connection of connections ?? []) {
     try {
-      await syncBankConnection(supabase, connection.id);
+      await syncBankConnection(supabase, connection.id, psu);
     } catch (err) {
       console.error("auto-sync failed for connection", connection.id, err);
     }

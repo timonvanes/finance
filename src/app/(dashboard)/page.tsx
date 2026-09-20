@@ -9,7 +9,7 @@ import {
   getRecurringPayments,
 } from "@/actions/dashboard";
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
-import { autoSyncStaleConnections } from "@/actions/bank-connections";
+import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
 import { getPlannedSavingsTotal, getPotsTotalBalance } from "@/actions/pots";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
@@ -41,7 +41,9 @@ export default async function DashboardPage({
   const requestHeaders = await headers();
   const isPrefetch =
     requestHeaders.has("next-router-prefetch") || requestHeaders.get("purpose") === "prefetch";
-  if (!isPrefetch) after(() => autoSyncStaleConnections());
+  // Captured now: request headers aren't available inside after().
+  const psu = await getPsuContext();
+  if (!isPrefetch) after(() => autoSyncStaleConnections(psu));
 
   const { month } = await searchParams;
   // 0 = this month, 1 = previous month, etc. — can't navigate into the future.

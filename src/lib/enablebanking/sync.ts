@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { enableBankingFetch } from "./client";
+import { enableBankingFetch, psuHeaders, type PsuContext } from "./client";
 import { applyCategoryRules } from "@/lib/categorization/engine";
 import { autoMatchIncomingTransactions } from "@/lib/reclaims/matching";
 import { matchPotTransfers } from "@/lib/pots/matching";
@@ -49,10 +49,11 @@ interface BalancesResponse {
 
 const BALANCE_TYPE_PRIORITY = ["CLBD", "ITBD", "XPCD"];
 
-async function fetchAccountBalance(accountUid: string): Promise<number | null> {
+async function fetchAccountBalance(accountUid: string, psu?: PsuContext | null): Promise<number | null> {
   try {
     const { balances } = await enableBankingFetch<BalancesResponse>(
-      `/accounts/${accountUid}/balances`
+      `/accounts/${accountUid}/balances`,
+      { headers: psuHeaders(psu) }
     );
     if (!balances || balances.length === 0) return null;
 
@@ -104,7 +105,8 @@ const HISTORY_DAYS = 90;
 
 async function fetchAllTransactions(
   accountUid: string,
-  syncFromDate: string | null
+  syncFromDate: string | null,
+  psu?: PsuContext | null
 ): Promise<EnableBankingTransaction[]> {
   const all: EnableBankingTransaction[] = [];
   let continuationKey: string | undefined;
@@ -118,7 +120,8 @@ async function fetchAllTransactions(
     if (continuationKey) params.set("continuation_key", continuationKey);
 
     const page = await enableBankingFetch<TransactionsResponse>(
-      `/accounts/${accountUid}/transactions?${params.toString()}`
+      `/accounts/${accountUid}/transactions?${params.toString()}`,
+      { headers: psuHeaders(psu) }
     );
     all.push(...page.transactions);
     continuationKey = page.continuation_key;
@@ -258,7 +261,8 @@ function isExpiredSessionError(err: unknown): boolean {
 
 export async function syncBankConnection(
   supabase: SupabaseClient,
-  bankConnectionId: string
+  bankConnectionId: string,
+  psu?: PsuContext | null
 ) {
   const [{ data: accounts, error: accountsError }, { data: connection, error: connectionError }] =
     await Promise.all([
@@ -295,7 +299,7 @@ export async function syncBankConnection(
     }
 
     try {
-      const balance = await fetchAccountBalance(account.account_uid);
+      const balance = await fetchAccountBalance(account.account_uid, psu);
       if (balance !== null) {
         await supabase
           .from("bank_accounts")
@@ -305,7 +309,8 @@ export async function syncBankConnection(
 
       const transactions = await fetchAllTransactions(
         account.account_uid,
-        connection?.sync_from_date ?? null
+        connection?.sync_from_date ?? null,
+        psu
       );
 
       const rows = transactions

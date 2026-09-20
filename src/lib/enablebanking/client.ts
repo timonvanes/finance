@@ -17,6 +17,21 @@ async function signRequestJwt() {
     .sign(privateKey);
 }
 
+// Banks limit unattended ("background") data fetches to about 4 per day.
+// Passing at least one PSU header tells the bank the user is actively using
+// the app, and then that daily limit does not apply (Enable Banking FAQ).
+export interface PsuContext {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+export function psuHeaders(psu?: PsuContext | null): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (psu?.ipAddress) headers["Psu-Ip-Address"] = psu.ipAddress;
+  if (psu?.userAgent) headers["Psu-User-Agent"] = psu.userAgent;
+  return headers;
+}
+
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 500;
 
@@ -50,7 +65,10 @@ export async function enableBankingFetch<T>(
         );
         // Only retry on rate-limiting/server errors — a 4xx like a bad
         // request or expired consent won't succeed on retry.
-        if (response.status === 429 || response.status >= 500) {
+        // The daily background limit can't be retried away — waiting a
+        // second won't help, only time (or a user-present request) does.
+        const dailyLimit = body.includes("ASPSP_RATE_LIMIT_EXCEEDED");
+        if (!dailyLimit && (response.status === 429 || response.status >= 500)) {
           lastError = error;
           if (attempt < MAX_ATTEMPTS) {
             await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * attempt));
