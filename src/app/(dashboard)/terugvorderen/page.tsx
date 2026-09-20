@@ -210,9 +210,6 @@ export default async function TerugvorderenPage() {
         <span className="text-2xl text-gray-300">›</span>
       </Link>
 
-      <Link href="/reclaims" className="block pt-2 text-center text-sm text-gray-400 underline">
-        Terug naar de oude versie
-      </Link>
     </div>
   );
 }

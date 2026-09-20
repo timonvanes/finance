@@ -53,7 +53,7 @@ const TABS: {
   {
     href: "/terugvorderen",
     label: "Terugvorderen",
-    match: (p) => p.startsWith("/terugvorderen") || p.startsWith("/reclaims"),
+    match: (p) => p.startsWith("/terugvorderen"),
     icon: icon(
       <>
         <path d="M7 7h11l-3-3" />

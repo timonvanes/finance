@@ -6,13 +6,9 @@ const SECTIONS: { title: string; items: { href: string; label: string; hint?: st
     title: "Overig",
     items: [
       { href: "/leningen", label: "Leningen", hint: "Geld dat je van iemand hebt geleend" },
-      { href: "/pots", label: "Potjes", hint: "Nog in ontwikkeling" },
+      { href: "/pots", label: "Potjes", hint: "Sparen, beleggen en vakantie" },
       { href: "/settings", label: "Instellingen", hint: "Maandstart, budgetten, categorieën, banken, personen" },
     ],
-  },
-  {
-    title: "Oude versies",
-    items: [{ href: "/reclaims", label: "Terugvorderingen (oude versie)" }],
   },
 ];
 

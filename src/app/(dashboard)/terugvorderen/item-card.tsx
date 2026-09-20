@@ -18,7 +18,7 @@ import {
   writeOffPaymentRequest,
 } from "@/actions/payment-requests";
 import { TxDetails, type TxInfo } from "./tx-details";
-import { ReferenceCode } from "../reclaims/reference-code";
+import { ReferenceCode } from "./reference-code";
 
 interface IncomingTransaction {
   id: string;

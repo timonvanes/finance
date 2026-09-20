@@ -9,7 +9,7 @@ import {
 } from "@/actions/dashboard";
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections } from "@/actions/bank-connections";
-import { getPotsTotalBalance } from "@/actions/pots";
+import { getPlannedSavingsTotal, getPotsTotalBalance } from "@/actions/pots";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
 import { periodRange } from "@/lib/month";
@@ -43,7 +43,7 @@ export default async function DashboardPage({
   const monthsAgo = Math.max(0, parseInt(month ?? "0", 10) || 0);
   const isCurrentMonth = monthsAgo === 0;
 
-  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, potsTotal, freeToSpend, loans] =
+  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, potsTotal, freeToSpend, loans, plannedSavings] =
     await Promise.all([
       getDashboardSummary(monthsAgo),
       getMonthlySpendByCategory(monthsAgo),
@@ -54,6 +54,7 @@ export default async function DashboardPage({
       getPotsTotalBalance(),
       getFreeToSpendPerMonth(),
       getOpenLoansTotal(),
+      getPlannedSavingsTotal(),
     ]);
 
   const now = new Date();
@@ -107,12 +108,21 @@ export default async function DashboardPage({
       )}
 
       {freeToSpend != null && (
-        <section className={`${card} flex items-center justify-between gap-4 p-5`}>
-          <div>
-            <p className="text-sm text-gray-500">Vrije ruimte per maand</p>
-            <p className="text-xs text-gray-400">gemiddelde van de laatste maanden</p>
+        <section className={`${card} space-y-2 p-5`}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-gray-500">Vrije ruimte per maand</p>
+              <p className="text-xs text-gray-400">gemiddelde van de laatste maanden</p>
+            </div>
+            <p className="text-2xl font-semibold text-gray-900">
+              {euro(Math.max(0, freeToSpend - plannedSavings), 0)}
+            </p>
           </div>
-          <p className="text-2xl font-semibold text-gray-900">{euro(Math.max(0, freeToSpend), 0)}</p>
+          {plannedSavings > 0 && (
+            <p className="text-sm text-gray-500">
+              na {euro(plannedSavings, 0)} gepland sparen (voor sparen {euro(Math.max(0, freeToSpend), 0)})
+            </p>
+          )}
         </section>
       )}
 
