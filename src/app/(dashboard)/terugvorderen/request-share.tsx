@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { checkBunqPayments, createBunqPaymentLink, testBunqConnection } from "@/actions/bunq";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const STORAGE_KEY = "payment-request-settings";
@@ -37,19 +39,79 @@ export function RequestShare({
   referenceCode,
   description,
   proofHref,
+  kind,
+  id,
+  bunqEnabled,
+  bunqLink,
 }: {
   personName: string;
   amount: number;
   referenceCode: string | null;
   description: string;
   proofHref: string;
+  kind: "reclaim" | "request";
+  id: string;
+  bunqEnabled: boolean;
+  bunqLink: { url: string; amount: number; status: string } | null;
 }) {
+  const router = useRouter();
   const [settings, setSettings] = useState<Settings>({ iban: "", holder: "", link: "" });
   const [showSettings, setShowSettings] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [bunqUrl, setBunqUrl] = useState<string | null>(
+    bunqLink && Math.abs(bunqLink.amount - amount) < 0.005 ? bunqLink.url : null
+  );
+
+  async function makeLink() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const r = await createBunqPaymentLink(kind, id, description);
+      setBunqUrl(r.url);
+      router.refresh();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Betaallink maken mislukt.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function checkPayment() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const r = await checkBunqPayments();
+      if (r.error) setNotice(r.error);
+      else if (r.detected > 0) router.refresh();
+      else setNotice("Nog geen betaling ontvangen bij bunq.");
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Controleren mislukt.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testBunq() {
+    setBusy(true);
+    const r = await testBunqConnection();
+    setNotice(r.message);
+    setBusy(false);
+  }
 
   useEffect(() => {
     setSettings(load());
+  }, []);
+
+  // Opening the page with an unpaid bunq link quietly checks for the payment.
+  useEffect(() => {
+    if (bunqLink?.status !== "open") return;
+    checkBunqPayments()
+      .then((r) => {
+        if (r.detected > 0) router.refresh();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function update(patch: Partial<Settings>) {
@@ -61,7 +123,8 @@ export function RequestShare({
   }
 
   function message() {
-    const link = buildLink(settings.link, amount, referenceCode ? `${description} ${referenceCode}` : description);
+    const link =
+      bunqUrl ?? buildLink(settings.link, amount, referenceCode ? `${description} ${referenceCode}` : description);
     const lines = [`Hoi ${personName}, ik heb ${euro(amount)} voor je voorgeschoten (${description}).`];
     if (link) {
       lines.push(`Je kunt het hier betalen: ${link}`);
@@ -95,10 +158,11 @@ export function RequestShare({
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={share}
-          className="min-h-[52px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800"
+          disabled={busy}
+          onClick={bunqEnabled && !bunqUrl ? makeLink : share}
+          className="min-h-[52px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
         >
-          Vraag terug
+          {busy ? "Bezig…" : bunqEnabled && !bunqUrl ? "Maak betaallink" : "Vraag terug"}
         </button>
         <Link
           href={proofHref}
@@ -107,6 +171,25 @@ export function RequestShare({
           Overzicht / bewijs
         </Link>
       </div>
+      {bunqUrl && (
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-teal-50 px-4 py-3 text-sm text-teal-900">
+          <span>
+            {bunqLink?.status === "paid"
+              ? "Betaald via bunq. Het bedrag staat op je bunq-rekening."
+              : "Betaallink klaar. Wacht op betaling via bunq."}
+          </span>
+          {bunqLink?.status !== "paid" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={checkPayment}
+              className="min-h-[44px] shrink-0 font-medium underline disabled:opacity-50"
+            >
+              Controleer
+            </button>
+          )}
+        </div>
+      )}
       {notice && <p className="text-sm text-teal-700">{notice}</p>}
       <button
         type="button"
@@ -122,6 +205,16 @@ export function RequestShare({
             bunq.me/jouwnaam of paypal.me/jouwnaam) staat het bedrag er wel al in. Anders wordt je IBAN in het
             bericht gezet. Dit blijft op dit apparaat.
           </p>
+          {bunqEnabled && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={testBunq}
+              className="min-h-[44px] rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-800 disabled:opacity-50"
+            >
+              Test bunq-koppeling
+            </button>
+          )}
           <input
             value={settings.link}
             onChange={(e) => update({ link: e.target.value })}

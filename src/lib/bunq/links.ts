@@ -1,0 +1,92 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { bunqApi, getBunqAccount } from "./client";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Json = any;
+
+const money = (n: number) => n.toFixed(2);
+
+export async function createBunqTab(
+  userId: string,
+  amount: number,
+  description: string
+): Promise<{ tabId: number; url: string }> {
+  const acc = await getBunqAccount(userId);
+  const base = `/v1/user/${acc.userId}/monetary-account/${acc.accountId}/bunqme-tab`;
+  const created = await bunqApi(userId, "POST", base, {
+    bunqme_tab_entry: {
+      amount_inquired: { value: money(amount), currency: "EUR" },
+      description: description.slice(0, 135),
+    },
+  });
+  const tabId = (created?.Response ?? []).find((i: Json) => i?.Id)?.Id?.id;
+  if (!tabId) throw new Error("bunq gaf geen betaallink terug.");
+
+  const tab = await bunqApi(userId, "GET", `${base}/${tabId}`);
+  const url = (tab?.Response ?? []).find((i: Json) => i?.BunqMeTab)?.BunqMeTab?.bunqme_tab_share_url;
+  if (!url) throw new Error("bunq gaf geen betaallink-URL terug.");
+  return { tabId, url };
+}
+
+interface LinkRow {
+  id: string;
+  reference_code: string | null;
+  amount: number;
+  created_at: string;
+}
+
+// Detects received payments for open links: matched on reference code, exact
+// amount and creation time. Each incoming bunq payment is used for one link only.
+export async function detectBunqPayments(userId: string): Promise<{ detected: number; error?: string }> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("bunq_payment_links")
+    .select("id, reference_code, amount, created_at")
+    .eq("user_id", userId)
+    .eq("status", "open");
+  const open = ((data ?? []) as LinkRow[]).filter((l) => l.reference_code);
+  if (open.length === 0) return { detected: 0 };
+
+  let detected = 0;
+  try {
+    const acc = await getBunqAccount(userId);
+    const res = await bunqApi(
+      userId,
+      "GET",
+      `/v1/user/${acc.userId}/monetary-account/${acc.accountId}/payment?count=100`
+    );
+    const payments = (res?.Response ?? []).map((i: Json) => i.Payment).filter(Boolean);
+    const { data: used } = await admin
+      .from("bunq_payment_links")
+      .select("incoming_payment_id")
+      .not("incoming_payment_id", "is", null);
+    const usedIds = new Set((used ?? []).map((u) => Number(u.incoming_payment_id)));
+
+    for (const link of open) {
+      const code = link.reference_code!.toLowerCase();
+      const match = payments.find(
+        (p: Json) =>
+          !usedIds.has(p.id) &&
+          Number(p.amount?.value) > 0 &&
+          Math.abs(Number(p.amount.value) - Number(link.amount)) < 0.005 &&
+          typeof p.description === "string" &&
+          p.description.toLowerCase().includes(code) &&
+          new Date(String(p.created).replace(" ", "T") + "Z").getTime() >=
+            new Date(link.created_at).getTime() - 60_000
+      );
+      if (!match) continue;
+      const { error } = await admin
+        .from("bunq_payment_links")
+        .update({ status: "paid", incoming_payment_id: match.id })
+        .eq("id", link.id)
+        .eq("status", "open");
+      if (!error) {
+        usedIds.add(match.id);
+        detected++;
+      }
+    }
+  } catch (e) {
+    return { detected, error: e instanceof Error ? e.message : "bunq-fout" };
+  }
+  return { detected };
+}

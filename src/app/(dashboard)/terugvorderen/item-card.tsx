@@ -38,6 +38,7 @@ export interface OpenItem {
   method: "bank" | "external_app";
   referenceCode: string | null;
   tx?: TxInfo | null;
+  bunqLink?: { url: string; amount: number; status: string } | null;
   lines?: {
     id?: string;
     title: string;
@@ -58,7 +59,9 @@ export function ItemCard({
   incoming,
   openRequests = [],
   otherReclaims = [],
+  bunqEnabled = false,
 }: {
+  bunqEnabled?: boolean;
   item: OpenItem;
   personName: string;
   incoming: IncomingTransaction[];
@@ -178,6 +181,10 @@ export function ItemCard({
           referenceCode={item.referenceCode}
           description={item.kind === "request" ? (item.lines ?? []).map((l) => l.title).join(", ") : item.title}
           proofHref={`/terugvorderen/bewijs/${item.kind}/${item.id}`}
+          kind={item.kind}
+          id={item.id}
+          bunqEnabled={bunqEnabled}
+          bunqLink={item.bunqLink ?? null}
         />
       )}
 

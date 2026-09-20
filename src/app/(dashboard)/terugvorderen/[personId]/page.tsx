@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getReclaims, getUnlinkedIncomingTransactions } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
+import { getBunqLinks } from "@/actions/bunq";
+import { isBunqConfigured } from "@/lib/bunq/client";
 import { ItemCard, type OpenItem } from "../item-card";
 import { TxDetails } from "../tx-details";
 
@@ -13,11 +15,17 @@ export default async function PersonPage({
   params: Promise<{ personId: string }>;
 }) {
   const { personId } = await params;
-  const [reclaims, paymentRequests, incoming] = await Promise.all([
+  const bunqEnabled = isBunqConfigured();
+  const [reclaims, paymentRequests, incoming, bunqLinks] = await Promise.all([
     getReclaims(),
     getPaymentRequests(),
     getUnlinkedIncomingTransactions(),
+    bunqEnabled ? getBunqLinks() : Promise.resolve([]),
   ]);
+  const bunqFor = (kind: "reclaim" | "request", id: string) => {
+    const l = bunqLinks.find((x) => (kind === "reclaim" ? x.reclaim_id : x.payment_request_id) === id);
+    return l ? { url: l.share_url as string, amount: Number(l.amount), status: l.status as string } : null;
+  };
 
   let personName = "Onbekend";
   const open: OpenItem[] = [];
@@ -60,6 +68,7 @@ export default async function PersonPage({
         sourceTotal: r.source_total_amount,
         method: r.settlement_method === "external_app" ? "external_app" : "bank",
         referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
+        bunqLink: bunqFor("reclaim", r.id),
         tx: {
           name: tx?.counterparty_name ?? null,
           date: tx?.booking_date ?? null,
@@ -121,6 +130,7 @@ export default async function PersonPage({
         sourceTotal: null,
         method: "bank",
         referenceCode: pr.reference_code,
+        bunqLink: bunqFor("request", pr.id),
         lines,
       });
     } else {
@@ -172,6 +182,7 @@ export default async function PersonPage({
               item={item}
               personName={personName}
               incoming={incoming}
+              bunqEnabled={bunqEnabled}
               openRequests={openRequests}
               otherReclaims={looseBankReclaims
                 .filter((r) => r.id !== item.id)
