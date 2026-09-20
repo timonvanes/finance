@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getReclaims, getUnlinkedIncomingTransactions } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
+import { getBunqLinks } from "@/actions/bunq";
+import { isBunqConfigured } from "@/lib/bunq/client";
 import { ItemCard, type OpenItem } from "../../item-card";
 import { TxDetails } from "../../tx-details";
 import { DoneActions } from "../../done-actions";
@@ -14,10 +16,12 @@ export default async function TransactionReclaimsPage({
   params: Promise<{ transactionId: string }>;
 }) {
   const { transactionId } = await params;
-  const [reclaims, paymentRequests, incoming] = await Promise.all([
+  const bunqEnabled = isBunqConfigured();
+  const [reclaims, paymentRequests, incoming, bunqLinks] = await Promise.all([
     getReclaims(),
     getPaymentRequests(),
     getUnlinkedIncomingTransactions(),
+    bunqEnabled ? getBunqLinks() : Promise.resolve([]),
   ]);
 
   const mine = reclaims.filter((r) => r.transaction_id === transactionId);
@@ -41,6 +45,11 @@ export default async function TransactionReclaimsPage({
           sourceTotal: r.source_total_amount,
           method: r.settlement_method === "external_app" ? "external_app" : "bank",
           referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
+          description: tx?.counterparty_name ?? undefined,
+          bunqLink: (() => {
+            const l = bunqLinks.find((x) => x.reclaim_id === r.id);
+            return l ? { url: l.share_url as string, amount: Number(l.amount), status: l.status as string } : null;
+          })(),
         },
       });
     } else {
@@ -117,6 +126,7 @@ export default async function TransactionReclaimsPage({
               item={item}
               personName={item.title}
               incoming={incoming}
+              bunqEnabled={bunqEnabled}
               openRequests={openRequestsFor(personId)}
               otherReclaims={otherReclaimsFor(personId, item.id)}
             />

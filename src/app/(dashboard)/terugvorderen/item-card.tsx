@@ -39,6 +39,7 @@ export interface OpenItem {
   referenceCode: string | null;
   tx?: TxInfo | null;
   bunqLink?: { url: string; amount: number; status: string } | null;
+  description?: string;
   lines?: {
     id?: string;
     title: string;
@@ -179,7 +180,7 @@ export function ItemCard({
           personName={personName}
           amount={item.amount}
           referenceCode={item.referenceCode}
-          description={item.kind === "request" ? (item.lines ?? []).map((l) => l.title).join(", ") : item.title}
+          description={item.kind === "request" ? (item.lines ?? []).map((l) => l.title).join(", ") : item.description ?? item.title}
           proofHref={`/terugvorderen/bewijs/${item.kind}/${item.id}`}
           kind={item.kind}
           id={item.id}
