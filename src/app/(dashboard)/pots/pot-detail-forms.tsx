@@ -6,7 +6,7 @@ import {
   addPotEntry,
   deletePot,
   deletePotEntry,
-  setPotMonthlyAmount,
+  setPotMonthlyPlan,
   updatePotMatchText,
   updatePotOpeningBalance,
   updatePotTarget,
@@ -42,31 +42,88 @@ function useRun() {
 const Message = ({ message }: { message: { text: string; error: boolean } | null }) =>
   message ? <p className={`text-sm ${message.error ? "text-red-600" : "text-teal-700"}`}>{message.text}</p> : null;
 
-export function MonthlyPlanForm({ potId, initial }: { potId: string; initial: number | null }) {
+export function MonthlyPlanForm({
+  potId,
+  initial,
+  auto,
+  autoAmount,
+  canAuto,
+}: {
+  potId: string;
+  initial: number | null;
+  auto: boolean;
+  autoAmount: number | null;
+  canAuto: boolean;
+}) {
+  const [mode, setMode] = useState<"auto" | "fixed">(canAuto && (auto || initial == null) ? "auto" : "fixed");
   const [value, setValue] = useState(initial != null ? String(initial) : "");
   const { isPending, message, run } = useRun();
+
+  const unchanged =
+    (mode === "auto" && auto) ||
+    (mode === "fixed" && !auto && value === (initial != null ? String(initial) : ""));
+
   return (
     <div className="space-y-3">
-      <div>
-        <label className={label}>Bedrag per maand dat je wilt sparen</label>
-        <label className="flex h-[52px] items-center gap-2 rounded-xl border border-gray-300 px-4">
-          <span className="text-gray-400">€</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            step="1"
-            min="0"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="Geen maandelijkse inleg"
-            className="h-full min-w-0 flex-1 bg-transparent text-lg outline-none"
-          />
-        </label>
-      </div>
+      {canAuto ? (
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              ["auto", "Automatisch"],
+              ["fixed", "Vast bedrag"],
+            ] as const
+          ).map(([key, text]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setMode(key)}
+              className={`min-h-[48px] rounded-xl text-base ring-1 ${
+                mode === key ? "bg-gray-900 text-white ring-gray-900" : "bg-white text-gray-800 ring-gray-300"
+              }`}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500">
+          Vul bij Doel een doelbedrag en een datum in, dan rekent de app het maandbedrag zelf uit.
+        </p>
+      )}
+
+      {mode === "auto" && canAuto ? (
+        <p className="rounded-xl bg-gray-50 p-4 text-base text-gray-700">
+          {autoAmount != null
+            ? `€${autoAmount} per maand — berekend uit je doelbedrag en doeldatum, en past zich aan naarmate je spaart.`
+            : "Je hebt je doel al gehaald, of de doeldatum is voorbij."}
+        </p>
+      ) : (
+        <div>
+          <label className={label}>Bedrag per maand dat je wilt sparen</label>
+          <label className="flex h-[52px] items-center gap-2 rounded-xl border border-gray-300 px-4">
+            <span className="text-gray-400">€</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="1"
+              min="0"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="Geen maandelijkse inleg"
+              className="h-full min-w-0 flex-1 bg-transparent text-lg outline-none"
+            />
+          </label>
+        </div>
+      )}
+
       <button
         type="button"
-        disabled={isPending || value === (initial != null ? String(initial) : "")}
-        onClick={() => run(async () => { await setPotMonthlyAmount(potId, value ? Number(value) : null); })}
+        disabled={isPending || unchanged}
+        onClick={() =>
+          run(async () => {
+            await setPotMonthlyPlan(potId, mode === "fixed" && value ? Number(value) : null, mode === "auto" && canAuto);
+          })
+        }
         className={primary}
       >
         {isPending ? "Bezig…" : "Opslaan"}
@@ -76,8 +133,9 @@ export function MonthlyPlanForm({ potId, initial }: { potId: string; initial: nu
   );
 }
 
-export function EntryForm({ potId }: { potId: string }) {
+export function EntryForm({ potId, hasTarget }: { potId: string; hasTarget: boolean }) {
   const [amount, setAmount] = useState("");
+  const [spent, setSpent] = useState(false);
   const [note, setNote] = useState("");
   const { isPending, message, run } = useRun();
 
@@ -85,8 +143,9 @@ export function EntryForm({ potId }: { potId: string }) {
     run(async () => {
       const value = Number(amount);
       if (!(value > 0)) throw new Error("Vul een bedrag in.");
-      await addPotEntry(potId, value, direction, note.trim() || null);
+      await addPotEntry(potId, value, direction, note.trim() || null, direction === "withdraw" && hasTarget ? spent : undefined);
       setAmount("");
+      setSpent(false);
       setNote("");
     });
 
@@ -112,6 +171,12 @@ export function EntryForm({ potId }: { potId: string }) {
         placeholder="Notitie (optioneel)"
         className={input}
       />
+      {hasTarget && (
+        <label className="flex min-h-[44px] items-center gap-3 text-base text-gray-700">
+          <input type="checkbox" checked={spent} onChange={(e) => setSpent(e.target.checked)} />
+          Bij opnemen: uitgegeven aan het doel (verlaagt het doelbedrag)
+        </label>
+      )}
       <div className="flex gap-2">
         <button type="button" disabled={isPending} onClick={() => submit("deposit")} className={`${primary} flex-1`}>
           Inleggen
@@ -164,7 +229,7 @@ export function SettingsForms({
           type="text"
           value={match}
           onChange={(e) => setMatch(e.target.value)}
-          placeholder="bv. Z16377129 of de naam van het potje"
+          placeholder="Leeg = de naam van het potje"
           className={input}
         />
         <button
@@ -252,7 +317,7 @@ export function SettingsForms({
 export function EntryList({
   entries,
 }: {
-  entries: { id: string; amount: number; note: string | null; entry_date: string; transaction_id: string | null }[];
+  entries: { id: string; amount: number; note: string | null; entry_date: string; transaction_id: string | null; goal_spend?: string | null }[];
 }) {
   const { isPending, run } = useRun();
   if (entries.length === 0) {
@@ -266,7 +331,10 @@ export function EntryList({
             <p className="truncate text-base text-gray-900">
               {e.note ?? (e.transaction_id ? "Automatisch herkend" : e.amount >= 0 ? "Inleg" : "Opname")}
             </p>
-            <p className="text-sm text-gray-500">{new Date(e.entry_date).toLocaleDateString("nl-NL")}</p>
+            <p className="text-sm text-gray-500">
+              {new Date(e.entry_date).toLocaleDateString("nl-NL")}
+              {e.goal_spend === "yes" && " · uitgegeven aan doel"}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span className={`text-base font-medium ${e.amount >= 0 ? "text-teal-700" : "text-gray-900"}`}>

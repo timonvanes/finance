@@ -4,13 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { matchPotTransfers, rematchPotHistory } from "@/lib/pots/matching";
 import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
 import { computePotBalance } from "@/lib/pots/balance";
+import { effectiveMonthly } from "@/lib/pots/insights";
 
 export async function getPots() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, created_at, target_amount, target_date, monthly_amount, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id)"
+      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -29,7 +30,8 @@ export async function createPot(formData: FormData) {
   const targetRaw = formData.get("targetAmount") as string;
   const targetAmount = targetRaw ? Number(targetRaw) : null;
   const targetDate = (formData.get("targetDate") as string) || null;
-  const matchText = ((formData.get("matchText") as string) || "").trim() || null;
+  // No recognition text given: the pot's own name is what to look for.
+  const matchText = ((formData.get("matchText") as string) || "").trim() || name;
   const monthlyRaw = formData.get("monthlyAmount") as string;
   const monthlyAmount = monthlyRaw ? Number(monthlyRaw) : null;
   const openingBalanceRaw = formData.get("openingBalance") as string;
@@ -56,6 +58,7 @@ export async function createPot(formData: FormData) {
     kind,
     match_text: matchText,
     monthly_amount: monthlyAmount && monthlyAmount > 0 ? monthlyAmount : null,
+    monthly_auto: !(monthlyAmount && monthlyAmount > 0) && !!(targetAmount && targetAmount > 0 && targetDate),
     target_amount: targetAmount && targetAmount > 0 ? targetAmount : null,
     target_date: targetAmount && targetAmount > 0 ? targetDate : null,
     opening_balance: openingBalanceRaw ? Number(openingBalanceRaw) : 0,
@@ -69,11 +72,18 @@ export async function createPot(formData: FormData) {
 
 export async function updatePotTarget(potId: string, targetAmount: number | null, targetDate: string | null) {
   const supabase = await createClient();
+  const hasGoal = !!(targetAmount && targetAmount > 0);
+
+  const { data: pot } = await supabase.from("pots").select("monthly_amount").eq("id", potId).single();
   const { error } = await supabase
     .from("pots")
     .update({
-      target_amount: targetAmount && targetAmount > 0 ? targetAmount : null,
-      target_date: targetAmount && targetAmount > 0 ? targetDate : null,
+      target_amount: hasGoal ? targetAmount : null,
+      target_date: hasGoal ? targetDate : null,
+      // A goal with a date means the monthly plan can be worked out for you,
+      // unless you chose a fixed amount yourself.
+      ...(hasGoal && targetDate && !pot?.monthly_amount ? { monthly_auto: true } : {}),
+      ...(!hasGoal ? { monthly_auto: false } : {}),
     })
     .eq("id", potId);
   if (error) throw error;
@@ -101,7 +111,12 @@ export async function deletePot(potId: string) {
 // ongoing sync only checks newly-synced transactions going forward.
 export async function updatePotMatchText(potId: string, matchText: string | null) {
   const supabase = await createClient();
-  const trimmed = matchText?.trim() || null;
+  let trimmed = matchText?.trim() || null;
+  if (!trimmed) {
+    // Empty means "use the pot's name".
+    const { data: pot } = await supabase.from("pots").select("name").eq("id", potId).single();
+    trimmed = pot?.name?.trim() || null;
+  }
   const { error } = await supabase.from("pots").update({ match_text: trimmed }).eq("id", potId);
   if (error) throw error;
 
@@ -111,42 +126,91 @@ export async function updatePotMatchText(potId: string, matchText: string | null
   return 0;
 }
 
-// direction "withdraw" stores the amount negative.
+// Lowers (or, undoing, restores) the goal by an amount that was spent on it.
+async function adjustTarget(supabase: Awaited<ReturnType<typeof createClient>>, potId: string, delta: number) {
+  const { data: pot } = await supabase.from("pots").select("target_amount").eq("id", potId).single();
+  const current = pot?.target_amount != null ? Number(pot.target_amount) : null;
+  if (current == null) {
+    // The goal was fully spent earlier; undoing brings the spent part back.
+    if (delta > 0) await supabase.from("pots").update({ target_amount: delta }).eq("id", potId);
+    return;
+  }
+  const next = Math.round((current + delta) * 100) / 100;
+  await supabase
+    .from("pots")
+    .update({ target_amount: next > 0 ? next : null })
+    .eq("id", potId);
+}
+
+// direction "withdraw" stores the amount negative. For a withdrawal,
+// goalSpend says whether the money was spent on the goal (true lowers the
+// goal by that amount); undefined leaves the question open.
 export async function addPotEntry(
   potId: string,
   amount: number,
   direction: "deposit" | "withdraw",
-  note: string | null
+  note: string | null,
+  goalSpend?: boolean
 ) {
   if (!amount || amount <= 0) return;
   const supabase = await createClient();
+  const withdraw = direction === "withdraw";
   const { error } = await supabase.from("pot_entries").insert({
     pot_id: potId,
-    amount: direction === "withdraw" ? -amount : amount,
+    amount: withdraw ? -amount : amount,
     note,
+    ...(withdraw && goalSpend !== undefined ? { goal_spend: goalSpend ? "yes" : "no" } : {}),
   });
   if (error) throw error;
+  if (withdraw && goalSpend) await adjustTarget(supabase, potId, -amount);
+}
+
+// Answers "was this withdrawal spent on the goal?". Yes lowers the goal by
+// the amount; changing the answer later puts it back.
+export async function answerGoalSpend(entryId: string, answer: "yes" | "no") {
+  const supabase = await createClient();
+  const { data: entry, error } = await supabase
+    .from("pot_entries")
+    .select("pot_id, amount, goal_spend")
+    .eq("id", entryId)
+    .single();
+  if (error) throw error;
+  if (entry.goal_spend === answer) return;
+
+  const spent = Math.abs(Number(entry.amount));
+  if (entry.goal_spend === "yes") await adjustTarget(supabase, entry.pot_id, spent);
+  if (answer === "yes") await adjustTarget(supabase, entry.pot_id, -spent);
+
+  const { error: updateError } = await supabase.from("pot_entries").update({ goal_spend: answer }).eq("id", entryId);
+  if (updateError) throw updateError;
 }
 
 export async function deletePotEntry(entryId: string) {
   const supabase = await createClient();
+  const { data: entry } = await supabase
+    .from("pot_entries")
+    .select("pot_id, amount, goal_spend")
+    .eq("id", entryId)
+    .single();
   const { error } = await supabase.from("pot_entries").delete().eq("id", entryId);
   if (error) throw error;
+  if (entry?.goal_spend === "yes") await adjustTarget(supabase, entry.pot_id, Math.abs(Number(entry.amount)));
 }
 
-export async function setPotMonthlyAmount(potId: string, amount: number | null) {
+// auto = calculate the amount from target and date; otherwise a fixed amount
+// (or none).
+export async function setPotMonthlyPlan(potId: string, amount: number | null, auto: boolean) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("pots")
-    .update({ monthly_amount: amount && amount > 0 ? amount : null })
+    .update({ monthly_amount: !auto && amount && amount > 0 ? amount : null, monthly_auto: auto })
     .eq("id", potId);
   if (error) throw error;
 }
 
 export async function getPlannedSavingsTotal() {
-  const supabase = await createClient();
-  const { data } = await supabase.from("pots").select("monthly_amount").not("monthly_amount", "is", null);
-  return (data ?? []).reduce((sum, p) => sum + Number(p.monthly_amount), 0);
+  const pots = await getPots();
+  return pots.reduce((sum, pot) => sum + (effectiveMonthly(pot, computePotBalance(pot)) ?? 0), 0);
 }
 
 // One tap for "I transferred the planned amount this month" when the

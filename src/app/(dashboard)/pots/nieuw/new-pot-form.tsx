@@ -47,7 +47,7 @@ export function NewPotForm() {
         <input
           type="text"
           name="matchText"
-          placeholder="bv. Z16377129 of de naam van het potje"
+          placeholder="Leeg = de naam van het potje"
           className={input}
         />
         <p className="mt-1 text-xs text-gray-400">

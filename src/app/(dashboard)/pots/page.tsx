@@ -2,15 +2,15 @@ import Link from "next/link";
 import { getPots, getSavingsInbox } from "@/actions/pots";
 import { getDashboardSummary } from "@/actions/dashboard";
 import { computePotBalance } from "@/lib/pots/balance";
-import { computeSchedule, depositedInPeriod } from "@/lib/pots/insights";
+import { computeSchedule, depositedInPeriod, effectiveMonthly, netInPeriod } from "@/lib/pots/insights";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
-import { InvestmentCalculator } from "./investment-calculator";
 import { InfoButton } from "../info-button";
 import { PlanRow } from "./plan-row";
 import { SavingsInbox } from "./inbox";
 import { LeftoverCard } from "./leftover-card";
 import { AutoDetect } from "./auto-detect";
+import { GoalSpendCard } from "./goal-spend-card";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -25,12 +25,24 @@ export default async function PotsPage() {
   const balances = new Map(pots.map((p) => [p.id, computePotBalance(p)]));
   const totalBalance = [...balances.values()].reduce((s, b) => s + b, 0);
 
-  const planned = pots.filter((p) => p.monthly_amount);
-  const plannedTotal = planned.reduce((s, p) => s + Number(p.monthly_amount), 0);
+  // The plan per pot for this period (automatic plans follow the goal).
+  const plans = new Map(
+    pots.map((p) => [p.id, effectiveMonthly(p, (balances.get(p.id) ?? 0) - netInPeriod(p, 0, startDay))])
+  );
+  const planned = pots.filter((p) => plans.get(p.id));
+  const plannedTotal = planned.reduce((s, p) => s + (plans.get(p.id) ?? 0), 0);
   const depositedTotal = pots.reduce((s, p) => s + depositedInPeriod(p, 0, startDay), 0);
   const plannedDeposited = planned.reduce(
-    (s, p) => s + Math.min(depositedInPeriod(p, 0, startDay), Number(p.monthly_amount)),
+    (s, p) => s + Math.min(depositedInPeriod(p, 0, startDay), plans.get(p.id) ?? 0),
     0
+  );
+
+  const pendingSpend = pots.flatMap((p) =>
+    p.target_amount
+      ? p.pot_entries
+          .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= p.opening_balance_date)
+          .map((e) => ({ id: e.id, potName: p.name, amount: Math.abs(e.amount), date: e.entry_date, note: e.note }))
+      : []
   );
 
   const period = periodRange(0, startDay);
@@ -75,6 +87,8 @@ export default async function PotsPage() {
         )}
       </div>
 
+      {pendingSpend.length > 0 && <GoalSpendCard items={pendingSpend} />}
+
       {planned.length > 0 && (
         <section className="space-y-2">
           <div className="flex items-baseline justify-between px-1">
@@ -89,7 +103,7 @@ export default async function PotsPage() {
                 key={p.id}
                 potId={p.id}
                 name={p.name}
-                planned={Number(p.monthly_amount)}
+                planned={plans.get(p.id) ?? 0}
                 deposited={depositedInPeriod(p, 0, startDay)}
               />
             ))}
@@ -167,14 +181,6 @@ export default async function PotsPage() {
         )}
       </section>
 
-      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
-        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
-          Beleggen: wat kan €X per maand opleveren?
-        </summary>
-        <div className="p-3">
-          <InvestmentCalculator />
-        </div>
-      </details>
     </div>
   );
 }

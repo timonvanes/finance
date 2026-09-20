@@ -2,9 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPots } from "@/actions/pots";
 import { computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
-import { averageMonthlyNet, computeSchedule, depositedInPeriod, projectedFinish } from "@/lib/pots/insights";
+import {
+  averageMonthlyNet,
+  computeSchedule,
+  depositedInPeriod,
+  effectiveMonthly,
+  netInPeriod,
+  projectedFinish,
+} from "@/lib/pots/insights";
 import { getMonthStartDay } from "@/lib/settings";
 import { InfoButton } from "../../info-button";
+import { GoalSpendCard } from "../goal-spend-card";
 import { EntryForm, EntryList, MonthlyPlanForm, SettingsForms } from "../pot-detail-forms";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -22,6 +30,15 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   const finish = projectedFinish(balance, pot.target_amount, pace);
   const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
   const deposited = depositedInPeriod(pot, 0, startDay);
+  const baseBalance = balance - netInPeriod(pot, 0, startDay);
+  const monthly = effectiveMonthly(pot, baseBalance);
+  const canAuto = !!(pot.target_amount && pot.target_date);
+  const autoAmount = canAuto ? effectiveMonthly({ ...pot, monthly_auto: true }, baseBalance) : null;
+  const pending = pot.target_amount
+    ? pot.pot_entries
+        .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= pot.opening_balance_date)
+        .map((e) => ({ id: e.id, potName: pot.name, amount: Math.abs(e.amount), date: e.entry_date, note: e.note }))
+    : [];
   const entries = [...pot.pot_entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
 
   return (
@@ -48,6 +65,8 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
           </p>
         </InfoButton>
       </div>
+
+      {pending.length > 0 && <GoalSpendCard items={pending} />}
 
       <div className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
         <div>
@@ -104,17 +123,22 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
             <h3 className="text-lg font-semibold text-gray-900">Maandplan</h3>
             <p className="text-sm text-gray-500">
               Hoeveel je per maand in dit potje wilt zetten.
-              {pot.monthly_amount &&
-                ` Deze periode ingelegd: ${euro(deposited)} van ${euro(Number(pot.monthly_amount))}.`}
+              {monthly != null && ` Deze periode ingelegd: ${euro(deposited)} van ${euro(monthly)}.`}
             </p>
-            <MonthlyPlanForm potId={pot.id} initial={pot.monthly_amount != null ? Number(pot.monthly_amount) : null} />
+            <MonthlyPlanForm
+              potId={pot.id}
+              initial={pot.monthly_amount != null ? Number(pot.monthly_amount) : null}
+              auto={!!pot.monthly_auto}
+              autoAmount={autoAmount}
+              canAuto={canAuto}
+            />
           </div>
           <div className="space-y-3 border-t border-gray-100 pt-6">
             <h3 className="text-lg font-semibold text-gray-900">Saldo handmatig aanpassen</h3>
             <p className="text-sm text-gray-500">
               Alleen nodig als een overboeking niet automatisch werd herkend, of voor geld dat niet via je bank liep.
             </p>
-            <EntryForm potId={pot.id} />
+            <EntryForm potId={pot.id} hasTarget={!!pot.target_amount} />
           </div>
           <div className="border-t border-gray-100 pt-6">
           <SettingsForms

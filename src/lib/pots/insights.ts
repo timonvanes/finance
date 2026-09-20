@@ -1,4 +1,5 @@
 import { periodRange } from "@/lib/month";
+import { computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 
 export interface PotForInsights {
   created_at?: string;
@@ -7,6 +8,7 @@ export interface PotForInsights {
   target_amount: number | null;
   target_date: string | null;
   monthly_amount: number | null;
+  monthly_auto?: boolean;
   pot_entries: { amount: number; entry_date: string }[];
 }
 
@@ -70,4 +72,24 @@ export function projectedFinish(balance: number, target: number | null, monthlyP
   if (!target || balance >= target || monthlyPace <= 0) return null;
   const months = Math.ceil((target - balance) / monthlyPace);
   return new Date(now.getFullYear(), now.getMonth() + months, now.getDate());
+}
+
+// What was put in or taken out (net) during one budget period.
+export function netInPeriod(pot: PotForInsights, monthsAgo: number, startDay: number): number {
+  const { start, end } = periodRange(monthsAgo, startDay);
+  return counted(pot)
+    .filter((e) => e.entry_date >= start && e.entry_date < end)
+    .reduce((sum, e) => sum + e.amount, 0);
+}
+
+// The monthly amount to save: either the fixed plan, or — when the plan is
+// automatic — whatever it takes to reach the target by the target date
+// (rounded up to whole euros). baseBalance should be the balance at the
+// start of the period so the amount doesn't shrink as you deposit into it.
+export function effectiveMonthly(pot: PotForInsights, baseBalance: number): number | null {
+  if (pot.monthly_auto && pot.target_amount && pot.target_date) {
+    const required = computeRequiredMonthlyDeposit(baseBalance, pot.target_amount, pot.target_date);
+    return required && required > 0 ? Math.ceil(required) : null;
+  }
+  return pot.monthly_amount ? Number(pot.monthly_amount) : null;
 }
