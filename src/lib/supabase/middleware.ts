@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   "/terms",
   "/api/enablebanking/callback",
   "/api/cron/keep-alive",
+  "/api/inbound/mail",
 ];
 
 export async function updateSession(request: NextRequest) {

@@ -9,6 +9,7 @@ import {
   linkRefundToOrder,
   recordKlarnaCredit,
   setOrderPaymentMethod,
+  setReturnDeadline,
   toggleItemReturned,
   unlinkRefund,
   updateOrderCosts,
@@ -30,6 +31,9 @@ interface IncomingTransaction {
 }
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+
+export const daysLeft = (iso: string) =>
+  Math.ceil((new Date(`${iso}T23:59:59`).getTime() - Date.now()) / 86_400_000);
 
 const STATUS_LABEL: Record<string, string> = {
   not_returned: "Niks retour",
@@ -56,6 +60,7 @@ export function OrderRow({
     return_fee: number;
     payment_method: string;
     credited_amount: number | null;
+    return_deadline: string | null;
     refund_status: string;
     order_items: Item[];
     refund_transaction: {
@@ -115,6 +120,36 @@ export function OrderRow({
           )}
         </div>
       </div>
+
+      {order.refund_status === "not_returned" && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {order.return_deadline && (
+            <span
+              className={`rounded-full px-3 py-1 font-medium ${
+                daysLeft(order.return_deadline) <= 3 ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"
+              }`}
+            >
+              {daysLeft(order.return_deadline) < 0
+                ? "Retourtermijn verlopen"
+                : `Retour vóór ${new Date(order.return_deadline).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} · nog ${daysLeft(order.return_deadline)} dagen`}
+            </span>
+          )}
+          <label className="flex items-center gap-2 text-gray-500">
+            {order.return_deadline ? "Wijzig" : "Retour vóór"}
+            <input
+              type="date"
+              defaultValue={order.return_deadline ?? ""}
+              onChange={(e) =>
+                startTransition(async () => {
+                  await setReturnDeadline(order.id, e.target.value || null);
+                  router.refresh();
+                })
+              }
+              className="min-h-[40px] rounded-lg border border-gray-300 bg-white px-2 text-gray-800"
+            />
+          </label>
+        </div>
+      )}
 
       {order.order_items.length > 0 && (
         <ul className="divide-y divide-gray-100 rounded-xl bg-gray-50 px-3">
