@@ -204,12 +204,75 @@ function findPaymentRequestMatch(
   return null;
 }
 
+// The app forwards money received on bunq to the bank as "<code> doorgestort".
+// When that transfer shows up here, link it to the reclaim it settles so it
+// counts as the paid-back amount instead of loose income.
+export async function matchBunqSweeps(supabase: SupabaseClient) {
+  const { data: links } = await supabase
+    .from("bunq_payment_links")
+    .select(
+      "id, reference_code, amount, reclaim_id, payment_request_id, reclaims(settled_transaction_id), payment_requests(settled_transaction_id)"
+    )
+    .eq("status", "swept")
+    .order("swept_at", { ascending: true });
+
+  const unsettled = (links ?? []).filter((l) => {
+    const rc = Array.isArray(l.reclaims) ? l.reclaims[0] : l.reclaims;
+    const pr = Array.isArray(l.payment_requests) ? l.payment_requests[0] : l.payment_requests;
+    return !(rc?.settled_transaction_id ?? pr?.settled_transaction_id);
+  });
+  if (unsettled.length === 0) return;
+
+  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [{ data: txs }, { data: usedReclaims }, { data: usedRequests }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("id, amount, raw_description")
+      .gt("amount", 0)
+      .gte("booking_date", since)
+      .ilike("raw_description", "%doorgestort%"),
+    supabase.from("reclaims").select("settled_transaction_id").not("settled_transaction_id", "is", null),
+    supabase.from("payment_requests").select("settled_transaction_id").not("settled_transaction_id", "is", null),
+  ]);
+  const used = new Set([
+    ...(usedReclaims ?? []).map((r) => r.settled_transaction_id),
+    ...(usedRequests ?? []).map((r) => r.settled_transaction_id),
+  ]);
+
+  for (const link of unsettled) {
+    if (!link.reference_code) continue;
+    const tx = (txs ?? []).find(
+      (t) =>
+        !used.has(t.id) &&
+        Math.abs(Number(t.amount) - Number(link.amount)) < AMOUNT_TOLERANCE &&
+        descriptionHasCode((t.raw_description ?? "").toUpperCase(), link.reference_code!)
+    );
+    if (!tx) continue;
+    used.add(tx.id);
+    if (link.reclaim_id) {
+      await supabase.from("reclaims").update({ settled_transaction_id: tx.id }).eq("id", link.reclaim_id);
+    }
+    if (link.payment_request_id) {
+      await supabase
+        .from("payment_requests")
+        .update({ settled_transaction_id: tx.id })
+        .eq("id", link.payment_request_id);
+      await supabase
+        .from("reclaims")
+        .update({ settled_transaction_id: tx.id })
+        .eq("payment_request_id", link.payment_request_id);
+    }
+    await supabase.from("transactions").update({ reviewed: true }).eq("id", tx.id);
+  }
+}
+
 // Called from the sync job for freshly-synced incoming transactions.
 export async function autoMatchIncomingTransactions(
   supabase: SupabaseClient,
   incomingTransactionIds: string[]
 ) {
   if (incomingTransactionIds.length === 0) return;
+  await matchBunqSweeps(supabase);
 
   const { data: transactions } = await supabase
     .from("transactions")
