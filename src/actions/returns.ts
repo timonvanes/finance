@@ -46,7 +46,7 @@ export async function getOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      `id, merchant_name, order_date, total_amount, refund_status, refund_transaction_id, created_at,
+      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, refund_status, refund_transaction_id, created_at,
       order_items(id, description, price, quantity, returned),
       refund_transaction:transactions!orders_refund_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
@@ -143,6 +143,20 @@ export async function unlinkRefund(orderId: string) {
     .update({
       refund_transaction_id: null,
       refund_status: anyReturned ? "pending" : "not_returned",
+    })
+    .eq("id", orderId);
+  if (error) throw error;
+}
+
+// Shipping that's refunded along with the items (positive) and a return fee
+// held back from the refund (positive number, subtracted).
+export async function updateOrderCosts(orderId: string, refundedShipping: number, returnFee: number) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("orders")
+    .update({
+      refunded_shipping: Math.max(0, refundedShipping || 0),
+      return_fee: Math.max(0, returnFee || 0),
     })
     .eq("id", orderId);
   if (error) throw error;
