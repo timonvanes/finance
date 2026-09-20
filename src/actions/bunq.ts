@@ -73,7 +73,19 @@ export async function createBunqPaymentLink(kind: "reclaim" | "request", id: str
   const reusable = (existing ?? []).find((l) => Math.abs(Number(l.amount) - amount) < 0.005);
   if (reusable) return { url: reusable.share_url as string };
 
-  const tab = await createBunqTab(userId, amount, `${description} ${code}`.trim());
+  // Same code and same amount (a group split): everyone gets the one link.
+  // A different amount always gets its own link.
+  const { data: shared } = await supabase
+    .from("bunq_payment_links")
+    .select("tab_id, share_url, amount")
+    .eq("reference_code", code)
+    .eq("status", "open")
+    .order("created_at", { ascending: false });
+  const sharedTab = (shared ?? []).find((l) => Math.abs(Number(l.amount) - amount) < 0.005);
+
+  const tab = sharedTab
+    ? { tabId: Number(sharedTab.tab_id), url: sharedTab.share_url as string }
+    : await createBunqTab(userId, amount, `${description} ${code}`.trim());
   const { error: insertError } = await supabase.from("bunq_payment_links").insert({
     user_id: userId,
     [column]: id,
