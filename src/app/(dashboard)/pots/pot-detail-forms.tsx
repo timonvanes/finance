@@ -136,6 +136,7 @@ export function MonthlyPlanForm({
 export function EntryForm({ potId, hasTarget }: { potId: string; hasTarget: boolean }) {
   const [amount, setAmount] = useState("");
   const [spent, setSpent] = useState(false);
+  const [spentAmount, setSpentAmount] = useState("");
   const [note, setNote] = useState("");
   const { isPending, message, run } = useRun();
 
@@ -143,9 +144,16 @@ export function EntryForm({ potId, hasTarget }: { potId: string; hasTarget: bool
     run(async () => {
       const value = Number(amount);
       if (!(value > 0)) throw new Error("Vul een bedrag in.");
-      await addPotEntry(potId, value, direction, note.trim() || null, direction === "withdraw" && hasTarget ? spent : undefined);
+      const goalSpendAmount =
+        direction === "withdraw" && hasTarget
+          ? spent
+            ? Math.min(spentAmount ? Number(spentAmount) : value, value)
+            : 0
+          : undefined;
+      await addPotEntry(potId, value, direction, note.trim() || null, goalSpendAmount);
       setAmount("");
       setSpent(false);
+      setSpentAmount("");
       setNote("");
     });
 
@@ -175,6 +183,22 @@ export function EntryForm({ potId, hasTarget }: { potId: string; hasTarget: bool
         <label className="flex min-h-[44px] items-center gap-3 text-base text-gray-700">
           <input type="checkbox" checked={spent} onChange={(e) => setSpent(e.target.checked)} />
           Bij opnemen: uitgegeven aan het doel (verlaagt het doelbedrag)
+        </label>
+      )}
+      {hasTarget && spent && (
+        <label className="flex h-[52px] items-center gap-2 rounded-xl border border-gray-300 px-4">
+          <span className="text-sm text-gray-500">Waarvan voor het doel</span>
+          <span className="text-gray-400">€</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={spentAmount}
+            onChange={(e) => setSpentAmount(e.target.value)}
+            placeholder="alles"
+            className="h-full min-w-0 flex-1 bg-transparent text-right text-lg outline-none"
+          />
         </label>
       )}
       <div className="flex gap-2">
@@ -317,7 +341,7 @@ export function SettingsForms({
 export function EntryList({
   entries,
 }: {
-  entries: { id: string; amount: number; note: string | null; entry_date: string; transaction_id: string | null; goal_spend?: string | null }[];
+  entries: { id: string; amount: number; note: string | null; entry_date: string; transaction_id: string | null; goal_spend?: string | null; goal_spend_amount?: number | null }[];
 }) {
   const { isPending, run } = useRun();
   if (entries.length === 0) {
@@ -333,7 +357,7 @@ export function EntryList({
             </p>
             <p className="text-sm text-gray-500">
               {new Date(e.entry_date).toLocaleDateString("nl-NL")}
-              {e.goal_spend === "yes" && " · uitgegeven aan doel"}
+              {e.goal_spend === "yes" && ` · ${euro(Number(e.goal_spend_amount ?? Math.abs(e.amount)))} uitgegeven aan doel`}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

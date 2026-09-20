@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { matchPotTransfers, rematchPotHistory } from "@/lib/pots/matching";
 import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
@@ -11,7 +12,7 @@ export async function getPots() {
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend)"
+      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -68,6 +69,10 @@ export async function createPot(formData: FormData) {
 
   // Pick up transfers that already happened.
   if (matchText) await rematchPotHistory(supabase, created.id);
+
+  // The client keeps visited pages for a minute; without this the new pot
+  // wouldn't show up on the list until that cache expired.
+  revalidatePath("/", "layout");
 }
 
 export async function updatePotTarget(potId: string, targetAmount: number | null, targetDate: string | null) {
@@ -105,6 +110,7 @@ export async function deletePot(potId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("pots").delete().eq("id", potId);
   if (error) throw error;
+  revalidatePath("/", "layout");
 }
 
 // Setting/changing the match text also re-scans existing history, since
@@ -143,45 +149,55 @@ async function adjustTarget(supabase: Awaited<ReturnType<typeof createClient>>, 
 }
 
 // direction "withdraw" stores the amount negative. For a withdrawal,
-// goalSpend says whether the money was spent on the goal (true lowers the
-// goal by that amount); undefined leaves the question open.
+// goalSpendAmount is how much of it was spent on the goal (0 = none, up to
+// the full amount): that part lowers the goal. undefined leaves the question
+// open.
 export async function addPotEntry(
   potId: string,
   amount: number,
   direction: "deposit" | "withdraw",
   note: string | null,
-  goalSpend?: boolean
+  goalSpendAmount?: number
 ) {
   if (!amount || amount <= 0) return;
   const supabase = await createClient();
   const withdraw = direction === "withdraw";
+  const spent = withdraw && goalSpendAmount !== undefined ? Math.min(Math.max(goalSpendAmount, 0), amount) : undefined;
   const { error } = await supabase.from("pot_entries").insert({
     pot_id: potId,
     amount: withdraw ? -amount : amount,
     note,
-    ...(withdraw && goalSpend !== undefined ? { goal_spend: goalSpend ? "yes" : "no" } : {}),
+    ...(spent !== undefined
+      ? { goal_spend: spent > 0 ? "yes" : "no", goal_spend_amount: spent > 0 ? spent : null }
+      : {}),
   });
   if (error) throw error;
-  if (withdraw && goalSpend) await adjustTarget(supabase, potId, -amount);
+  if (spent && spent > 0) await adjustTarget(supabase, potId, -spent);
 }
 
-// Answers "was this withdrawal spent on the goal?". Yes lowers the goal by
-// the amount; changing the answer later puts it back.
-export async function answerGoalSpend(entryId: string, answer: "yes" | "no") {
+// Answers "was this withdrawal spent on the goal?". Yes (optionally only for
+// part of it) lowers the goal by that amount; changing the answer later puts
+// the old amount back first.
+export async function answerGoalSpend(entryId: string, answer: "yes" | "no", amount?: number) {
   const supabase = await createClient();
   const { data: entry, error } = await supabase
     .from("pot_entries")
-    .select("pot_id, amount, goal_spend")
+    .select("pot_id, amount, goal_spend, goal_spend_amount")
     .eq("id", entryId)
     .single();
   if (error) throw error;
-  if (entry.goal_spend === answer) return;
 
-  const spent = Math.abs(Number(entry.amount));
-  if (entry.goal_spend === "yes") await adjustTarget(supabase, entry.pot_id, spent);
-  if (answer === "yes") await adjustTarget(supabase, entry.pot_id, -spent);
+  const total = Math.abs(Number(entry.amount));
+  const newSpent = answer === "yes" ? Math.min(Math.max(amount ?? total, 0.01), total) : 0;
+  const oldSpent = entry.goal_spend === "yes" ? Number(entry.goal_spend_amount ?? total) : 0;
 
-  const { error: updateError } = await supabase.from("pot_entries").update({ goal_spend: answer }).eq("id", entryId);
+  if (oldSpent > 0) await adjustTarget(supabase, entry.pot_id, oldSpent);
+  if (newSpent > 0) await adjustTarget(supabase, entry.pot_id, -newSpent);
+
+  const { error: updateError } = await supabase
+    .from("pot_entries")
+    .update({ goal_spend: answer, goal_spend_amount: answer === "yes" && newSpent < total ? newSpent : null })
+    .eq("id", entryId);
   if (updateError) throw updateError;
 }
 
@@ -189,12 +205,14 @@ export async function deletePotEntry(entryId: string) {
   const supabase = await createClient();
   const { data: entry } = await supabase
     .from("pot_entries")
-    .select("pot_id, amount, goal_spend")
+    .select("pot_id, amount, goal_spend, goal_spend_amount")
     .eq("id", entryId)
     .single();
   const { error } = await supabase.from("pot_entries").delete().eq("id", entryId);
   if (error) throw error;
-  if (entry?.goal_spend === "yes") await adjustTarget(supabase, entry.pot_id, Math.abs(Number(entry.amount)));
+  if (entry?.goal_spend === "yes") {
+    await adjustTarget(supabase, entry.pot_id, Number(entry.goal_spend_amount ?? Math.abs(Number(entry.amount))));
+  }
 }
 
 // auto = calculate the amount from target and date; otherwise a fixed amount

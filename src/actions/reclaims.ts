@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
 import { generateReferenceCode } from "@/lib/reclaims/reference-code";
@@ -218,6 +219,8 @@ export async function createSplitReclaim(formData: FormData) {
     .from("transactions")
     .update({ flagged_for_reclaim: false, reviewed: true })
     .in("id", transactionIds);
+
+  revalidatePath("/", "layout");
 }
 
 export async function markReclaimPaid(reclaimId: string) {

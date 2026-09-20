@@ -10,7 +10,9 @@ import {
 } from "@/actions/dashboard";
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
-import { getPlannedSavingsTotal, getPotsTotalBalance } from "@/actions/pots";
+import { getPots } from "@/actions/pots";
+import { computePotBalance } from "@/lib/pots/balance";
+import { effectiveMonthly } from "@/lib/pots/insights";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
 import { periodRange } from "@/lib/month";
@@ -50,7 +52,7 @@ export default async function DashboardPage({
   const monthsAgo = Math.max(0, parseInt(month ?? "0", 10) || 0);
   const isCurrentMonth = monthsAgo === 0;
 
-  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, potsTotal, freeToSpend, loans, plannedSavings] =
+  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans] =
     await Promise.all([
       getDashboardSummary(monthsAgo),
       getMonthlySpendByCategory(monthsAgo),
@@ -58,15 +60,26 @@ export default async function DashboardPage({
       getBudgetStatus(),
       getSpendingAnomaly(),
       getAccountBalances(),
-      getPotsTotalBalance(),
+      getPots(),
       getFreeToSpendPerMonth(),
       getOpenLoansTotal(),
-      getPlannedSavingsTotal(),
     ]);
+
+  const potBalances = new Map(pots.map((p) => [p.id, computePotBalance(p)]));
+  const potsTotal = [...potBalances.values()].reduce((sum, b) => sum + b, 0);
+  // What to set aside from the next salary: each pot's monthly plan.
+  const reservations = pots
+    .map((p) => ({ id: p.id, name: p.name, amount: effectiveMonthly(p, potBalances.get(p.id) ?? 0) ?? 0 }))
+    .filter((r) => r.amount > 0);
+  const plannedSavings = reservations.reduce((sum, r) => sum + r.amount, 0);
 
   const now = new Date();
   const startDay = await getMonthStartDay();
   const period = periodRange(monthsAgo, startDay);
+  const nextPeriodLabel = periodRange(0, startDay).endDate.toLocaleDateString("nl-NL", {
+    day: "numeric",
+    month: "long",
+  });
   const viewedDate = period.labelDate;
   const rangeLabel =
     startDay === 1
@@ -130,6 +143,31 @@ export default async function DashboardPage({
               na {euro(plannedSavings, 0)} gepland sparen (voor sparen {euro(Math.max(0, freeToSpend), 0)})
             </p>
           )}
+        </section>
+      )}
+
+      {isCurrentMonth && reservations.length > 0 && (
+        <section className={`${card} space-y-3 p-5`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm text-gray-500">Reserveren van je volgende loon</p>
+              <p className="text-xs text-gray-400">voor sparen naar je potjes, vanaf {nextPeriodLabel}</p>
+            </div>
+            <p className="text-2xl font-semibold text-gray-900">{euro(plannedSavings, 0)}</p>
+          </div>
+          <ul className="divide-y divide-gray-100 border-t border-gray-100">
+            {reservations.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/pots/${r.id}`}
+                  className="flex min-h-[48px] items-center justify-between gap-3 text-base active:bg-gray-50"
+                >
+                  <span className="min-w-0 truncate text-gray-700">{r.name}</span>
+                  <span className="shrink-0 font-medium text-gray-900">{euro(r.amount, 0)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
