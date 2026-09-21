@@ -8,6 +8,8 @@ import { TransactionNote } from "./transaction-note";
 import { ExpenseContribution } from "./expense-contribution";
 import { RecategorizeButton } from "./recategorize-button";
 import { getLoanPickerData } from "@/actions/loans";
+import { getOutgoingOptions, getPassthroughsForTransactions } from "@/actions/passthrough";
+import { IncomeSplit } from "./income-split";
 
 export const maxDuration = 60;
 
@@ -82,7 +84,8 @@ export default async function TransactionsPage({
   const allTxIds = (transactions ?? []).map((tx) => tx.id);
   const expenseTxIds = (transactions ?? []).filter((tx) => tx.amount < 0).map((tx) => tx.id);
   const NONE = ["00000000-0000-0000-0000-000000000000"];
-  const [loanData, { data: reclaimRows }, { data: settledRows }, allContributions] = await Promise.all([
+  const incomeTxIds = (transactions ?? []).filter((tx) => tx.amount > 0 && !tx.is_transfer).map((tx) => tx.id);
+  const [loanData, { data: reclaimRows }, { data: settledRows }, allContributions, passthroughs, outgoingOptions] = await Promise.all([
     getLoanPickerData(allTxIds),
     supabase
       .from("reclaims")
@@ -94,6 +97,8 @@ export default async function TransactionsPage({
       .select("id, payment_request_id, settled_transaction_id, people(name)")
       .in("settled_transaction_id", allTxIds.length > 0 ? allTxIds : NONE),
     getContributionsForTransactions(expenseTxIds),
+    getPassthroughsForTransactions(incomeTxIds),
+    incomeTxIds.length > 0 ? getOutgoingOptions() : Promise.resolve([]),
   ]);
   const txWithReclaim = new Set((reclaimRows ?? []).map((r) => r.transaction_id));
   const settledBy = new Map<string, { kind: "reclaim" | "request"; id: string; label: string }>();
@@ -239,6 +244,15 @@ export default async function TransactionsPage({
                   </p>
                 )}
                 <TransactionNote transactionId={tx.id} note={tx.note} />
+                {tx.amount > 0 && !tx.is_transfer && (
+                  <IncomeSplit
+                    transactionId={tx.id}
+                    amount={tx.amount}
+                    people={loanData.people}
+                    splits={passthroughs.filter((s) => s.sourceTransactionId === tx.id)}
+                    outgoing={outgoingOptions}
+                  />
+                )}
                 {tx.amount < 0 && (
                   <ExpenseContribution
                     transactionId={tx.id}

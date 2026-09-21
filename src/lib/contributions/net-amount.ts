@@ -21,7 +21,7 @@ export async function getContributionAdjustments(
   if (transactionIds.length === 0) return empty;
 
   const idList = transactionIds.join(",");
-  const [{ data: contributions }, { data: reclaims }] = await Promise.all([
+  const [{ data: contributions }, { data: reclaims }, { data: passthroughs }] = await Promise.all([
     supabase
       .from("expense_contributions")
       .select("expense_transaction_id, source_transaction_id, amount")
@@ -31,6 +31,8 @@ export async function getContributionAdjustments(
       .select("transaction_id, settled_transaction_id, computed_amount")
       .in("status", ["requested", "paid"])
       .or(`transaction_id.in.(${idList}),settled_transaction_id.in.(${idList})`),
+    // Parts of an incoming payment that belong to housemates are not income.
+    supabase.from("income_passthroughs").select("source_transaction_id, amount").in("source_transaction_id", transactionIds),
   ]);
 
   const expenseReduction = new Map<string, number>();
@@ -44,6 +46,10 @@ export async function getContributionAdjustments(
     if (c.source_transaction_id) {
       sourceReduction.set(c.source_transaction_id, (sourceReduction.get(c.source_transaction_id) ?? 0) + c.amount);
     }
+  }
+
+  for (const p of passthroughs ?? []) {
+    sourceReduction.set(p.source_transaction_id, (sourceReduction.get(p.source_transaction_id) ?? 0) + Number(p.amount));
   }
 
   for (const r of reclaims ?? []) {
