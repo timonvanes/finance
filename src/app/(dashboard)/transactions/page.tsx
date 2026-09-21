@@ -256,6 +256,7 @@ export default async function TransactionsPage({
                 {tx.amount < 0 && (
                   <ExpenseContribution
                     transactionId={tx.id}
+                    expenseAmount={Math.abs(tx.amount)}
                     contributions={(contributionsByTx.get(tx.id) ?? []).map((c) => ({
                       id: c.id,
                       amount: c.amount,
