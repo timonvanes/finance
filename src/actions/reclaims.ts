@@ -61,6 +61,8 @@ export async function markOwnExpense(formData: FormData) {
     .update({ reviewed: true })
     .eq("id", transactionId);
   if (error) throw error;
+  // Without this the phone keeps showing the cached "Te doen" list for a minute.
+  revalidatePath("/", "layout");
 }
 
 // Third triage option: the automatic own-account-transfer detection
@@ -73,6 +75,7 @@ export async function markAsTransfer(transactionId: string) {
     .update({ is_transfer: true, reviewed: true, flagged_for_reclaim: false })
     .eq("id", transactionId);
   if (error) throw error;
+  revalidatePath("/", "layout");
 }
 
 export async function unreviewTransaction(transactionId: string) {
@@ -82,6 +85,7 @@ export async function unreviewTransaction(transactionId: string) {
     .update({ reviewed: false, is_transfer: false })
     .eq("id", transactionId);
   if (error) throw error;
+  revalidatePath("/", "layout");
 }
 
 // Incoming transactions not yet used to settle another reclaim — candidates

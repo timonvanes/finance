@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { buildCategorizer, counterpartyKey } from "@/lib/categorization/engine";
 
@@ -153,6 +154,7 @@ export async function updateTransactionCategory(
   ]);
   if (updateError) throw updateError;
   if (ruleResult.error) throw ruleResult.error;
+  revalidatePath("/", "layout");
 }
 
 export async function updateTransactionNote(transactionId: string, note: string) {
