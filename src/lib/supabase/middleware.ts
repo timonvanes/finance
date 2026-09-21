@@ -17,6 +17,8 @@ const PUBLIC_PATHS = [
   "/api/enablebanking/callback",
   "/api/cron/keep-alive",
   "/api/inbound/mail",
+  "/api/bunq/callback",
+  "/sw.js",
 ];
 
 export async function updateSession(request: NextRequest) {

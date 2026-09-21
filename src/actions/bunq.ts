@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getBunqAccount, isBunqConfigured } from "@/lib/bunq/client";
+import { ensureBunqCallback, getBunqAccount, isBunqConfigured } from "@/lib/bunq/client";
 import { matchBunqSweeps } from "@/lib/reclaims/matching";
-import { createBunqTab, detectBunqPayments, sweepBunqPayments } from "@/lib/bunq/links";
+import { createBunqTab } from "@/lib/bunq/links";
+import { processBunqForUser } from "@/lib/bunq/process";
 
 async function requireUserId() {
   const supabase = await createClient();
@@ -97,6 +98,7 @@ export async function createBunqPaymentLink(kind: "reclaim" | "request", id: str
     person_name: personName,
   });
   if (insertError) throw insertError;
+  await ensureBunqCallback(userId);
   revalidatePath("/", "layout");
   return { url: tab.url };
 }
@@ -104,38 +106,10 @@ export async function createBunqPaymentLink(kind: "reclaim" | "request", id: str
 // Checks bunq for received payments and marks the matching reclaims as paid.
 export async function checkBunqPayments() {
   const { supabase, userId } = await requireUserId();
-  const result = await detectBunqPayments(userId);
-
-  const { data: paid } = await supabase
-    .from("bunq_payment_links")
-    .select("id, reclaim_id, payment_request_id")
-    .eq("status", "paid");
-  const now = new Date().toISOString();
-  for (const link of paid ?? []) {
-    if (link.reclaim_id) {
-      await supabase
-        .from("reclaims")
-        .update({ status: "paid", paid_at: now })
-        .eq("id", link.reclaim_id)
-        .eq("status", "requested");
-    }
-    if (link.payment_request_id) {
-      await supabase
-        .from("payment_requests")
-        .update({ status: "paid", paid_at: now })
-        .eq("id", link.payment_request_id)
-        .eq("status", "requested");
-      await supabase
-        .from("reclaims")
-        .update({ status: "paid", paid_at: now })
-        .eq("payment_request_id", link.payment_request_id)
-        .eq("status", "requested");
-    }
-  }
-  const sweep = await sweepBunqPayments(userId);
+  const result = await processBunqForUser(userId);
   await matchBunqSweeps(supabase);
-  if ((paid ?? []).length > 0) revalidatePath("/", "layout");
-  return { ...result, error: result.error ?? sweep.error };
+  if (result.detected > 0 || result.swept > 0) revalidatePath("/", "layout");
+  return result;
 }
 
 export async function getBunqLinks() {

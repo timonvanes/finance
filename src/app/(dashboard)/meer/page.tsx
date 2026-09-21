@@ -5,6 +5,7 @@ const SECTIONS: { title: string; items: { href: string; label: string; hint?: st
   {
     title: "Overig",
     items: [
+      { href: "/meldingen", label: "Meldingen", hint: "Kies welke pushmeldingen je krijgt" },
       { href: "/leningen", label: "Leningen", hint: "Geld dat je van iemand hebt geleend" },
       { href: "/pots", label: "Potjes", hint: "Sparen, beleggen en vakantie" },
       { href: "/settings", label: "Instellingen", hint: "Maandstart, budgetten, categorieën, banken, personen" },

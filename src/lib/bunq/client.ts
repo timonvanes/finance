@@ -183,3 +183,31 @@ export async function getBunqAccount(
   const iban = (account.alias ?? []).find((a: Json) => a.type === "IBAN")?.value ?? null;
   return { userId: creds.bunq_user_id!, accountId: account.id, iban, name: account.description ?? "bunq" };
 }
+
+// Registers our callback URL with bunq once, so payments trigger it instantly.
+// Failure is harmless: payments are still picked up on the daily check and
+// whenever the app is opened.
+export async function ensureBunqCallback(userId: string) {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.from("bunq_credentials").select("callback_registered").eq("user_id", userId).maybeSingle();
+    if (data?.callback_registered) return;
+
+    const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    const secret = process.env.INBOUND_MAIL_SECRET;
+    if (!host || !secret) return;
+
+    const acc = await getBunqAccount(userId);
+    await bunqApi(userId, "POST", `/v1/user/${acc.userId}/notification-filter-url`, {
+      notification_filters: [
+        {
+          category: "MUTATION",
+          notification_target: `https://${host}/api/bunq/callback?token=${encodeURIComponent(secret)}`,
+        },
+      ],
+    });
+    await admin.from("bunq_credentials").update({ callback_registered: true }).eq("user_id", userId);
+  } catch (e) {
+    console.error("bunq callback registration failed", e);
+  }
+}

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractMail, type ExtractedMail } from "@/lib/anthropic/extract-mail";
 import type { ExtractedReturn } from "@/lib/anthropic/extract-return";
+import { sendPush } from "@/lib/push/send";
 import { getReturnWindow } from "@/lib/returns/policy";
 import { inferDiscount } from "@/lib/returns/amounts";
 import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
@@ -66,6 +67,14 @@ async function record(
     outcome,
     body_excerpt: mail.text.slice(0, 1500),
   });
+
+  if (kind === "order_confirmation" && outcome.startsWith("Bestelling toegevoegd")) {
+    await sendPush(userId, "mail_order", { title: "Nieuwe bestelling", body: outcome, url: "/returns" });
+  } else if (kind === "return_confirmation") {
+    await sendPush(userId, "mail_return", { title: "Retour", body: outcome, url: "/returns" });
+  } else if (kind === "price_adjustment") {
+    await sendPush(userId, "price_adjustment", { title: "Prijsverschil", body: outcome, url: "/returns" });
+  }
 }
 
 // Runs with the service-role client, so every query is scoped to userId.

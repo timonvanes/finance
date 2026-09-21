@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enableBankingFetch, psuHeaders, type PsuContext } from "./client";
 import { applyCategoryRules } from "@/lib/categorization/engine";
+import { sendPush } from "@/lib/push/send";
 import { autoMatchIncomingTransactions } from "@/lib/reclaims/matching";
 import { matchPotTransfers } from "@/lib/pots/matching";
 import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
@@ -290,6 +291,7 @@ export async function syncBankConnection(
   // burning the retry budget on a request that can never succeed.
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+  const newRows: { amount: number; name: string | null }[] = [];
   for (const account of accounts ?? []) {
     if (!UUID_PATTERN.test(account.account_uid)) {
       console.error(
@@ -340,8 +342,9 @@ export async function syncBankConnection(
             onConflict: "bank_account_id,external_transaction_id",
             ignoreDuplicates: true,
           })
-          .select("id");
+          .select("id, amount, counterparty_name");
         if (upsertError) throw upsertError;
+        for (const row of inserted ?? []) newRows.push({ amount: Number(row.amount), name: row.counterparty_name });
         syncedCount += rows.length;
 
         // ignoreDuplicates means only genuinely new rows come back here —
@@ -371,6 +374,17 @@ export async function syncBankConnection(
     .from("bank_connections")
     .update({ last_synced_at: new Date().toISOString() })
     .eq("id", bankConnectionId);
+
+  // A background sync (no user present) reports what came in; a first big
+  // import is left out, and a manual sync needs no notification.
+  if (!psu && newRows.length > 0 && newRows.length <= 30 && connection?.user_id) {
+    const eur = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+    const body =
+      newRows.length === 1
+        ? `${eur(newRows[0].amount)} · ${newRows[0].name ?? "onbekend"}`
+        : `${newRows.length} nieuwe transacties, ${eur(newRows.filter((r) => r.amount > 0).reduce((s, r) => s + r.amount, 0))} binnen en ${eur(Math.abs(newRows.filter((r) => r.amount < 0).reduce((s, r) => s + r.amount, 0)))} uit`;
+    await sendPush(connection.user_id, "transactions", { title: "Nieuwe transacties", body, url: "/transactions" });
+  }
 
   return syncedCount;
 }
