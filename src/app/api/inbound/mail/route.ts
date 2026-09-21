@@ -32,7 +32,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const payload = await request.json().catch(() => null);
+  const contentType = request.headers.get("content-type") ?? "";
+  let payload: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (contentType.includes("multipart/form-data") || contentType.includes("x-www-form-urlencoded")) {
+    // CloudMailin "Multipart - Normalized": fields like headers[subject], plain, html.
+    const form = await request.formData().catch(() => null);
+    if (form) {
+      const field = (name: string) => {
+        const v = form.get(name);
+        return typeof v === "string" ? v : "";
+      };
+      payload = {
+        plain: field("plain"),
+        html: field("html"),
+        envelope: { from: field("envelope[from]") },
+        headers: {
+          subject: field("headers[subject]"),
+          from: field("headers[from]"),
+          message_id: field("headers[message_id]"),
+          date: field("headers[date]"),
+        },
+      };
+    }
+  } else {
+    payload = await request.json().catch(() => null);
+  }
   if (!payload) return NextResponse.json({ error: "Bad request" }, { status: 400 });
 
   // Accepts Postmark's JSON and CloudMailin's "JSON (normalized)" format.
