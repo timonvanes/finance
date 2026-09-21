@@ -276,6 +276,11 @@ export default async function DashboardPage({
           <div className={`${card} p-4`}>
             <p className="text-2xl font-semibold text-green-700">{euro(summary.monthIncome, 0)}</p>
             <p className="text-sm text-gray-500">binnengekomen</p>
+            {summary.monthIncomeNotCounted > 0.5 && (
+              <p className="text-xs text-gray-400">
+                + {euro(summary.monthIncomeNotCounted, 0)} niet van jou (doorgegeven of verrekend)
+              </p>
+            )}
           </div>
           <div className={`${card} p-4`}>
             <p className="text-2xl font-semibold text-gray-900">{euro(summary.monthExpense, 0)}</p>

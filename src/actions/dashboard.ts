@@ -101,6 +101,10 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
   const monthExpense = (monthTx ?? [])
     .filter((tx) => tx.amount < 0)
     .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0);
+  // What came in but is not counted as your income (passed on, netted, paid back).
+  const monthIncomeNotCounted = (monthTx ?? [])
+    .filter((tx) => tx.amount > 0)
+    .reduce((sum, tx) => sum + Math.min(tx.amount, adjustments.sourceReduction.get(tx.id) ?? 0), 0);
   const previousMonthExpense = (prevMonthTx ?? [])
     .filter((tx) => tx.amount < 0)
     .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, prevAdjustments), 0);
@@ -110,6 +114,7 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
     uncategorizedCount: uncategorizedCount ?? 0,
     outstandingReclaimsTotal,
     monthIncome,
+    monthIncomeNotCounted,
     monthExpense,
     previousMonthExpense,
   };
