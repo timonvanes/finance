@@ -6,12 +6,13 @@ import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@
 import { periodKey, periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 
-async function spendByCategoryForRange(start: string, end: string) {
+async function spendByCategoryForRange(start: string, end: string, direction: "expense" | "income" = "expense") {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("visible_transactions")
-    .select("id, amount, category_id, categories(name)")
-    .lt("amount", 0)
+    .select("id, amount, category_id, categories(name)");
+  query = direction === "expense" ? query.lt("amount", 0) : query.gt("amount", 0);
+  const { data, error } = await query
     .eq("is_transfer", false)
     .gte("booking_date", start)
     .lt("booking_date", end);
@@ -23,9 +24,32 @@ async function spendByCategoryForRange(start: string, end: string) {
   for (const tx of data ?? []) {
     const category = Array.isArray(tx.categories) ? tx.categories[0] : tx.categories;
     const name = category?.name ?? "Ongecategoriseerd";
-    totals.set(name, (totals.get(name) ?? 0) + netExpenseAmount(tx.id, tx.amount, adjustments));
+    const counted =
+      direction === "expense"
+        ? netExpenseAmount(tx.id, tx.amount, adjustments)
+        : netIncomeAmount(tx.id, tx.amount, adjustments);
+    totals.set(name, (totals.get(name) ?? 0) + counted);
   }
   return totals;
+}
+
+// Same as the spend per category, for money coming in (only what is really
+// yours: passed-on and netted amounts are already taken out).
+export async function getMonthlyIncomeByCategory(monthsAgo: number = 0) {
+  const startDay = await getMonthStartDay();
+  const { start, end } = periodRange(monthsAgo, startDay);
+  const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
+
+  const [totals, previousTotals] = await Promise.all([
+    spendByCategoryForRange(start, end, "income"),
+    spendByCategoryForRange(prevStart, prevEnd, "income"),
+  ]);
+
+  const names = new Set([...totals.keys(), ...previousTotals.keys()]);
+  return [...names]
+    .map((name) => ({ name, total: totals.get(name) ?? 0, previousTotal: previousTotals.get(name) ?? 0 }))
+    .filter((c) => c.total > 0 || c.previousTotal > 0)
+    .sort((a, b) => b.total - a.total);
 }
 
 // Includes each category's total for the previous month too, so the

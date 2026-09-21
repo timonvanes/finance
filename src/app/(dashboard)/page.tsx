@@ -5,6 +5,7 @@ import {
   getAccountBalances,
   getDashboardSummary,
   getFreeToSpendPerMonth,
+  getMonthlyIncomeByCategory,
   getMonthlySpendByCategory,
   getRecurringPayments,
 } from "@/actions/dashboard";
@@ -52,10 +53,11 @@ export default async function DashboardPage({
   const monthsAgo = Math.max(0, parseInt(month ?? "0", 10) || 0);
   const isCurrentMonth = monthsAgo === 0;
 
-  const [summary, categorySpend, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans] =
+  const [summary, categorySpend, incomeByCategory, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans] =
     await Promise.all([
       getDashboardSummary(monthsAgo),
       getMonthlySpendByCategory(monthsAgo),
+      getMonthlyIncomeByCategory(monthsAgo),
       getRecurringPayments(),
       getBudgetStatus(),
       getSpendingAnomaly(),
@@ -94,6 +96,11 @@ export default async function DashboardPage({
       ? MONTH_NAMES[viewedDate.getMonth()]
       : `${MONTH_NAMES[viewedDate.getMonth()]} ${viewedDate.getFullYear()}`;
   const maxCategoryTotal = Math.max(1, ...categorySpend.map((c) => c.total));
+  const maxIncomeTotal = Math.max(1, ...incomeByCategory.map((c) => c.total));
+  const totalIncome = incomeByCategory.reduce((s, c) => s + c.total, 0);
+  const totalExpense = categorySpend.reduce((s, c) => s + c.total, 0);
+  const net = totalIncome - totalExpense;
+  const budgetByName = new Map(budgetStatus.map((b) => [b.categoryName, b]));
   const budgetWarnings = budgetStatus.filter((b) => b.aheadOfPace || b.overBudget);
   const expenseDelta = summary.monthExpense - summary.previousMonthExpense;
 
@@ -339,41 +346,105 @@ export default async function DashboardPage({
         </section>
       )}
 
-      <section className="space-y-2">
-        <h2 className="px-1 text-lg font-semibold text-gray-900">Uitgaven per categorie</h2>
-        {categorySpend.length > 0 ? (
-          <ul className={`${card} space-y-4 p-5`}>
-            {categorySpend.map((c) => {
-              const delta = c.total - c.previousTotal;
-              return (
+      <section className="space-y-3">
+        <h2 className="px-1 text-lg font-semibold text-gray-900">Baten en lasten</h2>
+
+        <div className={`${card} p-5`}>
+          <p className="text-sm text-gray-500">Netto deze periode</p>
+          <p className={`mt-1 text-3xl font-semibold ${net >= 0 ? "text-green-700" : "text-red-600"}`}>
+            {net >= 0 ? `${euro(net, 0)} over` : `${euro(Math.abs(net), 0)} te veel uitgegeven`}
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-base">
+            <div>
+              <p className="text-sm text-gray-500">Baten</p>
+              <p className="font-semibold text-green-700">{euro(totalIncome, 0)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Lasten</p>
+              <p className="font-semibold text-gray-900">{euro(totalExpense, 0)}</p>
+            </div>
+          </div>
+        </div>
+
+        <details className={`${card} group`}>
+          <summary className="flex min-h-[60px] cursor-pointer list-none items-center justify-between gap-3 px-5 [&::-webkit-details-marker]:hidden">
+            <span className="text-base font-medium text-gray-900">Baten per categorie</span>
+            <span className="flex items-center gap-2">
+              <span className="text-base font-semibold text-green-700">{euro(totalIncome, 0)}</span>
+              <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
+            </span>
+          </summary>
+          {incomeByCategory.length > 0 ? (
+            <ul className="space-y-4 border-t border-gray-100 p-5">
+              {incomeByCategory.map((c) => (
                 <li key={c.name}>
                   <div className="mb-2 flex items-center justify-between text-base">
                     <span className="text-gray-900">{c.name}</span>
-                    <span className="font-medium text-gray-900">
-                      {euro(c.total, 0)}
-                      {c.previousTotal > 0 && Math.abs(delta) >= 1 && (
-                        <span
-                          className={`ml-1 text-sm font-normal ${delta > 0 ? "text-red-600" : "text-green-700"}`}
-                        >
-                          ({delta > 0 ? "+" : ""}
-                          {euro(delta, 0)})
-                        </span>
-                      )}
-                    </span>
+                    <span className="font-medium text-gray-900">{euro(c.total, 0)}</span>
                   </div>
                   <div className="h-3 rounded-full bg-gray-100">
                     <div
-                      className="h-3 rounded-full bg-teal-700"
-                      style={{ width: `${(c.total / maxCategoryTotal) * 100}%` }}
+                      className="h-3 rounded-full bg-green-600"
+                      style={{ width: `${(c.total / maxIncomeTotal) * 100}%` }}
                     />
                   </div>
                 </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className={`${card} p-5 text-base text-gray-500`}>Nog geen uitgaven in deze maand.</p>
-        )}
+              ))}
+            </ul>
+          ) : (
+            <p className="border-t border-gray-100 p-5 text-base text-gray-500">Nog geen baten in deze periode.</p>
+          )}
+        </details>
+
+        <details className={`${card} group`}>
+          <summary className="flex min-h-[60px] cursor-pointer list-none items-center justify-between gap-3 px-5 [&::-webkit-details-marker]:hidden">
+            <span className="text-base font-medium text-gray-900">Lasten per categorie</span>
+            <span className="flex items-center gap-2">
+              <span className="text-base font-semibold text-gray-900">{euro(totalExpense, 0)}</span>
+              <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
+            </span>
+          </summary>
+          {categorySpend.length > 0 ? (
+            <ul className="space-y-4 border-t border-gray-100 p-5">
+              {categorySpend.map((c) => {
+                const delta = c.total - c.previousTotal;
+                const budget = isCurrentMonth ? budgetByName.get(c.name) : undefined;
+                const left = budget ? budget.monthlyLimit - budget.spent : null;
+                return (
+                  <li key={c.name}>
+                    <div className="mb-2 flex items-center justify-between text-base">
+                      <span className="text-gray-900">{c.name}</span>
+                      <span className="font-medium text-gray-900">
+                        {euro(c.total, 0)}
+                        {c.previousTotal > 0 && Math.abs(delta) >= 1 && (
+                          <span
+                            className={`ml-1 text-sm font-normal ${delta > 0 ? "text-red-600" : "text-green-700"}`}
+                          >
+                            ({delta > 0 ? "+" : ""}
+                            {euro(delta, 0)})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="h-3 rounded-full bg-gray-100">
+                      <div
+                        className="h-3 rounded-full bg-teal-700"
+                        style={{ width: `${(c.total / maxCategoryTotal) * 100}%` }}
+                      />
+                    </div>
+                    {left != null && (
+                      <p className={`mt-1 text-sm ${left >= 0 ? "text-gray-500" : "font-medium text-red-600"}`}>
+                        {left >= 0 ? `${euro(left, 0)} over van je budget` : `${euro(Math.abs(left), 0)} boven je budget`}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="border-t border-gray-100 p-5 text-base text-gray-500">Nog geen lasten in deze periode.</p>
+          )}
+        </details>
       </section>
 
       {isCurrentMonth && (
