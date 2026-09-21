@@ -227,6 +227,19 @@ export async function createSplitReclaim(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+// Marks several reclaims paid at once (everything of one payment entered in WieBetaaltWat).
+export async function markReclaimsPaid(reclaimIds: string[]) {
+  if (reclaimIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("reclaims")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .in("id", reclaimIds)
+    .eq("status", "requested");
+  if (error) throw error;
+  revalidatePath("/", "layout");
+}
+
 export async function markReclaimPaid(reclaimId: string) {
   const supabase = await createClient();
   const { error } = await supabase

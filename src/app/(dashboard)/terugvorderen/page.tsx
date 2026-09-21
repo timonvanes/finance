@@ -94,6 +94,7 @@ export default async function TerugvorderenPage() {
     (b.date ?? "").localeCompare(a.date ?? "")
   );
   const suggestions = [...looseBankByPerson.values()].filter((p) => p.ids.length >= 2);
+  const wbwCount = [...byTransaction.values()].filter((t) => t.method === "external_app").length;
 
   return (
     <div className="space-y-5">
@@ -139,6 +140,19 @@ export default async function TerugvorderenPage() {
           </div>
         )}
       </div>
+
+      {wbwCount > 0 && (
+        <Link
+          href="/terugvorderen/wbw"
+          prefetch
+          className="flex min-h-[64px] items-center gap-3 rounded-2xl bg-teal-50 px-5 py-4 ring-1 ring-teal-100 active:bg-teal-100"
+        >
+          <span className="flex-1 text-lg font-medium text-teal-900">
+            {wbwCount} uitgave{wbwCount > 1 ? "n" : ""} nog in WieBetaaltWat zetten
+          </span>
+          <span className="text-2xl text-teal-700">›</span>
+        </Link>
+      )}
 
       {queued.length > 0 && (
         <Link
