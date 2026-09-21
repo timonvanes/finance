@@ -25,6 +25,11 @@ const GROUPS: {
         description: "Rapport per maand, periode of jaar om af te drukken",
       },
       {
+        href: "/settings/schulden",
+        label: "Schulden en hypotheek",
+        description: "Studielening (DUO) en later je hypotheek, in ontwikkeling",
+      },
+      {
         href: "/settings/budgets",
         label: "Budgetdoelen",
         description: "Maandbudget per categorie",
