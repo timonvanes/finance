@@ -140,7 +140,9 @@ export default async function SchuldenPage() {
               <div>
                 <p className="text-sm text-gray-500">Rente per jaar</p>
                 <p className="text-xl font-semibold text-gray-900">{euro(s.interestPerYear)}</p>
-                <p className="text-xs text-gray-400">ongeveer {euro(s.interestPerYear / 12)} per maand</p>
+                <p className="text-xs text-gray-400">
+                  volgende bijschrijving {date(s.nextCredit)}: {euro(s.nextInterestReal, 2)}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Nu per maand</p>
@@ -198,7 +200,8 @@ export default async function SchuldenPage() {
             </ul>
 
             <p className="text-xs text-gray-400">
-              Bedragen zijn berekend vanaf de stand van je gegevens en kunnen licht afwijken van DUO.
+              De rente wordt zoals bij DUO op de 1e van elke maand bijgeschreven. DUO schrijft op {date(s.nextCredit)}{" "}
+              ongeveer {euro(s.nextInterestTotal, 2)} bij, inclusief de rente over de prestatiebeurs.
             </p>
               </div>
             </details>

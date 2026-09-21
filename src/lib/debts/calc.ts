@@ -28,6 +28,24 @@ export function grow(balance: number, ratePct: number, fromMs: number, toMs: num
   return balance * Math.pow(1 + ratePct / 100, (toMs - fromMs) / DAY / 365);
 }
 
+// DUO books interest on the 1st of every month: the balance at the start of the
+// month (interest included) times (1+rate)^(1/12)-1. Payouts on the 25th earn
+// interest from the next month on, and the balance stays put in between.
+export function monthlyFactor(ratePct: number) {
+  return Math.pow(1 + ratePct / 100, 1 / 12) - 1;
+}
+
+// Whole interest bookings between a balance date and a moment in time.
+export function bookings(fromIso: string, toMs: number) {
+  const from = new Date(`${fromIso}T00:00:00`);
+  const to = new Date(toMs);
+  return Math.max(0, (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()));
+}
+
+export function growMonthly(balance: number, ratePct: number, fromIso: string, toMs: number) {
+  return balance * Math.pow(1 + monthlyFactor(ratePct), bookings(fromIso, toMs));
+}
+
 export function pmt(principal: number, monthlyRate: number, months: number) {
   if (months <= 0) return 0;
   if (monthlyRate === 0) return principal / months;
@@ -36,7 +54,7 @@ export function pmt(principal: number, monthlyRate: number, months: number) {
 
 export function summarize(debt: DebtInput, parts: PartInput[], now = new Date()) {
   const nowMs = now.getTime();
-  const current = parts.map((p) => ({ ...p, current: grow(p.balance, p.rate, at(p.balance_date), nowMs) }));
+  const current = parts.map((p) => ({ ...p, current: growMonthly(p.balance, p.rate, p.balance_date, nowMs) }));
 
   const nonGift = current.filter((p) => !p.is_gift);
   const nonGiftSum = nonGift.reduce((s, p) => s + p.current, 0);
@@ -66,6 +84,11 @@ export function summarize(debt: DebtInput, parts: PartInput[], now = new Date())
   const realNow = nonGiftSum - giftAdj;
   const interestPerYear = nonGift.reduce((s, p) => s + ((p.current * (1 - shareOf(p))) * p.rate) / 100, 0);
 
+  // What the next booking (the 1st of next month) will add.
+  const nextCredit = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextInterestTotal = current.reduce((s, p) => s + p.current * monthlyFactor(p.rate), 0);
+  const nextInterestReal = nonGift.reduce((s, p) => s + p.current * (1 - shareOf(p)) * monthlyFactor(p.rate), 0);
+
   let projectedAtStart: number | null = null;
   let blendedRate: number | null = null;
   let estimatedMonthly: number | null = null;
@@ -74,7 +97,7 @@ export function summarize(debt: DebtInput, parts: PartInput[], now = new Date())
   if (debt.repay_start) {
     const startMs = at(debt.repay_start);
     const projected = nonGift.map((p) => ({
-      value: grow(p.balance, p.rate, at(p.balance_date), Math.max(startMs, nowMs)) * (1 - shareOf(p)),
+      value: growMonthly(p.balance, p.rate, p.balance_date, Math.max(startMs, nowMs)) * (1 - shareOf(p)),
       rate: p.rate,
     }));
     projectedAtStart = projected.reduce((s, p) => s + p.value, 0);
@@ -93,6 +116,9 @@ export function summarize(debt: DebtInput, parts: PartInput[], now = new Date())
     giftTotal,
     realNow,
     interestPerYear,
+    nextCredit,
+    nextInterestTotal,
+    nextInterestReal,
     projectedAtStart,
     blendedRate,
     estimatedMonthly,
