@@ -14,6 +14,7 @@ export interface PartInput {
   rate_fixed_until: string | null;
   is_gift: boolean;
   gift_inside?: boolean;
+  gift_amount?: number;
   repay_type?: "annuity" | "linear" | "interest_only";
   end_date?: string | null;
 }
@@ -47,9 +48,18 @@ export function summarize(debt: DebtInput, parts: PartInput[], now = new Date())
   // The gift amount is stated as of the balance date; its share of those parts
   // stays the same, so it also accrues interest along with them.
   const carrierAtDate = carriers.reduce((s, p) => s + p.balance, 0);
-  const giftShare = carrierAtDate > 0 ? Math.min(1, Math.max(0, debt.gift_adjustment) / carrierAtDate) : 0;
-  const giftAdj = carrierSum * giftShare;
-  const shareOf = (p: { gift_inside?: boolean }) => (marked.length === 0 || p.gift_inside ? giftShare : 0);
+  const legacyShare = carrierAtDate > 0 ? Math.min(1, Math.max(0, debt.gift_adjustment) / carrierAtDate) : 0;
+  // Preferred: the gift amount is given per part; else one adjustment is spread.
+  const perPart = nonGift.some((p) => (p.gift_amount ?? 0) > 0);
+  const shareOf = (p: { balance: number; gift_amount?: number; gift_inside?: boolean }) =>
+    perPart
+      ? p.balance > 0
+        ? Math.min(1, Math.max(0, p.gift_amount ?? 0) / p.balance)
+        : 0
+      : marked.length === 0 || p.gift_inside
+        ? legacyShare
+        : 0;
+  const giftAdj = perPart ? nonGift.reduce((s, p) => s + p.current * shareOf(p), 0) : carrierSum * legacyShare;
 
   const totalAtLender = current.reduce((s, p) => s + p.current, 0);
   const giftTotal = current.filter((p) => p.is_gift).reduce((s, p) => s + p.current, 0) + giftAdj;

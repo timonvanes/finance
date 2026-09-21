@@ -18,7 +18,7 @@ export async function getDebts() {
   const { data, error } = await supabase
     .from("debts")
     .select(
-      "id, kind, name, regime, repay_start, term_years, monthly_payment, gift_adjustment, property_value, property_value_date, debt_parts(id, name, balance, balance_date, rate, rate_fixed_until, is_gift, gift_inside, sort, repay_type, end_date)"
+      "id, kind, name, regime, repay_start, term_years, monthly_payment, gift_adjustment, property_value, property_value_date, debt_parts(id, name, balance, balance_date, rate, rate_fixed_until, is_gift, gift_inside, gift_amount, sort, repay_type, end_date)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -28,7 +28,7 @@ export async function getDebts() {
     gift_adjustment: Number(d.gift_adjustment),
     property_value: d.property_value == null ? null : Number(d.property_value),
     debt_parts: ((d.debt_parts ?? []) as (PartInput & { sort: number })[])
-      .map((p) => ({ ...p, balance: Number(p.balance), rate: Number(p.rate) }))
+      .map((p) => ({ ...p, balance: Number(p.balance), rate: Number(p.rate), gift_amount: Number(p.gift_amount ?? 0) }))
       .sort((a, b) => a.sort - b.sort),
   }));
 }
@@ -106,6 +106,7 @@ export async function savePart(
     rateFixedUntil: string | null;
     isGift: boolean;
     giftInside?: boolean;
+    giftAmount?: number;
     repayType?: "annuity" | "linear" | "interest_only";
     endDate?: string | null;
   }
@@ -121,6 +122,7 @@ export async function savePart(
     rate_fixed_until: values.rateFixedUntil || null,
     is_gift: values.isGift,
     gift_inside: values.giftInside ?? false,
+    gift_amount: Math.max(0, values.giftAmount ?? 0),
     repay_type: values.repayType ?? "annuity",
     end_date: values.endDate || null,
   };
