@@ -35,7 +35,11 @@ export async function POST(request: NextRequest) {
   const payload = await request.json().catch(() => null);
   if (!payload) return NextResponse.json({ error: "Bad request" }, { status: 400 });
 
-  const text: string = payload.TextBody?.trim() || (payload.HtmlBody ? htmlToText(payload.HtmlBody) : "");
+  // Accepts Postmark's JSON and CloudMailin's "JSON (normalized)" format.
+  const html: string = payload.HtmlBody ?? payload.html ?? "";
+  const text: string = (payload.TextBody ?? payload.plain ?? "").trim() || (html ? htmlToText(html) : "");
+  const subject: string = payload.Subject ?? payload.headers?.subject ?? "";
+  const from: string = payload.FromFull?.Email ?? payload.From ?? payload.envelope?.from ?? payload.headers?.from ?? "";
   if (!text) return NextResponse.json({ ok: true, skipped: "empty" });
 
   const admin = createAdminClient();
@@ -46,12 +50,13 @@ export async function POST(request: NextRequest) {
   }
   if (!userId) return NextResponse.json({ error: "No user" }, { status: 500 });
 
-  const messageId: string = payload.MessageID ?? `${payload.Date ?? ""}-${payload.Subject ?? ""}`;
+  const messageId: string =
+    payload.MessageID ?? payload.headers?.message_id ?? `${payload.Date ?? payload.headers?.date ?? ""}-${subject}`;
   try {
     const result = await processInboundMail(admin, userId, {
       messageId,
-      subject: payload.Subject ?? "",
-      from: payload.FromFull?.Email ?? payload.From ?? "",
+      subject,
+      from,
       text,
     });
     return NextResponse.json({ ok: true, ...result });
