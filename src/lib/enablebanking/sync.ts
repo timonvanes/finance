@@ -214,6 +214,16 @@ async function matchTransfersByAmount(supabase: SupabaseClient, transactionIds: 
 // accounts (e.g. money moved from ING to Rabobank/Revolut), it's a transfer
 // between own accounts, not real spend or income — mark it as such and skip
 // the manual review queue for it.
+// Descriptions often carry "21-09-2026 13:15": the only time of day we get, used
+// to order same-day transactions. Interpreted as Amsterdam time.
+function timeFromDescription(description: string, bookingDate: string): string | null {
+  const m = description.match(/(\d{2})-(\d{2})-(\d{4}) (\d{2}:\d{2})/);
+  if (!m) return null;
+  const iso = `${m[3]}-${m[2]}-${m[1]}`;
+  if (iso !== bookingDate.slice(0, 10)) return null;
+  return `${iso} ${m[4]}:00 Europe/Amsterdam`;
+}
+
 export async function markOwnTransfers(supabase: SupabaseClient, transactionIds: string[]) {
   if (transactionIds.length === 0) return;
 
@@ -331,6 +341,7 @@ export async function syncBankConnection(
             counterparty_name: counterpartyName(tx),
             counterparty_iban: counterpartyIban(tx),
             raw_description: (tx.remittance_information ?? []).join(" ") || null,
+            booked_at: timeFromDescription((tx.remittance_information ?? []).join(" "), bookingDate),
           };
         })
         .filter((row): row is NonNullable<typeof row> => row !== null);

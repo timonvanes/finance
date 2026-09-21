@@ -57,6 +57,8 @@ export default async function TransactionsPage({
       bank_accounts(bank_connections(institution_name))`
     )
     .order("booking_date", { ascending: activeSort === "asc" })
+    .order("booked_at", { ascending: activeSort === "asc", nullsFirst: false })
+    .order("created_at", { ascending: activeSort === "asc" })
     .limit(limit);
 
   if (activeFilter === "expense") query = query.lt("amount", 0);
