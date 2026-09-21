@@ -18,7 +18,7 @@ export function ImportForm() {
   const [orderDate, setOrderDate] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"direct" | "klarna">("direct");
+  const [paymentMethod, setPaymentMethod] = useState<"direct" | "klarna" | "invoice">("direct");
   const [step, setStep] = useState<"paste" | "review">("paste");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -147,11 +147,12 @@ export function ImportForm() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {(
           [
-            ["direct", "Direct betaald"],
+            ["direct", "Direct"],
             ["klarna", "Via Klarna"],
+            ["invoice", "Op rekening"],
           ] as const
         ).map(([key, text]) => (
           <button

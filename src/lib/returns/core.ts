@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExtractedReturn } from "@/lib/anthropic/extract-return";
+import { discountFactor } from "./amounts";
 
 const norm = (t: string) =>
   t.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -77,7 +78,7 @@ export async function applyReturnToOrderCore(
 ) {
   const { data: order, error } = await supabase
     .from("orders")
-    .select("id, merchant_name, order_items(id, description, price, quantity, returned)")
+    .select("id, merchant_name, discount_total, order_items(id, description, price, quantity, returned)")
     .eq("id", orderId)
     .single();
   if (error) throw error;
@@ -118,9 +119,14 @@ export async function applyReturnToOrderCore(
     .eq("id", orderId);
   if (orderError) throw orderError;
 
-  const returnedTotal = items
-    .filter((i) => i.returned || matchedIds.includes(i.id))
-    .reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const factor = discountFactor(
+    items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+    Number(order.discount_total ?? 0)
+  );
+  const returnedTotal =
+    items
+      .filter((i) => i.returned || matchedIds.includes(i.id))
+      .reduce((sum, i) => sum + i.price * i.quantity, 0) * factor;
   const expected = Math.max(0, returnedTotal + shipping - fee);
 
   // Has the money already arrived?

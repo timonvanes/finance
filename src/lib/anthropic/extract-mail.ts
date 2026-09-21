@@ -34,6 +34,15 @@ const MailSchema = z.object({
   shipping_refunded: z.number().nullable().describe("Terugbetaalde verzendkosten in euro's, of null"),
   return_fee: z.number().nullable().describe("Ingehouden retourkosten in euro's, of null"),
   refund_total: z.number().nullable().describe("Totaal terug te betalen bedrag bij een retour, of null"),
+  discount_total: z
+    .number()
+    .nullable()
+    .describe(
+      "Korting op de hele bestelling (kortingscode, actie, tegoed) als positief getal, alleen als die NIET al in de artikelprijzen verwerkt is; anders null"
+    ),
+  on_invoice: z
+    .boolean()
+    .describe("true als de betaalwijze 'rekening', 'achteraf betalen' of 'op factuur' is (nog niet betaald bij het bestellen)"),
   via_klarna: z.boolean().describe("true als de bestelling via Klarna is betaald of de mail van/over Klarna gaat"),
   klarna_credit_confirmed: z
     .boolean()
@@ -52,7 +61,7 @@ export async function extractMail(input: { subject: string; from: string; text: 
     system:
       "Je leest doorgestuurde mails van webshops (vaak Nederlandstalig, vaak kleding) en haalt er gegevens uit. " +
       `Vandaag is ${today}. Bedragen zijn getallen in euro's zonder €-teken. Datums als YYYY-MM-DD. ` +
-      "Bij een retour: geef in items de geretourneerde artikelen. Gebruik null als iets er niet in staat. " +
+      "Geef bij items de prijs per stuk zoals die bij het artikel staat. Bij een retour: geef in items de geretourneerde artikelen. Gebruik null als iets er niet in staat. " +
       "Een verzendupdate zoals 'onderweg' of 'verzonden' is 'other', tenzij er ook een bezorgdatum of retourtermijn in staat. " +
       "Verzin nooit een retourtermijn of datum.",
     messages: [

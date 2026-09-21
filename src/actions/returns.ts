@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { extractOrderFromEmailText } from "@/lib/anthropic/extract-order";
+import { inferDiscount } from "@/lib/returns/amounts";
 import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
 import { extractReturnFromEmailText, type ExtractedReturn } from "@/lib/anthropic/extract-return";
 
@@ -14,7 +15,8 @@ export async function createOrder(input: {
   orderDate: string | null;
   totalAmount: number | null;
   sourceText: string;
-  paymentMethod?: "direct" | "klarna";
+  paymentMethod?: "direct" | "klarna" | "invoice";
+  discountTotal?: number;
   items: { description: string; price: number; quantity: number }[];
 }) {
   const supabase = await createClient();
@@ -27,6 +29,7 @@ export async function createOrder(input: {
       total_amount: input.totalAmount,
       source_text: input.sourceText || null,
       payment_method: input.paymentMethod ?? "direct",
+      discount_total: input.discountTotal ?? inferDiscount(input.items.reduce((s, i) => s + i.price * i.quantity, 0), input.totalAmount),
     })
     .select("id")
     .single();
@@ -50,8 +53,9 @@ export async function getOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, refund_status, refund_transaction_id, created_at,
+      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, discount_total, refund_status, refund_transaction_id, created_at,
       order_items(id, description, price, quantity, returned),
+      order_claims(id, reason, expected_amount, status, refund_transaction_id, created_at),
       refund_transaction:transactions!orders_refund_transaction_id_fkey(booking_date, counterparty_name, amount)`
     )
     .order("created_at", { ascending: false });
@@ -212,7 +216,7 @@ export async function deleteInboundMail(id: string) {
   if (error) throw error;
 }
 
-export async function setOrderPaymentMethod(orderId: string, method: "direct" | "klarna") {
+export async function setOrderPaymentMethod(orderId: string, method: "direct" | "klarna" | "invoice") {
   const supabase = await createClient();
   const { error } = await supabase.from("orders").update({ payment_method: method }).eq("id", orderId);
   if (error) throw error;
@@ -237,5 +241,38 @@ export async function clearKlarnaCredit(orderId: string) {
     .from("orders")
     .update({ credited_amount: null, refund_status: anyReturned ? "pending" : "not_returned" })
     .eq("id", orderId);
+  if (error) throw error;
+}
+
+export async function addOrderClaim(orderId: string, reason: string, expectedAmount: number) {
+  if (!(expectedAmount > 0)) throw new Error("Vul het bedrag in dat je verwacht terug te krijgen.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("order_claims")
+    .insert({ order_id: orderId, reason: reason.trim() || null, expected_amount: expectedAmount });
+  if (error) throw error;
+}
+
+export async function markClaimReceived(claimId: string, transactionId: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("order_claims")
+    .update({ status: "received", refund_transaction_id: transactionId })
+    .eq("id", claimId);
+  if (error) throw error;
+}
+
+export async function reopenClaim(claimId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("order_claims")
+    .update({ status: "pending", refund_transaction_id: null })
+    .eq("id", claimId);
+  if (error) throw error;
+}
+
+export async function deleteOrderClaim(claimId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("order_claims").delete().eq("id", claimId);
   if (error) throw error;
 }

@@ -3,8 +3,13 @@
 import { useState, useTransition } from "react";
 import { InfoButton } from "../info-button";
 import { useRouter } from "next/navigation";
+import { discountFactor } from "@/lib/returns/amounts";
 import {
+  addOrderClaim,
   clearKlarnaCredit,
+  deleteOrderClaim,
+  markClaimReceived,
+  reopenClaim,
   deleteOrder,
   linkRefundToOrder,
   recordKlarnaCredit,
@@ -61,6 +66,14 @@ export function OrderRow({
     payment_method: string;
     credited_amount: number | null;
     return_deadline: string | null;
+    discount_total: number;
+    order_claims: {
+      id: string;
+      reason: string | null;
+      expected_amount: number;
+      status: string;
+      refund_transaction_id: string | null;
+    }[];
     refund_status: string;
     order_items: Item[];
     refund_transaction: {
@@ -75,15 +88,22 @@ export function OrderRow({
   const [shipping, setShipping] = useState(order.refunded_shipping ? String(order.refunded_shipping) : "");
   const [fee, setFee] = useState(order.return_fee ? String(order.return_fee) : "");
   const [klarnaAmount, setKlarnaAmount] = useState("");
+  const [claimReason, setClaimReason] = useState("");
+  const [claimAmount, setClaimAmount] = useState("");
   const router = useRouter();
 
   const itemsTotal = order.order_items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  const returnedItems = order.order_items
-    .filter((i) => i.returned)
-    .reduce((sum, i) => sum + i.price * i.quantity, 0);
-  // Shipping that was part of the original order (total minus the items).
+  const discount = order.discount_total || 0;
+  const factor = discountFactor(itemsTotal, discount);
+  const returnedItems =
+    order.order_items.filter((i) => i.returned).reduce((sum, i) => sum + i.price * i.quantity, 0) * factor;
+  // Shipping that was part of the original order (total minus the discounted items).
   const paidShipping =
-    order.total_amount != null ? Math.max(0, Math.round((order.total_amount - itemsTotal) * 100) / 100) : 0;
+    order.total_amount != null
+      ? Math.max(0, Math.round((order.total_amount - (itemsTotal - discount)) * 100) / 100)
+      : 0;
+  const payName = order.payment_method === "klarna" ? "Klarna" : "De winkel";
+  const payTitle = order.payment_method === "klarna" ? "Betaald via Klarna" : "Betaald op rekening";
 
   const shippingRefund = order.refunded_shipping || 0;
   const returnFee = order.return_fee || 0;
@@ -115,8 +135,10 @@ export function OrderRow({
           <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLE[order.refund_status]}`}>
             {STATUS_LABEL[order.refund_status]}
           </span>
-          {order.payment_method === "klarna" && (
-            <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700">Klarna</span>
+          {order.payment_method !== "direct" && (
+            <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700">
+              {order.payment_method === "klarna" ? "Klarna" : "Op rekening"}
+            </span>
           )}
         </div>
       </div>
@@ -176,6 +198,13 @@ export function OrderRow({
             </li>
           ))}
         </ul>
+      )}
+
+      {discount > 0 && (
+        <p className="text-sm text-gray-500">
+          Korting {euro(discount)} is verdeeld over de artikelen: je krijgt per artikel {Math.round(factor * 100)}% van de
+          prijs terug.
+        </p>
       )}
 
       {order.refund_status !== "not_returned" && (
@@ -330,13 +359,13 @@ export function OrderRow({
         </div>
       )}
 
-      {order.payment_method === "klarna" && order.refund_status !== "not_returned" && (
+      {order.payment_method !== "direct" && order.refund_status !== "not_returned" && (
         <div className="space-y-2 rounded-xl bg-pink-50 p-4">
-          <p className="text-sm font-medium text-pink-900">Betaald via Klarna</p>
+          <p className="text-sm font-medium text-pink-900">{payTitle}</p>
           {order.credited_amount != null ? (
             <>
               <p className="text-base text-pink-950">
-                Klarna heeft <span className="font-semibold">{euro(order.credited_amount)}</span> verrekend of
+                {payName} heeft <span className="font-semibold">{euro(order.credited_amount)}</span> verrekend of
                 terugbetaald.
               </p>
               {Math.abs(order.credited_amount - expectedRefund) < 0.01 ? (
@@ -345,7 +374,7 @@ export function OrderRow({
                 <p className="text-base font-medium text-amber-800">
                   {euro(Math.abs(order.credited_amount - expectedRefund))}{" "}
                   {order.credited_amount < expectedRefund ? "minder" : "meer"} dan verwacht ({euro(expectedRefund)}).
-                  {order.credited_amount < expectedRefund && " Vraag Klarna of de winkel waar het verschil blijft."}
+                  {order.credited_amount < expectedRefund && " Vraag na waar het verschil blijft."}
                 </p>
               )}
               <button
@@ -365,8 +394,9 @@ export function OrderRow({
           ) : (
             <>
               <p className="text-sm text-pink-900">
-                Klarna verrekent een retour meestal met wat je nog moet betalen (of betaalt het uit). Vul in
-                wat Klarna zegt te hebben verrekend, dan controleert de app of het klopt.
+                Een retour wordt meestal verrekend met wat je nog moet betalen (of uitbetaald). Vul in wat{" "}
+                {order.payment_method === "klarna" ? "Klarna" : "de winkel"} zegt te hebben verrekend, dan controleert
+                de app of het klopt.
               </p>
               <div className="flex gap-2">
                 <label className="flex h-[48px] min-w-0 flex-1 items-center gap-1 rounded-xl border border-gray-300 bg-white px-3">
@@ -402,21 +432,156 @@ export function OrderRow({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
+      <label className="flex items-center gap-2 text-sm text-gray-600">
+        Betaald
+        <select
+          value={order.payment_method}
           disabled={isPending}
-          onClick={() =>
+          onChange={(e) =>
             startTransition(async () => {
-              await setOrderPaymentMethod(order.id, order.payment_method === "klarna" ? "direct" : "klarna");
+              await setOrderPaymentMethod(order.id, e.target.value as "direct" | "klarna" | "invoice");
               router.refresh();
             })
           }
-          className="min-h-[44px] text-sm text-gray-600 underline disabled:opacity-50"
+          className="min-h-[44px] rounded-lg border border-gray-300 bg-white px-2 text-gray-800"
         >
-          {order.payment_method === "klarna" ? "Niet via Klarna betaald" : "Betaald via Klarna"}
-        </button>
-      </div>
+          <option value="direct">Direct</option>
+          <option value="klarna">Via Klarna</option>
+          <option value="invoice">Op rekening</option>
+        </select>
+      </label>
+
+      <details className="rounded-xl bg-gray-50 px-4">
+        <summary className="flex min-h-[48px] cursor-pointer items-center text-sm font-medium text-gray-700">
+          Klacht of vergoeding achteraf{order.order_claims.length > 0 && ` (${order.order_claims.length})`}
+        </summary>
+        <div className="space-y-3 pb-4">
+          <p className="text-sm text-gray-500">
+            Bijvoorbeeld bij slechte kwaliteit: leg vast hoeveel je terug verwacht, ook als je het artikel houdt of
+            later toch terugstuurt.
+          </p>
+          {order.order_claims.map((c) => (
+            <div key={c.id} className="space-y-2 rounded-xl bg-white p-3 ring-1 ring-gray-200">
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 text-base text-gray-900">{c.reason || "Vergoeding"}</p>
+                <p className="shrink-0 text-base font-semibold text-gray-900">{euro(c.expected_amount)}</p>
+              </div>
+              {c.status === "received" ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-green-700">Ontvangen</span>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await reopenClaim(c.id);
+                        router.refresh();
+                      })
+                    }
+                    className="min-h-[44px] text-sm text-gray-600 underline disabled:opacity-50"
+                  >
+                    Weer openzetten
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <select
+                    disabled={isPending}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      if (!id) return;
+                      startTransition(async () => {
+                        await markClaimReceived(c.id, id);
+                        router.refresh();
+                      });
+                    }}
+                    className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 disabled:opacity-50"
+                  >
+                    <option value="" disabled>
+                      Koppel binnengekomen betaling…
+                    </option>
+                    {[...incomingTransactions]
+                      .sort(
+                        (a, b) => Math.abs(a.amount - c.expected_amount) - Math.abs(b.amount - c.expected_amount)
+                      )
+                      .map((tx) => (
+                        <option key={tx.id} value={tx.id}>
+                          {Math.abs(tx.amount - c.expected_amount) < 0.01 ? "✓ " : ""}
+                          {new Date(tx.booking_date).toLocaleDateString("nl-NL")} · {tx.counterparty_name ?? "Onbekend"} ·{" "}
+                          {euro(tx.amount)}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await markClaimReceived(c.id, null);
+                        router.refresh();
+                      })
+                    }
+                    className="min-h-[44px] rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 active:bg-gray-50 disabled:opacity-50"
+                  >
+                    Handmatig als ontvangen markeren
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  if (!confirm("Deze vergoeding verwijderen?")) return;
+                  startTransition(async () => {
+                    await deleteOrderClaim(c.id);
+                    router.refresh();
+                  });
+                }}
+                className="min-h-[44px] text-sm text-red-500 disabled:opacity-50"
+              >
+                Verwijderen
+              </button>
+            </div>
+          ))}
+          <input
+            value={claimReason}
+            onChange={(e) => setClaimReason(e.target.value)}
+            placeholder="Reden, bijv. slechte kwaliteit"
+            className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base"
+          />
+          <div className="flex gap-2">
+            <label className="flex h-[48px] min-w-0 flex-1 items-center gap-1 rounded-xl border border-gray-300 bg-white px-3">
+              <span className="text-gray-400">€</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={claimAmount}
+                onChange={(e) => setClaimAmount(e.target.value)}
+                placeholder="Verwacht bedrag"
+                className="h-full w-full min-w-0 bg-transparent text-lg outline-none"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={isPending || !claimAmount}
+              onClick={() =>
+                startTransition(async () => {
+                  await addOrderClaim(order.id, claimReason, Number(claimAmount));
+                  setClaimReason("");
+                  setClaimAmount("");
+                  router.refresh();
+                })
+              }
+              className="min-h-[48px] rounded-xl bg-gray-900 px-4 text-base font-medium text-white active:bg-gray-700 disabled:opacity-50"
+            >
+              Toevoegen
+            </button>
+          </div>
+        </div>
+      </details>
 
       <button
         type="button"

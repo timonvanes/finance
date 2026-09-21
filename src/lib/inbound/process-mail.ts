@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractMail, type ExtractedMail } from "@/lib/anthropic/extract-mail";
 import type { ExtractedReturn } from "@/lib/anthropic/extract-return";
+import { inferDiscount } from "@/lib/returns/amounts";
 import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
 
 export interface InboundMail {
@@ -14,6 +15,18 @@ const DEFAULT_WINDOW_DAYS = 14;
 const DAILY_LIMIT = 40;
 const PREFILTER_OUTCOME = "Genegeerd (niet herkend als bestelling of retour)";
 const RELEVANT = /bestel|order|retour|terug|bezorg|geleverd|pakket|zending|factuur|creditnota|refund|return|deliver|klarna|shipment/i;
+
+// Mails are mostly link and tracking noise; stripping it keeps the price
+// lines inside the part the AI reads and makes each call cheaper.
+function cleanMailText(text: string) {
+  return text
+    .replace(/[<\[]https?:\/\/[^>\]\s]*[>\]]/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[​-‏͏⁠﻿­]/g, "")
+    .replace(/[ \t ]+/g, " ")
+    .replace(/(\r?\n\s*){3,}/g, "\n\n")
+    .trim();
+}
 
 function addDays(iso: string, days: number) {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -55,7 +68,8 @@ async function record(
 }
 
 // Runs with the service-role client, so every query is scoped to userId.
-export async function processInboundMail(supabase: SupabaseClient, userId: string, mail: InboundMail) {
+export async function processInboundMail(supabase: SupabaseClient, userId: string, rawMail: InboundMail) {
+  const mail = { ...rawMail, text: cleanMailText(rawMail.text) };
   const { data: seen } = await supabase
     .from("inbound_mails")
     .select("id")
@@ -109,7 +123,8 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
         order_date: orderDate,
         total_amount: ex.total_amount,
         source_text: mail.text.slice(0, 20000),
-        payment_method: ex.via_klarna ? "klarna" : "direct",
+        payment_method: ex.via_klarna ? "klarna" : ex.on_invoice ? "invoice" : "direct",
+        discount_total: ex.discount_total ?? inferDiscount(ex.items.reduce((s, i) => s + i.price * i.quantity, 0), ex.total_amount),
         return_deadline: deadline,
       })
       .select("id")
