@@ -254,7 +254,7 @@ export function DebtEditor({ debt }: { debt: EditorDebt }) {
                 <input inputMode="decimal" value={property} onChange={(e) => setProperty(e.target.value)} className={input} />
               </Field>
             ) : (
-              <Field label="Waarvan gift (al meegeteld)">
+              <Field label="Prestatiebeurs in de onderdelen hieronder (gift)">
                 <input inputMode="decimal" value={gift} onChange={(e) => setGift(e.target.value)} className={input} />
               </Field>
             )}
