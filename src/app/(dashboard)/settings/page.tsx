@@ -27,7 +27,7 @@ const GROUPS: {
       {
         href: "/settings/schulden",
         label: "Schulden en hypotheek",
-        description: "Studielening (DUO) en later je hypotheek, in ontwikkeling",
+        description: "Studielening (DUO) en hypotheek met rente en maandlast",
       },
       {
         href: "/settings/budgets",

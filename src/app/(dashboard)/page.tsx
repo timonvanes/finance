@@ -19,6 +19,7 @@ import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
 import { periodRange } from "@/lib/month";
 import { getHiddenDashboardModules, getMonthStartDay } from "@/lib/settings";
+import { getDebtFixedCosts } from "@/actions/debts";
 
 const MONTH_NAMES = [
   "januari", "februari", "maart", "april", "mei", "juni",
@@ -57,8 +58,9 @@ export default async function DashboardPage({
   const hiddenModules = new Set(await getHiddenDashboardModules());
   const show = (key: string) => !hiddenModules.has(key);
 
-  const [summary, categorySpend, incomeByCategory, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans] =
+  const [debtCosts, summary, categorySpend, incomeByCategory, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans] =
     await Promise.all([
+      getDebtFixedCosts(),
       getDashboardSummary(monthsAgo),
       getMonthlySpendByCategory(monthsAgo),
       getMonthlyIncomeByCategory(monthsAgo),
@@ -481,8 +483,25 @@ export default async function DashboardPage({
       {show("fixed") && isCurrentMonth && (
         <section className="space-y-2">
           <h2 className="px-1 text-lg font-semibold text-gray-900">Vaste lasten</h2>
-          {recurring.length > 0 || reservations.length > 0 ? (
+          {recurring.length > 0 || reservations.length > 0 || debtCosts.length > 0 ? (
             <ul className={`${card} overflow-hidden`}>
+              {debtCosts.map((c) => (
+                <li key={`debt-${c.id}`} className="border-b border-gray-100 last:border-b-0">
+                  <Link
+                    href="/settings/schulden"
+                    className="flex min-h-[64px] items-center justify-between gap-3 px-5 py-3 active:bg-gray-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-medium text-gray-900">{c.name}</p>
+                      <p className="text-sm text-gray-500">{c.estimated ? "geschat maandbedrag" : "maandbedrag"}</p>
+                    </div>
+                    <span className="shrink-0 text-base font-medium text-gray-900">
+                      {c.estimated ? "~" : ""}
+                      {euro(c.amount)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
               {reservations.map((r) => (
                 <li key={`pot-${r.id}`} className="border-b border-gray-100 last:border-b-0">
                   <Link

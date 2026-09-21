@@ -53,6 +53,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { data: parts } = await admin
+      .from("debt_parts")
+      .select("user_id, name, rate_fixed_until, is_gift, debts(name)")
+      .not("rate_fixed_until", "is", null);
+    const today0 = new Date().toISOString().slice(0, 10);
+    let sent = 0;
+    for (const p of parts ?? []) {
+      if (p.is_gift) continue;
+      const days = Math.round((Date.parse(p.rate_fixed_until) - Date.parse(today0)) / 86_400_000);
+      if (days !== 30 && days !== 7) continue;
+      const debt = Array.isArray(p.debts) ? p.debts[0] : p.debts;
+      await sendPush(p.user_id, "debt_rate", {
+        title: "Rente wordt opnieuw vastgezet",
+        body: `${debt?.name ?? "Lening"} · ${p.name}: de rentevaste periode eindigt over ${days} dagen. Vul de nieuwe rente in zodra je die weet.`,
+        url: "/settings/schulden",
+      });
+      sent++;
+    }
+    report.debtRateReminders = sent;
+  } catch (e) {
+    report.debtRateReminders = e instanceof Error ? e.message : "failed";
+  }
+
+  try {
     await autoSyncStaleConnections();
     report.bankSync = "ok";
   } catch (e) {
