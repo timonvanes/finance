@@ -13,17 +13,15 @@ export default async function WbwPage() {
     const tx = one(r.transactions);
     const person = one(r.people as { name: string } | { name: string }[] | null);
     const total = r.source_total_amount ?? (tx?.amount != null ? Math.abs(tx.amount) : r.computed_amount);
-    const group =
-      groups.get(r.transaction_id) ??
-      ({
-        id: r.transaction_id,
-        title: tx?.counterparty_name ?? "Onbekend",
-        date: tx?.booking_date ?? null,
-        total,
-        ownShare: 0,
-        people: [],
-        reclaimIds: [],
-      } satisfies WbwGroup);
+    const group: WbwGroup = groups.get(r.transaction_id) ?? {
+      id: r.transaction_id,
+      title: tx?.counterparty_name ?? "Onbekend",
+      date: tx?.booking_date ?? null,
+      total,
+      ownShare: 0,
+      people: [],
+      reclaimIds: [],
+    };
     group.people.push({ name: person?.name ?? "Onbekend", amount: r.computed_amount });
     group.reclaimIds.push(r.id);
     groups.set(r.transaction_id, group);
