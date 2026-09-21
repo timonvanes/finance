@@ -12,6 +12,7 @@ export interface EditorPart {
   rate: number;
   rate_fixed_until: string | null;
   is_gift: boolean;
+  gift_inside?: boolean;
   repay_type?: "annuity" | "linear" | "interest_only";
   end_date?: string | null;
 }
@@ -84,6 +85,7 @@ function PartForm({ debt, part, onDone }: { debt: EditorDebt; part: EditorPart |
   const [rate, setRate] = useState(part ? String(part.rate) : "");
   const [fixedUntil, setFixedUntil] = useState(part?.rate_fixed_until ?? "");
   const [isGift, setIsGift] = useState(part?.is_gift ?? false);
+  const [giftInside, setGiftInside] = useState(part?.gift_inside ?? false);
   const [repayType, setRepayType] = useState(part?.repay_type ?? "annuity");
   const [endDate, setEndDate] = useState(part?.end_date ?? "");
 
@@ -98,6 +100,7 @@ function PartForm({ debt, part, onDone }: { debt: EditorDebt; part: EditorPart |
           rate: Number(rate.replace(",", ".")),
           rateFixedUntil: fixedUntil || null,
           isGift,
+          giftInside,
           repayType,
           endDate: endDate || null,
         });
@@ -154,6 +157,17 @@ function PartForm({ debt, part, onDone }: { debt: EditorDebt; part: EditorPart |
             className="h-6 w-6 accent-teal-700"
           />
           Wordt een gift (hoef ik niet terug te betalen)
+        </label>
+      )}
+      {!mortgage && !isGift && (
+        <label className="flex min-h-[48px] items-center gap-3 text-base text-gray-900">
+          <input
+            type="checkbox"
+            checked={giftInside}
+            onChange={(e) => setGiftInside(e.target.checked)}
+            className="h-6 w-6 accent-teal-700"
+          />
+          Hierin zit prestatiebeurs die een gift wordt
         </label>
       )}
       <div className="flex gap-2">

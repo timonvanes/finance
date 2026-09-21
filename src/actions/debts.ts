@@ -18,7 +18,7 @@ export async function getDebts() {
   const { data, error } = await supabase
     .from("debts")
     .select(
-      "id, kind, name, regime, repay_start, term_years, monthly_payment, gift_adjustment, property_value, property_value_date, debt_parts(id, name, balance, balance_date, rate, rate_fixed_until, is_gift, sort, repay_type, end_date)"
+      "id, kind, name, regime, repay_start, term_years, monthly_payment, gift_adjustment, property_value, property_value_date, debt_parts(id, name, balance, balance_date, rate, rate_fixed_until, is_gift, gift_inside, sort, repay_type, end_date)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -105,6 +105,7 @@ export async function savePart(
     rate: number;
     rateFixedUntil: string | null;
     isGift: boolean;
+    giftInside?: boolean;
     repayType?: "annuity" | "linear" | "interest_only";
     endDate?: string | null;
   }
@@ -119,6 +120,7 @@ export async function savePart(
     rate: values.rate,
     rate_fixed_until: values.rateFixedUntil || null,
     is_gift: values.isGift,
+    gift_inside: values.giftInside ?? false,
     repay_type: values.repayType ?? "annuity",
     end_date: values.endDate || null,
   };

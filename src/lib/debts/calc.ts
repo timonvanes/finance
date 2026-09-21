@@ -13,6 +13,7 @@ export interface PartInput {
   rate: number;
   rate_fixed_until: string | null;
   is_gift: boolean;
+  gift_inside?: boolean;
   repay_type?: "annuity" | "linear" | "interest_only";
   end_date?: string | null;
 }
@@ -38,13 +39,19 @@ export function summarize(debt: DebtInput, parts: PartInput[], now = new Date())
 
   const nonGift = current.filter((p) => !p.is_gift);
   const nonGiftSum = nonGift.reduce((s, p) => s + p.current, 0);
-  const giftAdj = Math.min(Math.max(0, debt.gift_adjustment), nonGiftSum);
-  const giftShare = nonGiftSum > 0 ? giftAdj / nonGiftSum : 0;
+  // The gift adjustment sits inside the parts marked "gift_inside"; if none is
+  // marked it is spread over all parts.
+  const marked = nonGift.filter((p) => p.gift_inside);
+  const carriers = marked.length > 0 ? marked : nonGift;
+  const carrierSum = carriers.reduce((s, p) => s + p.current, 0);
+  const giftAdj = Math.min(Math.max(0, debt.gift_adjustment), carrierSum);
+  const giftShare = carrierSum > 0 ? giftAdj / carrierSum : 0;
+  const shareOf = (p: { gift_inside?: boolean }) => (marked.length === 0 || p.gift_inside ? giftShare : 0);
 
   const totalAtLender = current.reduce((s, p) => s + p.current, 0);
   const giftTotal = current.filter((p) => p.is_gift).reduce((s, p) => s + p.current, 0) + giftAdj;
   const realNow = nonGiftSum - giftAdj;
-  const interestPerYear = nonGift.reduce((s, p) => s + (p.current * p.rate) / 100, 0) * (1 - giftShare);
+  const interestPerYear = nonGift.reduce((s, p) => s + ((p.current * (1 - shareOf(p))) * p.rate) / 100, 0);
 
   let projectedAtStart: number | null = null;
   let blendedRate: number | null = null;
@@ -54,7 +61,7 @@ export function summarize(debt: DebtInput, parts: PartInput[], now = new Date())
   if (debt.repay_start) {
     const startMs = at(debt.repay_start);
     const projected = nonGift.map((p) => ({
-      value: grow(p.balance, p.rate, at(p.balance_date), Math.max(startMs, nowMs)) * (1 - giftShare),
+      value: grow(p.balance, p.rate, at(p.balance_date), Math.max(startMs, nowMs)) * (1 - shareOf(p)),
       rate: p.rate,
     }));
     projectedAtStart = projected.reduce((s, p) => s + p.value, 0);

@@ -88,7 +88,12 @@ export default async function SchuldenPage() {
                 )}
               </div>
               {s.parts.length > 0 && (
-                <ul className="divide-y divide-gray-100 border-t border-gray-100">
+                <details className="group border-t border-gray-100">
+                  <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between text-base font-medium text-gray-700 [&::-webkit-details-marker]:hidden">
+                <span>Leningdelen</span>
+                <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
+              </summary>
+                <ul className="divide-y divide-gray-100">
                   {s.parts.map((p) => (
                     <li key={p.id} className="space-y-1 py-3">
                       <div className="flex items-baseline justify-between gap-3">
@@ -110,6 +115,7 @@ export default async function SchuldenPage() {
                     </li>
                   ))}
                 </ul>
+                </details>
               )}
               <DebtEditor debt={editor} />
             </section>
@@ -143,8 +149,14 @@ export default async function SchuldenPage() {
               </div>
             </div>
 
+            <details className="group border-t border-gray-100">
+              <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between text-base font-medium text-gray-700 [&::-webkit-details-marker]:hidden">
+                <span>Meer details</span>
+                <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
+              </summary>
+              <div className="space-y-4 pb-2">
             {d.repay_start && s.aanloopEnd && s.repayEnd && (
-              <div className="space-y-2 border-t border-gray-100 pt-3 text-base">
+              <div className="space-y-2 pt-1 text-base">
                 <p className="text-sm font-medium text-gray-700">Fasen</p>
                 <p className="text-gray-900">
                   Aanloopfase tot en met {date(s.aanloopEnd)}
@@ -188,6 +200,8 @@ export default async function SchuldenPage() {
             <p className="text-xs text-gray-400">
               Bedragen zijn berekend vanaf de stand van je gegevens en kunnen licht afwijken van DUO.
             </p>
+              </div>
+            </details>
             <DebtEditor debt={editor} />
           </section>
         );
