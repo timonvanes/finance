@@ -44,8 +44,11 @@ export function summarize(debt: DebtInput, parts: PartInput[], now = new Date())
   const marked = nonGift.filter((p) => p.gift_inside);
   const carriers = marked.length > 0 ? marked : nonGift;
   const carrierSum = carriers.reduce((s, p) => s + p.current, 0);
-  const giftAdj = Math.min(Math.max(0, debt.gift_adjustment), carrierSum);
-  const giftShare = carrierSum > 0 ? giftAdj / carrierSum : 0;
+  // The gift amount is stated as of the balance date; its share of those parts
+  // stays the same, so it also accrues interest along with them.
+  const carrierAtDate = carriers.reduce((s, p) => s + p.balance, 0);
+  const giftShare = carrierAtDate > 0 ? Math.min(1, Math.max(0, debt.gift_adjustment) / carrierAtDate) : 0;
+  const giftAdj = carrierSum * giftShare;
   const shareOf = (p: { gift_inside?: boolean }) => (marked.length === 0 || p.gift_inside ? giftShare : 0);
 
   const totalAtLender = current.reduce((s, p) => s + p.current, 0);
