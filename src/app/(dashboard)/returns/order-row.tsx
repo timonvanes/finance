@@ -327,7 +327,7 @@ export function OrderRow({
                 Ontkoppelen
               </button>
             </div>
-          ) : (
+          ) : order.payment_method !== "direct" ? null : (
             <select
               disabled={isPending}
               defaultValue=""

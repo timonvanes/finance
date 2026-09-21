@@ -4,10 +4,12 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 const MailSchema = z.object({
   kind: z
-    .enum(["order_confirmation", "delivered", "return_confirmation", "other"])
+    .enum(["order_confirmation", "delivered", "return_confirmation", "price_adjustment", "other"])
     .describe(
       "order_confirmation = bevestiging van een nieuwe bestelling; delivered = pakket is bezorgd of ligt klaar; " +
-        "return_confirmation = bevestiging van een retour, creditnota of terugbetaling; other = al het andere (reclame, verzendupdate onderweg, etc.)"
+        "return_confirmation = bevestiging van een retour, creditnota of terugbetaling van geretourneerde artikelen; " +
+        "price_adjustment = de winkel betaalt achteraf geld terug of geeft extra korting op een artikel dat je houdt (prijsverschil, prijsgarantie, compensatie, klachtafhandeling); " +
+        "other = al het andere (reclame, verzendupdate onderweg, etc.)"
     ),
   merchant_name: z
     .string()
@@ -43,6 +45,10 @@ const MailSchema = z.object({
   on_invoice: z
     .boolean()
     .describe("true als de betaalwijze 'rekening', 'achteraf betalen' of 'op factuur' is (nog niet betaald bij het bestellen)"),
+  adjustment_amount: z
+    .number()
+    .nullable()
+    .describe("Bij price_adjustment: het bedrag in euro's dat achteraf terugbetaald of gekort wordt, anders null"),
   via_klarna: z.boolean().describe("true als de bestelling via Klarna is betaald of de mail van/over Klarna gaat"),
   klarna_credit_confirmed: z
     .boolean()

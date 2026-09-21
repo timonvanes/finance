@@ -187,6 +187,49 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
     return { outcome: "needs_review" };
   }
 
+  if (ex.kind === "price_adjustment") {
+    const amount = ex.adjustment_amount ?? ex.refund_total;
+    const label = ex.items[0]?.description ?? "artikel";
+    if (!amount || amount <= 0) {
+      await record(supabase, userId, mail, ex.kind, "Prijsverschil: bedrag niet gevonden. Voeg het zelf toe bij de bestelling.");
+      return { outcome: "needs_review" };
+    }
+    const scored = await scoreOrdersForReturn(supabase, asReturn(ex), userId, true);
+    if (!isConfident(scored)) {
+      await record(
+        supabase,
+        userId,
+        mail,
+        ex.kind,
+        `Prijsverschil van ${amount.toFixed(2)} euro (${label}): geen eenduidige bestelling gevonden. Voeg het zelf toe bij de bestelling.`
+      );
+      return { outcome: "needs_review" };
+    }
+    const { data: order } = await supabase
+      .from("orders")
+      .select("payment_method")
+      .eq("id", scored[0].id)
+      .eq("user_id", userId)
+      .single();
+    // Credited on an invoice (or Klarna) means nothing will arrive at the bank.
+    const credited = order?.payment_method !== "direct" || ex.on_invoice || ex.via_klarna;
+    await supabase.from("order_claims").insert({
+      user_id: userId,
+      order_id: scored[0].id,
+      reason: `Prijsverschil: ${label}`.slice(0, 200),
+      expected_amount: amount,
+      status: credited ? "received" : "pending",
+    });
+    await record(
+      supabase,
+      userId,
+      mail,
+      ex.kind,
+      `Prijsverschil ${amount.toFixed(2)} euro vastgelegd bij ${ex.merchant_name}${credited ? " (verrekend op de factuur)" : ""}`
+    );
+    return { outcome: "price_adjustment" };
+  }
+
   await record(supabase, userId, mail, ex.kind, "Genegeerd (geen bestelling of retour)");
   return { outcome: "ignored" };
 }

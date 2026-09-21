@@ -36,12 +36,13 @@ export interface ScoredOrder {
 export async function scoreOrdersForReturn(
   supabase: SupabaseClient,
   extraction: ExtractedReturn,
-  userId?: string
+  userId?: string,
+  includeRefunded = false
 ): Promise<ScoredOrder[]> {
   let query = supabase
     .from("orders")
-    .select("id, merchant_name, order_date, refund_status, order_items(description)")
-    .neq("refund_status", "refunded");
+    .select("id, merchant_name, order_date, refund_status, order_items(description)");
+  if (!includeRefunded) query = query.neq("refund_status", "refunded");
   if (userId) query = query.eq("user_id", userId);
   const { data: orders, error } = await query;
   if (error) throw error;
