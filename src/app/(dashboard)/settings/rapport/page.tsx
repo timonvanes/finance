@@ -115,14 +115,14 @@ export default async function RapportPage({
             ))}
           </select>
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 [&_input]:min-w-0 [&_label]:min-w-0">
           <label className="block">
             <span className="mb-1 block text-sm text-gray-500">Van (bij zelf kiezen)</span>
             <input
               type="date"
               name="van"
               defaultValue={van ?? ""}
-              className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base"
+              className="box-border min-h-[52px] w-full min-w-0 max-w-full appearance-none rounded-xl border border-gray-300 bg-white px-3 text-base"
             />
           </label>
           <label className="block">
@@ -131,7 +131,7 @@ export default async function RapportPage({
               type="date"
               name="tot"
               defaultValue={tot ?? ""}
-              className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base"
+              className="box-border min-h-[52px] w-full min-w-0 max-w-full appearance-none rounded-xl border border-gray-300 bg-white px-3 text-base"
             />
           </label>
         </div>
