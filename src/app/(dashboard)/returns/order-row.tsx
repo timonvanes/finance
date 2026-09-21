@@ -122,7 +122,9 @@ export function OrderRow({
     });
 
   return (
-    <li className="flex flex-col gap-3 px-5 py-4 text-base">
+    <li className="text-base">
+      <details className="group">
+      <summary className="flex cursor-pointer list-none flex-col gap-1 px-5 py-4 active:bg-gray-50 [&::-webkit-details-marker]:hidden">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-lg font-medium text-gray-900">{order.merchant_name}</p>
@@ -142,7 +144,15 @@ export function OrderRow({
           )}
         </div>
       </div>
+      {order.refund_status === "not_returned" && order.return_deadline && daysLeft(order.return_deadline) >= 0 && (
+        <p className={`text-sm ${daysLeft(order.return_deadline) <= 3 ? "font-medium text-red-700" : "text-blue-700"}`}>
+          Retour vóór {new Date(order.return_deadline).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} · nog{" "}
+          {daysLeft(order.return_deadline)} dagen
+        </p>
+      )}
+      </summary>
 
+      <div className="flex flex-col gap-3 px-5 pb-4">
       {order.refund_status === "not_returned" && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {order.return_deadline && (
@@ -597,6 +607,8 @@ export function OrderRow({
       >
         Bestelling verwijderen
       </button>
+      </div>
+      </details>
     </li>
   );
 }

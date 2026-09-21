@@ -32,6 +32,20 @@ export default async function ReturnsPage() {
     .sort((a, b) => (a.return_deadline! < b.return_deadline! ? -1 : 1))
     .slice(0, 6);
 
+  const sortedOrders = [...orders].sort((a, b) => {
+    const live = (o: (typeof orders)[number]) =>
+      o.return_deadline &&
+      o.refund_status === "not_returned" &&
+      o.order_items.some((i: { returned: boolean }) => !i.returned) &&
+      daysLeft(o.return_deadline) >= 0;
+    const la = live(a);
+    const lb = live(b);
+    if (la && lb) return a.return_deadline! < b.return_deadline! ? -1 : 1;
+    if (la) return -1;
+    if (lb) return 1;
+    return a.created_at < b.created_at ? 1 : -1;
+  });
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
@@ -97,7 +111,7 @@ export default async function ReturnsPage() {
         <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Bestellingen ({orders.length})</h2>
         {orders.length > 0 ? (
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
-            {orders.map((order) => (
+            {sortedOrders.map((order) => (
               <OrderRow key={order.id} order={order} incomingTransactions={incomingTransactions} />
             ))}
           </ul>
