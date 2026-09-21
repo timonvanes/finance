@@ -70,13 +70,13 @@ export function ExpenseContribution({
   }
 
   return (
-    <div className="space-y-1 text-xs">
+    <div className="space-y-2">
       {contributions.length > 0 && (
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {contributions.map((c) => (
-            <li key={c.id} className="flex items-center gap-2 text-gray-500">
-              <span>
-                −€{c.amount.toFixed(2)}
+            <li key={c.id} className="flex items-center justify-between gap-3 rounded-xl bg-teal-50 px-4 py-3 text-sm">
+              <span className="min-w-0 text-teal-900">
+                <span className="font-semibold">−€{c.amount.toFixed(2)}</span>
                 {c.label && ` · ${c.label}`}
                 {c.source_transaction?.counterparty_name && ` (${c.source_transaction.counterparty_name})`}
               </span>
@@ -89,9 +89,9 @@ export function ExpenseContribution({
                     router.refresh();
                   });
                 }}
-                className="text-red-400 underline hover:text-red-600 disabled:opacity-50"
+                className="min-h-[44px] shrink-0 px-2 text-gray-500 underline disabled:opacity-50"
               >
-                x
+                Weg
               </button>
             </li>
           ))}
@@ -101,12 +101,13 @@ export function ExpenseContribution({
         <button
           type="button"
           onClick={openForm}
-          className="text-gray-400 underline hover:text-gray-600"
+          className="min-h-[44px] rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 active:bg-gray-50"
         >
-          + Bijdrage (bv. huurtoeslag, voorschot van iemand)
+          Bijdrage
         </button>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-3 rounded-xl bg-gray-50 p-4">
+          <p className="text-sm text-gray-600">Geld van iemand anders in deze betaling, zoals een toeslag.</p>
           <select
             value={sourceId}
             disabled={isPending}
@@ -116,41 +117,52 @@ export function ExpenseContribution({
             <option value="">Geen gekoppelde transactie</option>
             {incomeSources.map((s) => (
               <option key={s.id} value={s.id}>
-                {new Date(s.booking_date).toLocaleDateString("nl-NL")} ·{" "}
-                {s.counterparty_name ?? "Onbekend"} · €{s.amount.toFixed(2)}
+                {new Date(s.booking_date).toLocaleDateString("nl-NL")} · {s.counterparty_name ?? "Onbekend"} · €
+                {s.amount.toFixed(2)}
               </option>
             ))}
           </select>
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={amount}
-            disabled={isPending}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Bedrag"
-            className="min-h-[48px] w-28 rounded-xl border border-gray-300 px-3 text-base disabled:opacity-50"
-          />
-          <input
-            type="text"
-            value={label}
-            disabled={isPending}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Label (bv. Huurtoeslag)"
-            className="min-h-[48px] min-w-0 flex-1 rounded-xl border border-gray-300 px-3 text-base disabled:opacity-50"
-          />
-          <button
-            type="button"
-            disabled={isPending || !amount}
-            onClick={save}
-            className="min-h-[48px] rounded-xl bg-gray-900 px-5 text-base font-medium text-white disabled:opacity-50"
-          >
-            Opslaan
-          </button>
-          <button type="button" onClick={() => setShowForm(false)} className="min-h-[48px] px-3 text-base text-gray-500 underline">
-            Annuleren
-          </button>
+          <div className="flex gap-2">
+            <label className="flex h-[48px] w-32 shrink-0 items-center gap-1 rounded-xl border border-gray-300 bg-white px-3">
+              <span className="text-gray-400">€</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={amount}
+                disabled={isPending}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Bedrag"
+                className="h-full w-full min-w-0 bg-transparent text-base outline-none disabled:opacity-50"
+              />
+            </label>
+            <input
+              type="text"
+              value={label}
+              disabled={isPending}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Label"
+              className="min-h-[48px] min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-base disabled:opacity-50"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={isPending || !amount}
+              onClick={save}
+              className="min-h-[48px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
+            >
+              Opslaan
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="min-h-[48px] rounded-xl border border-gray-300 bg-white px-4 text-base text-gray-700"
+            >
+              Annuleren
+            </button>
+          </div>
         </div>
       )}
     </div>

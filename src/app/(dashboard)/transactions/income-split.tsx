@@ -77,7 +77,7 @@ export function IncomeSplit({
     return (
       <div className="space-y-2 rounded-xl bg-teal-50 p-4 text-sm">
         <p className="font-medium text-teal-900">
-          {euro(passed)} van dit bedrag is voor huisgenoten, {euro(amount - passed)} is voor jou.
+          {euro(passed)} niet voor jou, {euro(amount - passed)} wel.
         </p>
         <ul className="space-y-2">
           {splits.map((s) => (
@@ -138,7 +138,7 @@ export function IncomeSplit({
           }}
           className="min-h-[44px] text-sm text-gray-600 underline disabled:opacity-50"
         >
-          Verdeling ongedaan maken
+          Ongedaan maken
         </button>
         {error && <p className="text-red-600">{error}</p>}
       </div>
@@ -150,18 +150,16 @@ export function IncomeSplit({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="min-h-[44px] self-start text-sm text-gray-500 underline"
+        className="min-h-[44px] self-start rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 active:bg-gray-50"
       >
-        Deel is voor huisgenoten (bijv. huurtoeslag)
+        Deel niet voor mij
       </button>
     );
   }
 
   return (
     <div className="space-y-3 rounded-xl bg-gray-50 p-4">
-      <p className="text-sm text-gray-600">
-        Kies wie een deel krijgt. Dat deel telt niet als jouw inkomen. Wat overblijft is voor jou.
-      </p>
+      <p className="text-sm text-gray-600">Wie krijgt een deel? Dat telt niet als jouw inkomen.</p>
       <ul className="space-y-2">
         {people.map((p) => (
           <li key={p.id} className="flex min-h-[48px] items-center gap-3">
@@ -191,20 +189,20 @@ export function IncomeSplit({
       </ul>
       {chosen.length > 0 && (
         <p className={`text-sm ${own < 0 ? "font-medium text-red-600" : "text-gray-700"}`}>
-          Voor jou blijft over: <span className="font-semibold">{euro(own)}</span>
+          Voor jou: <span className="font-semibold">{euro(own)}</span>
         </p>
       )}
       {chosen.length > 0 && own > 0 && (
         <label className="block">
           <span className="mb-1 block text-sm text-gray-500">
-            Jouw deel verrekenen met de huur (dan telt je huur als huur min dit deel)
+            Mijn deel met de huur verrekenen
           </span>
           <select
             value={rentId}
             onChange={(e) => setRentId(e.target.value)}
             className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900"
           >
-            <option value="">Niet verrekenen, telt als inkomen</option>
+            <option value="">Nee, telt als mijn inkomen</option>
             {outgoing.map((tx) => (
               <option key={tx.id} value={tx.id}>
                 {new Date(tx.booking_date).toLocaleDateString("nl-NL")} · {tx.counterparty_name ?? "Onbekend"} ·{" "}
