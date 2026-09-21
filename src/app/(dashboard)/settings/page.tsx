@@ -15,6 +15,11 @@ const GROUPS: {
         value: ({ startDay }) => (startDay === 1 ? "1e" : `${startDay}e`),
       },
       {
+        href: "/settings/rapport",
+        label: "Baten en lasten",
+        description: "Rapport per maand, periode of jaar om af te drukken",
+      },
+      {
         href: "/settings/budgets",
         label: "Budgetdoelen",
         description: "Maandbudget per categorie",
