@@ -17,7 +17,7 @@ import { effectiveMonthly } from "@/lib/pots/insights";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
 import { periodRange } from "@/lib/month";
-import { getMonthStartDay } from "@/lib/settings";
+import { getHiddenDashboardModules, getMonthStartDay } from "@/lib/settings";
 
 const MONTH_NAMES = [
   "januari", "februari", "maart", "april", "mei", "juni",
@@ -52,6 +52,9 @@ export default async function DashboardPage({
   // 0 = this month, 1 = previous month, etc. — can't navigate into the future.
   const monthsAgo = Math.max(0, parseInt(month ?? "0", 10) || 0);
   const isCurrentMonth = monthsAgo === 0;
+
+  const hiddenModules = new Set(await getHiddenDashboardModules());
+  const show = (key: string) => !hiddenModules.has(key);
 
   const [summary, categorySpend, incomeByCategory, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans] =
     await Promise.all([
@@ -111,7 +114,7 @@ export default async function DashboardPage({
         <SyncAllButton />
       </div>
 
-      {balances.accounts.length > 0 && (
+      {show("accounts") && balances.accounts.length > 0 && (
         <section className={`${card} p-5`}>
           <p className="text-sm text-gray-500">Totaal op je betaalrekeningen</p>
           <p className="mt-1 text-4xl font-semibold text-gray-900">{euro(balances.total)}</p>
@@ -134,7 +137,7 @@ export default async function DashboardPage({
         </section>
       )}
 
-      {freeToSpend != null && (
+      {show("freeToSpend") && freeToSpend != null && (
         <section className={`${card} space-y-2 p-5`}>
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -153,7 +156,7 @@ export default async function DashboardPage({
         </section>
       )}
 
-      {isCurrentMonth && reservations.length > 0 && (
+      {show("reservations") && isCurrentMonth && reservations.length > 0 && (
         <section className={`${card} space-y-3 p-5`}>
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -178,7 +181,7 @@ export default async function DashboardPage({
         </section>
       )}
 
-      {loans.count > 0 && (
+      {show("loans") && loans.count > 0 && (
         <Link href="/leningen" prefetch className={`${card} flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50`}>
           <span className="min-w-0 flex-1">
             <span className="block text-sm text-gray-500">Nog af te lossen aan leningen</span>
@@ -189,7 +192,7 @@ export default async function DashboardPage({
         </Link>
       )}
 
-      {isCurrentMonth && (anomaly || budgetWarnings.length > 0) && (
+      {show("alerts") && isCurrentMonth && (anomaly || budgetWarnings.length > 0) && (
         <section className="space-y-2">
           {anomaly && (
             <p className="rounded-2xl bg-red-50 p-4 text-base text-red-700 ring-1 ring-red-100">
@@ -225,6 +228,7 @@ export default async function DashboardPage({
         </section>
       )}
 
+      {show("todo") && (
       <section className="space-y-2">
         <h2 className="px-1 text-lg font-semibold text-gray-900">Te doen</h2>
         <ul className={`${card} overflow-hidden`}>
@@ -251,7 +255,9 @@ export default async function DashboardPage({
           ))}
         </ul>
       </section>
+      )}
 
+      {show("month") && (
       <section className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <div>
@@ -296,8 +302,9 @@ export default async function DashboardPage({
           </div>
         </div>
       </section>
+      )}
 
-      {isCurrentMonth && budgetStatus.length > 0 && (
+      {show("budgets") && isCurrentMonth && budgetStatus.length > 0 && (
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold text-gray-900">Budgetten</h2>
@@ -346,6 +353,7 @@ export default async function DashboardPage({
         </section>
       )}
 
+      {show("profitLoss") && (
       <section className="space-y-3">
         <h2 className="px-1 text-lg font-semibold text-gray-900">Baten en lasten</h2>
 
@@ -446,8 +454,9 @@ export default async function DashboardPage({
           )}
         </details>
       </section>
+      )}
 
-      {isCurrentMonth && (
+      {show("fixed") && isCurrentMonth && (
         <section className="space-y-2">
           <h2 className="px-1 text-lg font-semibold text-gray-900">Vaste lasten</h2>
           {recurring.length > 0 || reservations.length > 0 ? (

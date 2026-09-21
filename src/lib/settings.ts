@@ -8,3 +8,9 @@ export const getMonthStartDay = cache(async (): Promise<number> => {
   const { data } = await supabase.from("user_settings").select("month_start_day").maybeSingle();
   return clampStartDay(data?.month_start_day ?? 1);
 });
+
+export const getHiddenDashboardModules = cache(async (): Promise<string[]> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("dashboard_hidden").maybeSingle();
+  return (data?.dashboard_hidden ?? []) as string[];
+});
