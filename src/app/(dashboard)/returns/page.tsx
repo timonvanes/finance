@@ -75,16 +75,6 @@ export default async function ReturnsPage() {
         </section>
       )}
 
-      <section>
-        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Retourmail verwerken</h2>
-        <ReturnMailForm />
-      </section>
-
-      <section>
-        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Nieuwe bestelling</h2>
-        <ImportForm />
-      </section>
-
       {inboundMails.length > 0 && (
         <details className="rounded-2xl bg-white ring-1 ring-gray-200">
           <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
@@ -115,6 +105,24 @@ export default async function ReturnsPage() {
           <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">Nog geen bestellingen toegevoegd.</p>
         )}
       </section>
+
+      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
+        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
+          Retourmail zelf plakken
+        </summary>
+        <div className="px-3 pb-3">
+          <ReturnMailForm />
+        </div>
+      </details>
+
+      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
+        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
+          Bestelling zelf toevoegen
+        </summary>
+        <div className="px-3 pb-3">
+          <ImportForm />
+        </div>
+      </details>
     </div>
   );
 }
