@@ -11,6 +11,9 @@ export interface InboundMail {
 }
 
 const DEFAULT_WINDOW_DAYS = 14;
+const DAILY_LIMIT = 40;
+const PREFILTER_OUTCOME = "Genegeerd (niet herkend als bestelling of retour)";
+const RELEVANT = /bestel|order|retour|terug|bezorg|geleverd|pakket|zending|factuur|creditnota|refund|return|deliver|klarna|shipment/i;
 
 function addDays(iso: string, days: number) {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -60,6 +63,22 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
     .eq("message_id", mail.messageId)
     .maybeSingle();
   if (seen) return { outcome: "duplicate" };
+
+  // Cost guards: at most DAILY_LIMIT mails a day go through the AI, and a mail
+  // must look like an order/delivery/return before it is worth a call at all.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await supabase
+    .from("inbound_mails")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .neq("outcome", PREFILTER_OUTCOME)
+    .gte("created_at", since);
+  if ((count ?? 0) >= DAILY_LIMIT) return { outcome: "daily_limit" };
+
+  if (!RELEVANT.test(`${mail.subject} ${mail.text.slice(0, 4000)}`)) {
+    await record(supabase, userId, mail, "other", PREFILTER_OUTCOME);
+    return { outcome: "prefiltered" };
+  }
 
   const ex = await extractMail(mail);
 
