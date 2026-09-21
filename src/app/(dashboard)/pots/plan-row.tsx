@@ -14,11 +14,13 @@ export function PlanRow({
   potId,
   name,
   planned,
+  carry = 0,
   deposited,
 }: {
   potId: string;
   name: string;
   planned: number;
+  carry?: number;
   deposited: number;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -50,6 +52,11 @@ export function PlanRow({
       <div className="h-2 rounded-full bg-gray-100">
         <div className={`h-2 rounded-full ${done ? "bg-teal-600" : "bg-teal-400"}`} style={{ width: `${pct}%` }} />
       </div>
+      {carry > 0 && (
+        <p className="text-sm font-medium text-amber-700">
+          Inclusief {euro(carry)} achterstand van eerdere maanden.
+        </p>
+      )}
       {!done && (
         <p className="text-sm text-gray-500">Wordt vanzelf afgevinkt zodra de overboeking binnenkomt.</p>
       )}

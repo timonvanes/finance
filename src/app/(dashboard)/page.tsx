@@ -13,7 +13,8 @@ import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
 import { getPots } from "@/actions/pots";
 import { computePotBalance } from "@/lib/pots/balance";
-import { effectiveMonthly } from "@/lib/pots/insights";
+import { effectiveMonthly, planCatchUp } from "@/lib/pots/insights";
+import { CatchUpCard } from "./pots/catch-up-card";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
 import { periodRange } from "@/lib/month";
@@ -73,13 +74,27 @@ export default async function DashboardPage({
   const potBalances = new Map(pots.map((p) => [p.id, computePotBalance(p)]));
   const potsTotal = [...potBalances.values()].reduce((sum, b) => sum + b, 0);
   // What to set aside from the next salary: each pot's monthly plan.
+  const startDay = await getMonthStartDay();
+  const catchUps = new Map(pots.map((p) => [p.id, planCatchUp(p, startDay)]));
   const reservations = pots
-    .map((p) => ({ id: p.id, name: p.name, amount: effectiveMonthly(p, potBalances.get(p.id) ?? 0) ?? 0 }))
+    .map((p) => {
+      const base = effectiveMonthly(p, potBalances.get(p.id) ?? 0) ?? 0;
+      const carry = base > 0 ? Math.ceil(catchUps.get(p.id)?.shortfall ?? 0) : 0;
+      return { id: p.id, name: p.name, base, carry, amount: base + carry };
+    })
     .filter((r) => r.amount > 0);
+  const catchUpItems = pots.flatMap((p) =>
+    (catchUps.get(p.id)?.pending ?? []).map((x) => ({
+      potId: p.id,
+      potName: p.name,
+      periodStart: x.periodStart,
+      monthName: new Date(x.labelDate).toLocaleDateString("nl-NL", { month: "long" }),
+      missing: x.missing,
+    }))
+  );
   const plannedSavings = reservations.reduce((sum, r) => sum + r.amount, 0);
 
   const now = new Date();
-  const startDay = await getMonthStartDay();
   const period = periodRange(monthsAgo, startDay);
   const nextPeriodLabel = periodRange(0, startDay).endDate.toLocaleDateString("nl-NL", {
     day: "numeric",
@@ -172,7 +187,12 @@ export default async function DashboardPage({
                   href={`/pots/${r.id}`}
                   className="flex min-h-[48px] items-center justify-between gap-3 text-base active:bg-gray-50"
                 >
-                  <span className="min-w-0 truncate text-gray-700">{r.name}</span>
+                  <span className="min-w-0 text-gray-700">
+                    <span className="block truncate">{r.name}</span>
+                    {r.carry > 0 && (
+                      <span className="block text-sm text-amber-700">inclusief {euro(r.carry, 0)} achterstand</span>
+                    )}
+                  </span>
                   <span className="shrink-0 font-medium text-gray-900">{euro(r.amount, 0)}</span>
                 </Link>
               </li>
@@ -180,6 +200,8 @@ export default async function DashboardPage({
           </ul>
         </section>
       )}
+
+      {show("reservations") && isCurrentMonth && catchUpItems.length > 0 && <CatchUpCard items={catchUpItems} />}
 
       {show("loans") && loans.count > 0 && (
         <Link href="/leningen" prefetch className={`${card} flex min-h-[64px] items-center gap-3 px-5 py-3 active:bg-gray-50`}>
@@ -471,7 +493,7 @@ export default async function DashboardPage({
                       <p className="truncate text-base font-medium text-gray-900">Sparen · {r.name}</p>
                       <p className="text-sm text-gray-500">maandelijks plan</p>
                     </div>
-                    <span className="shrink-0 text-base font-medium text-gray-900">{euro(r.amount)}</span>
+                    <span className="shrink-0 text-base font-medium text-gray-900">{euro(r.base)}</span>
                   </Link>
                 </li>
               ))}

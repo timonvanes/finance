@@ -2,7 +2,8 @@ import Link from "next/link";
 import { getPots, getSavingsInbox } from "@/actions/pots";
 import { getDashboardSummary } from "@/actions/dashboard";
 import { computePotBalance } from "@/lib/pots/balance";
-import { computeSchedule, depositedInPeriod, effectiveMonthly, netInPeriod } from "@/lib/pots/insights";
+import { computeSchedule, depositedInPeriod, effectiveMonthly, netInPeriod, planCatchUp } from "@/lib/pots/insights";
+import { CatchUpCard } from "./catch-up-card";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { InfoButton } from "../info-button";
@@ -29,11 +30,23 @@ export default async function PotsPage() {
   const plans = new Map(
     pots.map((p) => [p.id, effectiveMonthly(p, (balances.get(p.id) ?? 0) - netInPeriod(p, 0, startDay))])
   );
+  const catchUps = new Map(pots.map((p) => [p.id, planCatchUp(p, startDay)]));
+  const carryOf = (id: string) => Math.ceil(catchUps.get(id)?.shortfall ?? 0);
   const planned = pots.filter((p) => plans.get(p.id));
-  const plannedTotal = planned.reduce((s, p) => s + (plans.get(p.id) ?? 0), 0);
+  const plannedBaseTotal = planned.reduce((s, p) => s + (plans.get(p.id) ?? 0), 0);
+  const plannedTotal = planned.reduce((s, p) => s + (plans.get(p.id) ?? 0) + carryOf(p.id), 0);
+  const catchUpItems = pots.flatMap((p) =>
+    (catchUps.get(p.id)?.pending ?? []).map((x) => ({
+      potId: p.id,
+      potName: p.name,
+      periodStart: x.periodStart,
+      monthName: new Date(x.labelDate).toLocaleDateString("nl-NL", { month: "long" }),
+      missing: x.missing,
+    }))
+  );
   const depositedTotal = pots.reduce((s, p) => s + depositedInPeriod(p, 0, startDay), 0);
   const plannedDeposited = planned.reduce(
-    (s, p) => s + Math.min(depositedInPeriod(p, 0, startDay), plans.get(p.id) ?? 0),
+    (s, p) => s + Math.min(depositedInPeriod(p, 0, startDay), (plans.get(p.id) ?? 0) + carryOf(p.id)),
     0
   );
 
@@ -82,10 +95,12 @@ export default async function PotsPage() {
       <div className="rounded-2xl bg-white p-5 ring-1 ring-gray-200">
         <p className="text-sm text-gray-500">Totaal opzij gezet</p>
         <p className="mt-1 text-4xl font-semibold text-gray-900">{euro(totalBalance)}</p>
-        {plannedTotal > 0 && (
-          <p className="mt-1 text-sm text-gray-500">{euro(plannedTotal)} per maand gepland</p>
+        {plannedBaseTotal > 0 && (
+          <p className="mt-1 text-sm text-gray-500">{euro(plannedBaseTotal)} per maand gepland</p>
         )}
       </div>
+
+      {catchUpItems.length > 0 && <CatchUpCard items={catchUpItems} />}
 
       {pendingSpend.length > 0 && <GoalSpendCard items={pendingSpend} />}
 
@@ -103,7 +118,8 @@ export default async function PotsPage() {
                 key={p.id}
                 potId={p.id}
                 name={p.name}
-                planned={plans.get(p.id) ?? 0}
+                planned={(plans.get(p.id) ?? 0) + carryOf(p.id)}
+                carry={carryOf(p.id)}
                 deposited={depositedInPeriod(p, 0, startDay)}
               />
             ))}

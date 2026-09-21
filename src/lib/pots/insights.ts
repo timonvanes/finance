@@ -1,4 +1,4 @@
-import { periodRange } from "@/lib/month";
+import { isoDate, periodRange, periodStartFor } from "@/lib/month";
 import { computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 
 export interface PotForInsights {
@@ -9,6 +9,8 @@ export interface PotForInsights {
   target_date: string | null;
   monthly_amount: number | null;
   monthly_auto?: boolean;
+  plan_start_date?: string | null;
+  pot_period_decisions?: { period_start: string; decision: string }[];
   pot_entries: { amount: number; entry_date: string }[];
 }
 
@@ -102,4 +104,53 @@ export function effectiveMonthly(pot: PotForInsights, baseBalance: number): numb
     return required && required > 0 ? Math.ceil(required) : null;
   }
   return pot.monthly_amount ? Number(pot.monthly_amount) : null;
+}
+
+export interface PendingPeriod {
+  periodStart: string;
+  // A date inside the period, for naming its month.
+  labelDate: string;
+  missing: number;
+}
+
+// Running score of a fixed monthly plan: what should have gone in over the
+// completed periods since the plan started (periods the user chose to skip
+// excluded) against everything deposited since. What is short is carried to
+// the next period. Undecided short periods are listed so the user can choose
+// "meenemen" or "overslaan"; until then they count as carried over.
+export function planCatchUp(pot: PotForInsights, startDay: number, now = new Date()) {
+  const monthly = pot.monthly_amount && !pot.monthly_auto ? Number(pot.monthly_amount) : 0;
+  if (!monthly || !pot.plan_start_date) return { shortfall: 0, pending: [] as PendingPeriod[] };
+
+  const first = periodStartFor(new Date(`${pot.plan_start_date}T00:00:00`), startDay);
+  const current = periodStartFor(now, startDay);
+  const decisions = new Map((pot.pot_period_decisions ?? []).map((d) => [d.period_start, d.decision]));
+  const entries = counted(pot).filter((e) => e.amount > 0);
+
+  let expected = 0;
+  const pending: PendingPeriod[] = [];
+  for (
+    let s = new Date(first);
+    s < current;
+    s = new Date(s.getFullYear(), s.getMonth() + 1, startDay)
+  ) {
+    const next = new Date(s.getFullYear(), s.getMonth() + 1, startDay);
+    const key = isoDate(s);
+    const end = isoDate(next);
+    const decision = decisions.get(key);
+    if (decision === "skip") continue;
+    expected += monthly;
+    const deposited = entries.filter((e) => e.entry_date >= key && e.entry_date < end).reduce((sum, e) => sum + e.amount, 0);
+    if (!decision && deposited < monthly - 0.005) {
+      pending.push({
+        periodStart: key,
+        labelDate: isoDate(new Date(next.getFullYear(), next.getMonth(), next.getDate() - 1)),
+        missing: monthly - deposited,
+      });
+    }
+  }
+
+  const deposited = entries.filter((e) => e.entry_date >= isoDate(first)).reduce((sum, e) => sum + e.amount, 0);
+  const shortfall = Math.max(0, expected - deposited);
+  return { shortfall, pending: shortfall > 0.5 ? pending : [] };
 }

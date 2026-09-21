@@ -6,13 +6,15 @@ import { matchPotTransfers, rematchPotHistory } from "@/lib/pots/matching";
 import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
 import { computePotBalance } from "@/lib/pots/balance";
 import { effectiveMonthly } from "@/lib/pots/insights";
+import { getMonthStartDay } from "@/lib/settings";
+import { isoDate, periodStartFor } from "@/lib/month";
 
 export async function getPots() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
+      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -59,6 +61,7 @@ export async function createPot(formData: FormData) {
     kind,
     match_text: matchText,
     monthly_amount: monthlyAmount && monthlyAmount > 0 ? monthlyAmount : null,
+    plan_start_date: monthlyAmount && monthlyAmount > 0 ? isoDate(periodStartFor(new Date(), await getMonthStartDay())) : null,
     monthly_auto: !(monthlyAmount && monthlyAmount > 0) && !!(targetAmount && targetAmount > 0 && targetDate),
     target_amount: targetAmount && targetAmount > 0 ? targetAmount : null,
     target_date: targetAmount && targetAmount > 0 ? targetDate : null,
@@ -219,11 +222,33 @@ export async function deletePotEntry(entryId: string) {
 // (or none).
 export async function setPotMonthlyPlan(potId: string, amount: number | null, auto: boolean) {
   const supabase = await createClient();
+  const fixed = !auto && amount && amount > 0 ? amount : null;
+  const { data: before } = await supabase.from("pots").select("monthly_amount, plan_start_date").eq("id", potId).single();
+  const changed = fixed == null || Number(before?.monthly_amount ?? 0) !== fixed || !before?.plan_start_date;
+
   const { error } = await supabase
     .from("pots")
-    .update({ monthly_amount: !auto && amount && amount > 0 ? amount : null, monthly_auto: auto })
+    .update({
+      monthly_amount: fixed,
+      monthly_auto: auto,
+      // A new amount starts a new count: earlier months are not held against it.
+      ...(fixed != null && changed ? { plan_start_date: isoDate(periodStartFor(new Date(), await getMonthStartDay())) } : {}),
+      ...(fixed == null ? { plan_start_date: null } : {}),
+    })
     .eq("id", potId);
   if (error) throw error;
+  if (changed) await supabase.from("pot_period_decisions").delete().eq("pot_id", potId);
+  revalidatePath("/", "layout");
+}
+
+// "Meenemen" keeps the missed amount on the plan, "overslaan" drops it.
+export async function decidePotPeriod(potId: string, periodStart: string, decision: "carry" | "skip") {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pot_period_decisions")
+    .upsert({ pot_id: potId, period_start: periodStart, decision }, { onConflict: "pot_id,period_start" });
+  if (error) throw error;
+  revalidatePath("/", "layout");
 }
 
 export async function getPlannedSavingsTotal() {
