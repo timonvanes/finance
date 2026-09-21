@@ -66,15 +66,16 @@ export async function POST(request: NextRequest) {
   const from: string = payload.FromFull?.Email ?? payload.From ?? payload.envelope?.from ?? payload.headers?.from ?? "";
   if (!text) return NextResponse.json({ ok: true, skipped: "empty" });
 
-  // The mail belongs to the user whose address forwarded it. Never guess: with
-  // several accounts, a wrong guess would put the data in someone else's app.
+  // INBOUND_MAIL_USER_ID pins every mail to one account (single-user use).
+  // Without it, the mail goes to the user whose address forwarded it; never
+  // guess, since a wrong guess would put the data in someone else's app.
   const admin = createAdminClient();
-  const sender = from.trim().toLowerCase();
-  let userId: string | null = null;
-  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-  const owner = (list?.users ?? []).find((u) => u.email?.toLowerCase() === sender);
-  if (owner) userId = owner.id;
-  else if (process.env.INBOUND_MAIL_USER_ID) userId = process.env.INBOUND_MAIL_USER_ID;
+  let userId: string | null = process.env.INBOUND_MAIL_USER_ID || null;
+  if (!userId) {
+    const sender = from.trim().toLowerCase();
+    const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    userId = (list?.users ?? []).find((u) => u.email?.toLowerCase() === sender)?.id ?? null;
+  }
   if (!userId) {
     return NextResponse.json({ ok: true, skipped: "unknown sender" });
   }
