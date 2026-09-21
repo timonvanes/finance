@@ -53,7 +53,7 @@ export async function getOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, discount_total, refund_status, refund_transaction_id, created_at,
+      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, return_deadline_source, discount_total, refund_status, refund_transaction_id, created_at,
       order_items(id, description, price, quantity, returned),
       order_claims(id, reason, expected_amount, status, refund_transaction_id, created_at),
       refund_transaction:transactions!orders_refund_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -195,7 +195,7 @@ export async function applyReturnToOrder(orderId: string, extraction: ExtractedR
 
 export async function setReturnDeadline(orderId: string, deadline: string | null) {
   const supabase = await createClient();
-  const { error } = await supabase.from("orders").update({ return_deadline: deadline || null }).eq("id", orderId);
+  const { error } = await supabase.from("orders").update({ return_deadline: deadline || null, return_deadline_source: deadline ? "manual" : null }).eq("id", orderId);
   if (error) throw error;
 }
 

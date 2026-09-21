@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractMail, type ExtractedMail } from "@/lib/anthropic/extract-mail";
 import type { ExtractedReturn } from "@/lib/anthropic/extract-return";
+import { getReturnWindow } from "@/lib/returns/policy";
 import { inferDiscount } from "@/lib/returns/amounts";
 import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
 
@@ -110,11 +111,20 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
       return { outcome: "exists" };
     }
 
-    const deadline = isIso(ex.return_deadline)
+    let deadline = isIso(ex.return_deadline)
       ? ex.return_deadline
       : ex.return_window_days
         ? addDays(orderDate, ex.return_window_days)
         : null;
+    let deadlineSource: "mail" | "lookup" | null = deadline ? "mail" : null;
+    if (!deadline) {
+      // Nothing in the mail: one cached web lookup per shop.
+      const windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
+      if (windowDays) {
+        deadline = addDays(orderDate, windowDays);
+        deadlineSource = "lookup";
+      }
+    }
     const { data: order, error } = await supabase
       .from("orders")
       .insert({
@@ -126,6 +136,7 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
         payment_method: ex.via_klarna ? "klarna" : ex.on_invoice ? "invoice" : "direct",
         discount_total: ex.discount_total ?? inferDiscount(ex.items.reduce((s, i) => s + i.price * i.quantity, 0), ex.total_amount),
         return_deadline: deadline,
+        return_deadline_source: deadlineSource,
       })
       .select("id")
       .single();
@@ -153,10 +164,20 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
       return { outcome: "unmatched" };
     }
     const delivered = isIso(ex.delivered_date) ? ex.delivered_date : new Date().toISOString().slice(0, 10);
+    let windowDays = ex.return_window_days;
+    let source: "mail" | "lookup" | null = isIso(ex.return_deadline) || windowDays ? "mail" : null;
+    if (!isIso(ex.return_deadline) && !windowDays) {
+      windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
+      if (windowDays) source = "lookup";
+    }
     const deadline = isIso(ex.return_deadline)
       ? ex.return_deadline
-      : addDays(delivered, ex.return_window_days ?? DEFAULT_WINDOW_DAYS);
-    await supabase.from("orders").update({ return_deadline: deadline }).eq("id", scored[0].id).eq("user_id", userId);
+      : addDays(delivered, windowDays ?? DEFAULT_WINDOW_DAYS);
+    await supabase
+      .from("orders")
+      .update({ return_deadline: deadline, return_deadline_source: source })
+      .eq("id", scored[0].id)
+      .eq("user_id", userId);
     await record(supabase, userId, mail, ex.kind, `Retourtermijn bijgewerkt (tot ${deadline})`);
     return { outcome: "deadline_set" };
   }

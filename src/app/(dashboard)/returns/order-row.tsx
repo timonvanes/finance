@@ -66,6 +66,7 @@ export function OrderRow({
     payment_method: string;
     credited_amount: number | null;
     return_deadline: string | null;
+    return_deadline_source: string | null;
     discount_total: number;
     order_claims: {
       id: string;
@@ -147,7 +148,7 @@ export function OrderRow({
       {order.refund_status === "not_returned" && order.return_deadline && daysLeft(order.return_deadline) >= 0 && (
         <p className={`text-sm ${daysLeft(order.return_deadline) <= 3 ? "font-medium text-red-700" : "text-blue-700"}`}>
           Retour vóór {new Date(order.return_deadline).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} · nog{" "}
-          {daysLeft(order.return_deadline)} dagen
+          {daysLeft(order.return_deadline)} dagen{order.return_deadline_source === "lookup" && " (opgezocht)"}
         </p>
       )}
       </summary>
