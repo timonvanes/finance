@@ -2,16 +2,19 @@ import Link from "next/link";
 import { getQueuedTransactions, getReclaims } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { CombineSuggestion } from "./combine-suggestion";
+import { WbwBalanceCard } from "./wbw-balance-card";
+import { getWbwStatus } from "@/actions/wbw";
 
 const euro = (n: number) =>
   n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 
 export default async function TerugvorderenPage() {
-  const [reclaims, paymentRequests, queued] = await Promise.all([
+  const [reclaims, paymentRequests, queued, wbwStatus] = await Promise.all([
     getReclaims(),
     getPaymentRequests(),
     getQueuedTransactions(),
+    getWbwStatus(),
   ]);
 
   type PersonRef = { name: string; person_groups: { name: string } | { name: string }[] | null };
@@ -166,6 +169,8 @@ export default async function TerugvorderenPage() {
           <span className="text-2xl text-amber-700">›</span>
         </Link>
       )}
+
+      <WbwBalanceCard status={wbwStatus} />
 
       {suggestions.map((s) => (
         <CombineSuggestion key={s.ids.join(",")} personName={s.name} reclaimIds={s.ids} total={s.total} />

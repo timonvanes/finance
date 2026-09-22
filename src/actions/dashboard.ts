@@ -5,6 +5,7 @@ import { detectRecurringPayments } from "@/lib/dashboard/recurring";
 import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@/lib/contributions/net-amount";
 import { periodKey, periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
+import { wbwFrontedInPeriod } from "@/lib/wbw-fronted";
 
 async function spendByCategoryForRange(start: string, end: string, direction: "expense" | "income" = "expense") {
   const supabase = await createClient();
@@ -29,6 +30,10 @@ async function spendByCategoryForRange(start: string, end: string, direction: "e
         ? netExpenseAmount(tx.id, tx.amount, adjustments)
         : netIncomeAmount(tx.id, tx.amount, adjustments);
     totals.set(name, (totals.get(name) ?? 0) + counted);
+  }
+  if (direction === "expense") {
+    const fronted = await wbwFrontedInPeriod(supabase, start);
+    if (fronted > 0) totals.set("Via WieBetaaltWat", (totals.get("Via WieBetaaltWat") ?? 0) + fronted);
   }
   return totals;
 }
@@ -122,9 +127,11 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
   const monthIncome = (monthTx ?? [])
     .filter((tx) => tx.amount > 0)
     .reduce((sum, tx) => sum + netIncomeAmount(tx.id, tx.amount, adjustments), 0);
-  const monthExpense = (monthTx ?? [])
-    .filter((tx) => tx.amount < 0)
-    .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0);
+  const wbwFronted = await wbwFrontedInPeriod(supabase, start);
+  const monthExpense =
+    (monthTx ?? [])
+      .filter((tx) => tx.amount < 0)
+      .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0) + wbwFronted;
   // What came in but is not counted as your income (passed on, netted, paid back).
   const monthIncomeNotCounted = (monthTx ?? [])
     .filter((tx) => tx.amount > 0)

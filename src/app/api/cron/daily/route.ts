@@ -53,6 +53,26 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const today1 = new Date();
+    if (today1.getDate() === 1) {
+      const { data: balanceUsers } = await admin.from("wbw_balances").select("user_id");
+      const { data: allUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+      const withBalances = new Set((balanceUsers ?? []).map((b) => b.user_id));
+      for (const u of allUsers?.users ?? []) {
+        if (!withBalances.has(u.id)) continue; // only nudge users who use this feature
+        await sendPush(u.id, "wbw_reminder", {
+          title: "WieBetaaltWat invullen",
+          body: "Vul het saldo van deze maand in bij Terugvorderen, dan klopt je overzicht weer.",
+          url: "/terugvorderen",
+        });
+      }
+      report.wbwReminders = withBalances.size;
+    }
+  } catch (e) {
+    report.wbwReminders = e instanceof Error ? e.message : "failed";
+  }
+
+  try {
     const { data: parts } = await admin
       .from("debt_parts")
       .select("user_id, name, rate_fixed_until, is_gift, debts(name)")

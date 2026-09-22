@@ -103,6 +103,32 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     monthly.set(key, m);
   }
 
+  const { data: frontedRows } = await supabase
+    .from("wbw_fronted_expenses")
+    .select("period_start, amount")
+    .gte("period_start", from)
+    .lte("period_start", to);
+  const fronted = (frontedRows ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  if (fronted > 0.5) {
+    const group: CategoryGroup = { name: "Via WieBetaaltWat", total: 0, transactions: [] };
+    for (const r of frontedRows ?? []) {
+      group.total += Number(r.amount);
+      group.transactions.push({
+        id: `wbw-${r.period_start}`,
+        date: r.period_start,
+        name: "Door huisgenoten voorgeschoten",
+        description: null,
+        category: group.name,
+        amount: Number(r.amount),
+      });
+      const key = r.period_start.slice(0, 7);
+      const m = monthly.get(key) ?? { income: 0, expense: 0 };
+      m.expense += Number(r.amount);
+      monthly.set(key, m);
+    }
+    expense.set(group.name, group);
+  }
+
   const sorted = (m: Map<string, CategoryGroup>) => [...m.values()].sort((a, b) => b.total - a.total);
   const incomeGroups = sorted(income);
   const expenseGroups = sorted(expense);

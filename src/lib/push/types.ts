@@ -6,6 +6,7 @@ export const PUSH_TYPES = [
   { key: "bunq_paid", label: "Betaalverzoek betaald via bunq" },
   { key: "transactions", label: "Nieuwe banktransacties" },
   { key: "debt_rate", label: "Rente van een lening wordt opnieuw vastgezet" },
+  { key: "wbw_reminder", label: "Maandelijkse herinnering: WieBetaaltWat invullen" },
 ] as const;
 
 export type PushType = (typeof PUSH_TYPES)[number]["key"];
