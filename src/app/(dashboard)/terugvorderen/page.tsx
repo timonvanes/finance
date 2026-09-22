@@ -170,8 +170,6 @@ export default async function TerugvorderenPage() {
         </Link>
       )}
 
-      <WbwBalanceCard status={wbwStatus} />
-
       {suggestions.map((s) => (
         <CombineSuggestion key={s.ids.join(",")} personName={s.name} reclaimIds={s.ids} total={s.total} />
       ))}
@@ -251,6 +249,7 @@ export default async function TerugvorderenPage() {
         <span className="text-2xl text-gray-300">›</span>
       </Link>
 
+      <WbwBalanceCard status={wbwStatus} />
     </div>
   );
 }
