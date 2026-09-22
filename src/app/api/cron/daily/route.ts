@@ -4,6 +4,7 @@ import { autoSyncStaleConnections } from "@/actions/bank-connections";
 import { ensureBunqCallback, isBunqConfigured } from "@/lib/bunq/client";
 import { processBunqForUser } from "@/lib/bunq/process";
 import { sendPush } from "@/lib/push/send";
+import { clampStartDay } from "@/lib/month";
 
 export const maxDuration = 60;
 
@@ -53,21 +54,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const today1 = new Date();
-    if (today1.getDate() === 1) {
-      const { data: balanceUsers } = await admin.from("wbw_balances").select("user_id");
-      const { data: allUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-      const withBalances = new Set((balanceUsers ?? []).map((b) => b.user_id));
-      for (const u of allUsers?.users ?? []) {
-        if (!withBalances.has(u.id)) continue; // only nudge users who use this feature
-        await sendPush(u.id, "wbw_reminder", {
-          title: "WieBetaaltWat invullen",
-          body: "Vul het saldo van deze maand in bij Terugvorderen, dan klopt je overzicht weer.",
-          url: "/terugvorderen",
-        });
-      }
-      report.wbwReminders = withBalances.size;
+    const todayOfMonth = new Date().getDate();
+    const { data: balanceUsers } = await admin.from("wbw_balances").select("user_id");
+    const withBalances = [...new Set((balanceUsers ?? []).map((b) => b.user_id))];
+    let sentWbw = 0;
+    for (const userId of withBalances) {
+      // Each user's "1st of the month" is their own period start day (e.g. salary day).
+      const { data: settings } = await admin
+        .from("user_settings")
+        .select("month_start_day")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const startDay = clampStartDay(settings?.month_start_day ?? 1);
+      if (todayOfMonth !== startDay) continue;
+      await sendPush(userId, "wbw_reminder", {
+        title: "WieBetaaltWat invullen",
+        body: "Vul het saldo van deze maand in bij Terugvorderen, dan klopt je overzicht weer.",
+        url: "/terugvorderen",
+      });
+      sentWbw++;
     }
+    report.wbwReminders = sentWbw;
   } catch (e) {
     report.wbwReminders = e instanceof Error ? e.message : "failed";
   }
