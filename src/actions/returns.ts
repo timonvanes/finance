@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { extractOrderFromEmailText } from "@/lib/anthropic/extract-order";
 import { inferDiscount } from "@/lib/returns/amounts";
 import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
+import { autoMatchOrderRefunds } from "@/lib/returns/auto-match";
 import { extractReturnFromEmailText, type ExtractedReturn } from "@/lib/anthropic/extract-return";
 
 export async function extractOrderPreview(emailText: string) {
@@ -50,6 +51,22 @@ export async function createOrder(input: {
 
 export async function getOrders() {
   const supabase = await createClient();
+  // Catches refunds that arrived after their return was processed — the
+  // background sync also does this, but this keeps the page itself in sync.
+  const { data: recentIncoming } = await supabase
+    .from("visible_transactions")
+    .select("id")
+    .gt("amount", 0)
+    .eq("is_transfer", false)
+    .order("booking_date", { ascending: false })
+    .limit(50);
+  if (recentIncoming && recentIncoming.length > 0) {
+    await autoMatchOrderRefunds(
+      supabase,
+      recentIncoming.map((t) => t.id)
+    );
+  }
+
   const { data, error } = await supabase
     .from("orders")
     .select(

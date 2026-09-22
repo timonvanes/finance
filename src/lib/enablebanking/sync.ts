@@ -3,6 +3,7 @@ import { enableBankingFetch, psuHeaders, type PsuContext } from "./client";
 import { applyCategoryRules } from "@/lib/categorization/engine";
 import { sendPush } from "@/lib/push/send";
 import { autoMatchIncomingTransactions } from "@/lib/reclaims/matching";
+import { autoMatchOrderRefunds } from "@/lib/returns/auto-match";
 import { matchPotTransfers } from "@/lib/pots/matching";
 import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
 
@@ -366,6 +367,7 @@ export async function syncBankConnection(
         await matchPotTransfers(supabase, insertedIds, userId);
         await applyCategoryRules(supabase, insertedIds, userId);
         await autoMatchIncomingTransactions(supabase, insertedIds);
+        await autoMatchOrderRefunds(supabase, insertedIds);
       }
     } catch (err) {
       if (isExpiredSessionError(err)) {
