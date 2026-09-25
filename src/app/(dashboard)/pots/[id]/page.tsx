@@ -11,6 +11,7 @@ import {
   projectedFinish,
 } from "@/lib/pots/insights";
 import { getMonthStartDay } from "@/lib/settings";
+import { periodRange } from "@/lib/month";
 import { InfoButton } from "../../info-button";
 import { GoalSpendCard } from "../goal-spend-card";
 import { EntryForm, EntryList, MonthlyPlanForm, SettingsForms } from "../pot-detail-forms";
@@ -31,9 +32,10 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
   const deposited = depositedInPeriod(pot, 0, startDay);
   const baseBalance = balance - netInPeriod(pot, 0, startDay);
-  const monthly = effectiveMonthly(pot, baseBalance);
+  const periodStart = periodRange(0, startDay).startDate;
+  const monthly = effectiveMonthly(pot, baseBalance, periodStart);
   const canAuto = !!(pot.target_amount && pot.target_date);
-  const autoAmount = canAuto ? effectiveMonthly({ ...pot, monthly_auto: true }, baseBalance) : null;
+  const autoAmount = canAuto ? effectiveMonthly({ ...pot, monthly_auto: true }, baseBalance, periodStart) : null;
   const pending = pot.target_amount
     ? pot.pot_entries
         .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= pot.opening_balance_date)

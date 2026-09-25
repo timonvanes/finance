@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getPots } from "@/actions/pots";
 import { getDebts } from "@/actions/debts";
 import { computePotBalance } from "@/lib/pots/balance";
-import { effectiveMonthly } from "@/lib/pots/insights";
+import { periodMonthly } from "@/lib/pots/insights";
+import { getMonthStartDay } from "@/lib/settings";
 import { summarize } from "@/lib/debts/calc";
 import type { HouseInputs } from "@/lib/house/calc";
 
@@ -21,13 +22,14 @@ export async function getHousePlanData() {
 
   // Defaults from what the app already knows: pots (investment pots are
   // separate) and the study loan's expected monthly amount.
+  const startDay = await getMonthStartDay();
   let savingsBalance = 0;
   let investBalance = 0;
   let monthlySave = 0;
   let monthlyInvest = 0;
   for (const p of pots) {
     const balance = computePotBalance(p);
-    const monthly = effectiveMonthly(p, balance) ?? 0;
+    const monthly = periodMonthly(p, balance, startDay) ?? 0;
     if (p.kind === "investment") {
       investBalance += balance;
       monthlyInvest += monthly;

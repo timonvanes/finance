@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getPots, getSavingsInbox } from "@/actions/pots";
 import { getDashboardSummary } from "@/actions/dashboard";
 import { computePotBalance } from "@/lib/pots/balance";
-import { computeSchedule, depositedInPeriod, effectiveMonthly, netInPeriod, planCatchUp } from "@/lib/pots/insights";
+import { computeSchedule, depositedInPeriod, netInPeriod, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./catch-up-card";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
@@ -28,7 +28,7 @@ export default async function PotsPage() {
 
   // The plan per pot for this period (automatic plans follow the goal).
   const plans = new Map(
-    pots.map((p) => [p.id, effectiveMonthly(p, (balances.get(p.id) ?? 0) - netInPeriod(p, 0, startDay))])
+    pots.map((p) => [p.id, periodMonthly(p, balances.get(p.id) ?? 0, startDay)])
   );
   const catchUps = new Map(pots.map((p) => [p.id, planCatchUp(p, startDay)]));
   const carryOf = (id: string) => Math.ceil(catchUps.get(id)?.shortfall ?? 0);

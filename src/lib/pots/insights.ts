@@ -98,9 +98,9 @@ export function netInPeriod(pot: PotForInsights, monthsAgo: number, startDay: nu
 // automatic — whatever it takes to reach the target by the target date
 // (rounded up to whole euros). baseBalance should be the balance at the
 // start of the period so the amount doesn't shrink as you deposit into it.
-export function effectiveMonthly(pot: PotForInsights, baseBalance: number): number | null {
+export function effectiveMonthly(pot: PotForInsights, baseBalance: number, ref: Date = new Date()): number | null {
   if (pot.monthly_auto && pot.target_amount && pot.target_date) {
-    const required = computeRequiredMonthlyDeposit(baseBalance, pot.target_amount, pot.target_date);
+    const required = computeRequiredMonthlyDeposit(baseBalance, pot.target_amount, pot.target_date, ref);
     return required && required > 0 ? Math.ceil(required) : null;
   }
   return pot.monthly_amount ? Number(pot.monthly_amount) : null;
@@ -153,4 +153,12 @@ export function planCatchUp(pot: PotForInsights, startDay: number, now = new Dat
   const deposited = entries.filter((e) => e.entry_date >= isoDate(first)).reduce((sum, e) => sum + e.amount, 0);
   const shortfall = Math.max(0, expected - deposited);
   return { shortfall, pending: shortfall > 0.5 ? pending : [] };
+}
+
+// The planned amount for the current budget period. It is worked out from the
+// balance at the START of the period and the period's start date, so
+// depositing during the month never changes what was expected for that month.
+export function periodMonthly(pot: PotForInsights, balance: number, startDay: number): number | null {
+  const range = periodRange(0, startDay);
+  return effectiveMonthly(pot, balance - netInPeriod(pot, 0, startDay), range.startDate);
 }

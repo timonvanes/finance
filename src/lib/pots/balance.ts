@@ -16,13 +16,14 @@ export function computePotBalance(pot: {
 export function computeRequiredMonthlyDeposit(
   balance: number,
   targetAmount: number | null,
-  targetDate: string | null
+  targetDate: string | null,
+  ref: Date = new Date()
 ): number | null {
   if (!targetAmount || !targetDate) return null;
   const remaining = targetAmount - balance;
   if (remaining <= 0) return 0;
 
-  const now = new Date();
+  const now = ref;
   const target = new Date(targetDate);
   const monthsRemaining = Math.max(
     1,

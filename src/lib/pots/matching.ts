@@ -25,8 +25,10 @@ export async function matchPotTransfers(
     .select("id, amount, booking_date, counterparty_name, raw_description, is_transfer")
     .in("id", transactionIds);
 
+  // Not skipping is_transfer on purpose: a deposit into a savings sub-account is
+  // itself a transfer, and the amount-pairing step of the sync may already have
+  // flagged it before this runs.
   for (const tx of transactions ?? []) {
-    if (tx.is_transfer) continue;
     const haystack = `${tx.counterparty_name ?? ""} ${tx.raw_description ?? ""}`.toLowerCase();
     const pot = activePots.find((p) => haystack.includes(p.match_text.toLowerCase()));
     if (!pot) continue;
@@ -58,7 +60,6 @@ export async function rematchPotHistory(supabase: SupabaseClient, potId: string)
   const { data: transactions } = await supabase
     .from("transactions")
     .select("id, amount, booking_date, counterparty_name, raw_description")
-    .eq("is_transfer", false)
     .or(
       `counterparty_name.ilike.%${matchText}%,raw_description.ilike.%${matchText}%`
     );

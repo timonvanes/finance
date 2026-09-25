@@ -13,7 +13,7 @@ import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
 import { getPots } from "@/actions/pots";
 import { computePotBalance } from "@/lib/pots/balance";
-import { effectiveMonthly, planCatchUp } from "@/lib/pots/insights";
+import { periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./pots/catch-up-card";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
@@ -80,7 +80,7 @@ export default async function DashboardPage({
   const catchUps = new Map(pots.map((p) => [p.id, planCatchUp(p, startDay)]));
   const reservations = pots
     .map((p) => {
-      const base = effectiveMonthly(p, potBalances.get(p.id) ?? 0) ?? 0;
+      const base = periodMonthly(p, potBalances.get(p.id) ?? 0, startDay) ?? 0;
       const carry = base > 0 ? Math.ceil(catchUps.get(p.id)?.shortfall ?? 0) : 0;
       return { id: p.id, name: p.name, base, carry, amount: base + carry };
     })
