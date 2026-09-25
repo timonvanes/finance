@@ -193,9 +193,19 @@ export default async function RapportPage({
               )}
             </div>
 
+            {Math.abs(statement.reserved) > 0.5 && (
+              <div>
+                <h2 className="flex items-baseline justify-between text-lg font-semibold text-gray-900">
+                  <span>Gereserveerd in potjes</span>
+                  <span className="text-teal-700">{euro(statement.reserved)}</span>
+                </h2>
+                <p className="text-sm text-gray-500">Geld dat je hebt opzij gezet, dus niet uitgegeven.</p>
+              </div>
+            )}
+
             <div className="flex items-baseline justify-between border-t-2 border-gray-900 pt-3">
               <span className="text-lg font-semibold text-gray-900">
-                {statement.net >= 0 ? "Netto over" : "Netto te veel uitgegeven"}
+                {statement.net >= 0 ? "Netto over na potjes" : "Netto te veel uitgegeven"}
               </span>
               <span className={`text-2xl font-semibold ${statement.net >= 0 ? "text-green-700" : "text-red-600"}`}>
                 {euro(Math.abs(statement.net))}

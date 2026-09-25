@@ -2,27 +2,30 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setBudget } from "@/actions/budgets";
+import { setBudget, type BudgetPeriod } from "@/actions/budgets";
 
 export function BudgetRow({
   categoryId,
   categoryName,
   monthlyLimit,
+  period: savedPeriod,
 }: {
   categoryId: string;
   categoryName: string;
   monthlyLimit: number | null;
+  period: BudgetPeriod;
 }) {
   const saved = monthlyLimit != null ? String(monthlyLimit) : "";
   const [value, setValue] = useState(saved);
+  const [period, setPeriod] = useState<BudgetPeriod>(savedPeriod);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const changed = value.trim() !== saved;
+  const changed = value.trim() !== saved || period !== savedPeriod;
 
   function save(limit: number | null) {
     startTransition(async () => {
-      await setBudget(categoryId, limit);
+      await setBudget(categoryId, limit, period);
       router.refresh();
     });
   }
@@ -42,11 +45,21 @@ export function BudgetRow({
             disabled={isPending}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Geen budget"
-            aria-label={`Maandbudget voor ${categoryName}`}
+            aria-label={`Budget voor ${categoryName}`}
             className="h-full min-w-0 flex-1 bg-transparent text-lg text-gray-900 outline-none disabled:opacity-50"
           />
-          <span className="shrink-0 text-sm text-gray-400">/ maand</span>
         </label>
+        <select
+          value={period}
+          disabled={isPending}
+          onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
+          aria-label={`Periode voor ${categoryName}`}
+          className="h-[52px] shrink-0 rounded-xl border border-gray-300 bg-white px-2 text-base text-gray-800"
+        >
+          <option value="month">/ maand</option>
+          <option value="quarter">/ kwartaal</option>
+          <option value="year">/ jaar</option>
+        </select>
         {changed && (
           <button
             type="button"

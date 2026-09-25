@@ -33,7 +33,8 @@ export async function GET(request: NextRequest) {
   rows.push([]);
   rows.push(["", "", "", "Totaal baten", statement.totalIncome.toFixed(2)]);
   rows.push(["", "", "", "Totaal lasten", (-statement.totalExpense).toFixed(2)]);
-  rows.push(["", "", "", "Netto", statement.net.toFixed(2)]);
+  rows.push(["", "", "", "Gereserveerd in potjes", (-statement.reserved).toFixed(2)]);
+  rows.push(["", "", "", "Netto na potjes", statement.net.toFixed(2)]);
 
   return new NextResponse(toCsv(rows), {
     headers: {

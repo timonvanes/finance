@@ -13,7 +13,7 @@ import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
 import { getPots } from "@/actions/pots";
 import { computePotBalance } from "@/lib/pots/balance";
-import { periodMonthly, planCatchUp } from "@/lib/pots/insights";
+import { netInPeriod, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./pots/catch-up-card";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
@@ -119,9 +119,11 @@ export default async function DashboardPage({
   const maxIncomeTotal = Math.max(1, ...incomeByCategory.map((c) => c.total));
   const totalIncome = incomeByCategory.reduce((s, c) => s + c.total, 0);
   const totalExpense = categorySpend.reduce((s, c) => s + c.total, 0);
-  const net = totalIncome - totalExpense;
+  // Money moved into pots this period: set aside, not spent, but not free either.
+  const reservedTotal = pots.reduce((s, p) => s + netInPeriod(p, monthsAgo, startDay), 0);
+  const net = totalIncome - totalExpense - reservedTotal;
   const budgetByName = new Map(budgetStatus.map((b) => [b.categoryName, b]));
-  const budgetWarnings = budgetStatus.filter((b) => b.aheadOfPace || b.overBudget);
+  const overBudgets = budgetStatus.filter((b) => b.overBudget);
   const expenseDelta = summary.monthExpense - summary.previousMonthExpense;
 
   return (
@@ -216,7 +218,7 @@ export default async function DashboardPage({
         </Link>
       )}
 
-      {show("alerts") && isCurrentMonth && (anomaly || budgetWarnings.length > 0) && (
+      {show("alerts") && isCurrentMonth && (anomaly || overBudgets.length > 0) && (
         <section className="space-y-2">
           {anomaly && (
             <p className="rounded-2xl bg-red-50 p-4 text-base text-red-700 ring-1 ring-red-100">
@@ -225,30 +227,19 @@ export default async function DashboardPage({
               {euro(anomaly.usualMonthToDateSpend, 0)}).
             </p>
           )}
-          {budgetWarnings.map((b) => (
-            <p
-              key={b.categoryId}
-              className={
-                b.overBudget
-                  ? "rounded-2xl bg-red-50 p-4 text-base text-red-700 ring-1 ring-red-100"
-                  : "rounded-2xl bg-amber-50 p-4 text-base text-amber-800 ring-1 ring-amber-100"
-              }
+          {overBudgets.length > 0 && (
+            <Link
+              href="/settings/budgets"
+              className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl bg-red-50 px-5 py-3 text-base text-red-700 ring-1 ring-red-100 active:bg-red-100"
             >
-              {b.overBudget ? (
-                <>
-                  Budget <span className="font-medium">{b.categoryName}</span> overschreden:{" "}
-                  {euro(b.spent, 0)} van {euro(b.monthlyLimit, 0)}.
-                </>
-              ) : (
-                <>
-                  Je zit op {Math.round(b.pctOfMonthElapsed)}% van de maand, maar al op{" "}
-                  {Math.round(b.pctUsed)}% van je budget voor{" "}
-                  <span className="font-medium">{b.categoryName}</span> ({euro(b.spent, 0)} van{" "}
-                  {euro(b.monthlyLimit, 0)}).
-                </>
-              )}
-            </p>
-          ))}
+              <span>
+                {overBudgets.length === 1
+                  ? `Budget ${overBudgets[0].categoryName} is overschreden`
+                  : `${overBudgets.length} budgetten zijn overschreden`}
+              </span>
+              <span className="text-2xl text-red-300">›</span>
+            </Link>
+          )}
         </section>
       )}
 
@@ -351,6 +342,9 @@ export default async function DashboardPage({
                     }
                   >
                     {euro(b.spent, 0)} / {euro(b.monthlyLimit, 0)}
+                    {b.period !== "month" && (
+                      <span className="ml-1 text-xs font-normal text-gray-400">{b.periodLabel}</span>
+                    )}
                   </span>
                 </div>
                 <div className="relative h-3 rounded-full bg-gray-100">
@@ -382,11 +376,11 @@ export default async function DashboardPage({
         <h2 className="px-1 text-lg font-semibold text-gray-900">Baten en lasten</h2>
 
         <div className={`${card} p-5`}>
-          <p className="text-sm text-gray-500">Netto deze periode</p>
+          <p className="text-sm text-gray-500">Netto na potjes</p>
           <p className={`mt-1 text-3xl font-semibold ${net >= 0 ? "text-green-700" : "text-red-600"}`}>
             {net >= 0 ? `${euro(net, 0)} over` : `${euro(Math.abs(net), 0)} te veel uitgegeven`}
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-base">
+          <div className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-3 text-base">
             <div>
               <p className="text-sm text-gray-500">Baten</p>
               <p className="font-semibold text-green-700">{euro(totalIncome, 0)}</p>
@@ -394,6 +388,10 @@ export default async function DashboardPage({
             <div>
               <p className="text-sm text-gray-500">Lasten</p>
               <p className="font-semibold text-gray-900">{euro(totalExpense, 0)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Potjes</p>
+              <p className="font-semibold text-teal-700">{euro(reservedTotal, 0)}</p>
             </div>
           </div>
         </div>

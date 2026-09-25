@@ -23,6 +23,7 @@ export interface Statement {
   expense: CategoryGroup[];
   totalIncome: number;
   totalExpense: number;
+  reserved: number;
   net: number;
   monthly: { key: string; income: number; expense: number }[];
 }
@@ -129,6 +130,14 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     expense.set(group.name, group);
   }
 
+  // Money moved into pots in the period: set aside, so it is taken off the result.
+  const { data: potRows } = await supabase
+    .from("pot_entries")
+    .select("amount")
+    .gte("entry_date", from)
+    .lte("entry_date", to);
+  const reserved = (potRows ?? []).reduce((s, r) => s + Number(r.amount), 0);
+
   const sorted = (m: Map<string, CategoryGroup>) => [...m.values()].sort((a, b) => b.total - a.total);
   const incomeGroups = sorted(income);
   const expenseGroups = sorted(expense);
@@ -142,7 +151,8 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     expense: expenseGroups,
     totalIncome,
     totalExpense,
-    net: totalIncome - totalExpense,
+    reserved,
+    net: totalIncome - totalExpense - reserved,
     monthly: [...monthly.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([key, v]) => ({ key, ...v })),
   };
 }
