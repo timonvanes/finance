@@ -5,6 +5,7 @@ import { extractOrderFromEmailText } from "@/lib/anthropic/extract-order";
 import { inferDiscount } from "@/lib/returns/amounts";
 import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
 import { autoMatchOrderRefunds } from "@/lib/returns/auto-match";
+import { computeDeadline } from "@/lib/returns/deadline";
 import { extractReturnFromEmailText, type ExtractedReturn } from "@/lib/anthropic/extract-return";
 
 export async function extractOrderPreview(emailText: string) {
@@ -70,7 +71,7 @@ export async function getOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, return_deadline_source, discount_total, refund_status, refund_transaction_id, created_at,
+      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, return_deadline_source, delivered_date, expected_delivery_date, return_window_days, discount_total, refund_status, refund_transaction_id, created_at,
       order_items(id, description, price, quantity, returned),
       order_claims(id, reason, expected_amount, status, refund_transaction_id, created_at),
       refund_transaction:transactions!orders_refund_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -208,6 +209,32 @@ export async function processReturnEmail(emailText: string) {
 
 export async function applyReturnToOrder(orderId: string, extraction: ExtractedReturn) {
   return applyReturnToOrderCore(await createClient(), orderId, extraction);
+}
+
+export async function setDeliveredDate(orderId: string, delivered: string | null) {
+  const supabase = await createClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("order_date, expected_delivery_date, return_window_days")
+    .eq("id", orderId)
+    .single();
+  if (error) throw error;
+  const computed = computeDeadline({
+    orderDate: order.order_date ?? new Date().toISOString().slice(0, 10),
+    deliveredDate: delivered || null,
+    expectedDate: order.expected_delivery_date,
+    windowDays: order.return_window_days,
+  });
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({
+      delivered_date: delivered || null,
+      return_deadline: computed.deadline,
+      return_deadline_source: delivered ? "manual" : "estimate",
+      return_window_days: computed.windowDays,
+    })
+    .eq("id", orderId);
+  if (updateError) throw updateError;
 }
 
 export async function setReturnDeadline(orderId: string, deadline: string | null) {

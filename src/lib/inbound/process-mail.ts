@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractMail, type ExtractedMail } from "@/lib/anthropic/extract-mail";
 import type { ExtractedReturn } from "@/lib/anthropic/extract-return";
 import { sendPush } from "@/lib/push/send";
+import { computeDeadline } from "@/lib/returns/deadline";
 import { getReturnWindow } from "@/lib/returns/policy";
 import { inferDiscount } from "@/lib/returns/amounts";
 import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
@@ -120,20 +121,24 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
       return { outcome: "exists" };
     }
 
-    let deadline = isIso(ex.return_deadline)
-      ? ex.return_deadline
-      : ex.return_window_days
-        ? addDays(orderDate, ex.return_window_days)
-        : null;
-    let deadlineSource: "mail" | "lookup" | null = deadline ? "mail" : null;
-    if (!deadline) {
-      // Nothing in the mail: one cached web lookup per shop.
-      const windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
-      if (windowDays) {
-        deadline = addDays(orderDate, windowDays);
-        deadlineSource = "lookup";
-      }
+    // The term runs from delivery: shop-stated deadline wins; otherwise
+    // delivery date (expected, else estimated) plus the window.
+    let windowDays = ex.return_window_days;
+    let windowFromLookup = false;
+    if (!windowDays) {
+      windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
+      windowFromLookup = Boolean(windowDays);
     }
+    const expected = isIso(ex.expected_delivery_date) ? ex.expected_delivery_date : null;
+    const computed = computeDeadline({ orderDate, expectedDate: expected, windowDays });
+    const deadline = isIso(ex.return_deadline) ? ex.return_deadline : computed.deadline;
+    const deadlineSource: "mail" | "lookup" | "estimate" = isIso(ex.return_deadline)
+      ? "mail"
+      : computed.basis === "estimate"
+        ? "estimate"
+        : windowFromLookup
+          ? "lookup"
+          : "mail";
     const { data: order, error } = await supabase
       .from("orders")
       .insert({
@@ -146,6 +151,8 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
         discount_total: ex.discount_total ?? inferDiscount(ex.items.reduce((s, i) => s + i.price * i.quantity, 0), ex.total_amount),
         return_deadline: deadline,
         return_deadline_source: deadlineSource,
+        return_window_days: computed.windowDays,
+        expected_delivery_date: expected,
       })
       .select("id")
       .single();
@@ -166,28 +173,58 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
     return { outcome: "order_created" };
   }
 
-  if (ex.kind === "delivered") {
+  if (ex.kind === "delivered" || ex.kind === "shipped") {
     const scored = await scoreOrdersForReturn(supabase, asReturn(ex), userId);
     if (scored.length === 0) {
-      await record(supabase, userId, mail, ex.kind, "Bezorgd, maar geen bijbehorende bestelling gevonden");
+      await record(supabase, userId, mail, ex.kind, "Geen bijbehorende bestelling gevonden");
       return { outcome: "unmatched" };
     }
-    const delivered = isIso(ex.delivered_date) ? ex.delivered_date : new Date().toISOString().slice(0, 10);
-    let windowDays = ex.return_window_days;
-    let source: "mail" | "lookup" | null = isIso(ex.return_deadline) || windowDays ? "mail" : null;
-    if (!isIso(ex.return_deadline) && !windowDays) {
-      windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
-      if (windowDays) source = "lookup";
-    }
-    const deadline = isIso(ex.return_deadline)
-      ? ex.return_deadline
-      : addDays(delivered, windowDays ?? DEFAULT_WINDOW_DAYS);
-    await supabase
+    const { data: order } = await supabase
       .from("orders")
-      .update({ return_deadline: deadline, return_deadline_source: source })
+      .select("order_date, delivered_date, expected_delivery_date, return_window_days, return_deadline_source")
       .eq("id", scored[0].id)
-      .eq("user_id", userId);
-    await record(supabase, userId, mail, ex.kind, `Retourtermijn bijgewerkt (tot ${deadline})`);
+      .eq("user_id", userId)
+      .single();
+    if (!order) return { outcome: "unmatched" };
+
+    const today = new Date().toISOString().slice(0, 10);
+    const delivered =
+      ex.kind === "delivered" ? (isIso(ex.delivered_date) ? ex.delivered_date : today) : order.delivered_date;
+    const expected = isIso(ex.expected_delivery_date) ? ex.expected_delivery_date : order.expected_delivery_date;
+    let windowDays = order.return_window_days ?? ex.return_window_days;
+    let fromLookup = false;
+    if (!windowDays) {
+      windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
+      fromLookup = Boolean(windowDays);
+    }
+    const computed = computeDeadline({ orderDate: order.order_date ?? today, deliveredDate: delivered, expectedDate: expected, windowDays });
+
+    const update: Record<string, unknown> = {
+      delivered_date: delivered,
+      expected_delivery_date: expected,
+      return_window_days: computed.windowDays,
+    };
+    // A deadline the user set by hand is left alone.
+    if (order.return_deadline_source !== "manual") {
+      update.return_deadline = isIso(ex.return_deadline) ? ex.return_deadline : computed.deadline;
+      update.return_deadline_source = isIso(ex.return_deadline)
+        ? "mail"
+        : computed.basis === "estimate"
+          ? "estimate"
+          : fromLookup
+            ? "lookup"
+            : "mail";
+    }
+    await supabase.from("orders").update(update).eq("id", scored[0].id).eq("user_id", userId);
+    await record(
+      supabase,
+      userId,
+      mail,
+      ex.kind,
+      ex.kind === "delivered"
+        ? `Bezorgd: retourtermijn tot ${computed.deadline}`
+        : `Verzonden: retourtermijn geschat tot ${computed.deadline}`
+    );
     return { outcome: "deadline_set" };
   }
 

@@ -4,9 +4,9 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 const MailSchema = z.object({
   kind: z
-    .enum(["order_confirmation", "delivered", "return_confirmation", "price_adjustment", "other"])
+    .enum(["order_confirmation", "shipped", "delivered", "return_confirmation", "price_adjustment", "other"])
     .describe(
-      "order_confirmation = bevestiging van een nieuwe bestelling; delivered = pakket is bezorgd of ligt klaar; " +
+      "order_confirmation = bevestiging van een nieuwe bestelling; shipped = de bestelling is verzonden of onderweg, meestal met een verwachte bezorgdatum; delivered = pakket is bezorgd of ligt klaar; " +
         "return_confirmation = bevestiging van een retour, creditnota of terugbetaling van geretourneerde artikelen; " +
         "price_adjustment = de winkel betaalt achteraf geld terug of geeft extra korting op een artikel dat je houdt (prijsverschil, prijsgarantie, compensatie, klachtafhandeling); " +
         "other = al het andere (reclame, verzendupdate onderweg, etc.)"
@@ -15,6 +15,10 @@ const MailSchema = z.object({
     .string()
     .describe("Naam van de webshop waar de bestelling is geplaatst (bij een Klarna-mail dus de winkel, niet Klarna zelf)"),
   order_date: z.string().nullable().describe("Besteldatum als YYYY-MM-DD, of null"),
+  expected_delivery_date: z
+    .string()
+    .nullable()
+    .describe("Verwachte of geplande bezorgdatum als YYYY-MM-DD als die genoemd wordt (bij bestelling of verzending), anders null"),
   delivered_date: z.string().nullable().describe("Bezorgdatum als YYYY-MM-DD als die genoemd wordt, of null"),
   total_amount: z.number().nullable().describe("Totaalbedrag van de bestelling in euro's, of null"),
   items: z.array(
@@ -68,7 +72,7 @@ export async function extractMail(input: { subject: string; from: string; text: 
       "Je leest doorgestuurde mails van webshops (vaak Nederlandstalig, vaak kleding) en haalt er gegevens uit. " +
       `Vandaag is ${today}. Bedragen zijn getallen in euro's zonder €-teken. Datums als YYYY-MM-DD. ` +
       "Geef bij items de prijs per stuk zoals die bij het artikel staat. Bij een retour: geef in items de geretourneerde artikelen. Gebruik null als iets er niet in staat. " +
-      "Een verzendupdate zoals 'onderweg' of 'verzonden' is 'other', tenzij er ook een bezorgdatum of retourtermijn in staat. " +
+      "Een verzendupdate zoals 'onderweg' of 'verzonden' is 'shipped'. " +
       "Verzin nooit een retourtermijn of datum.",
     messages: [
       {

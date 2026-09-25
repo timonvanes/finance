@@ -14,6 +14,7 @@ import {
   linkRefundToOrder,
   recordKlarnaCredit,
   setOrderPaymentMethod,
+  setDeliveredDate,
   setReturnDeadline,
   toggleItemReturned,
   unlinkRefund,
@@ -67,6 +68,7 @@ export function OrderRow({
     credited_amount: number | null;
     return_deadline: string | null;
     return_deadline_source: string | null;
+    delivered_date: string | null;
     discount_total: number;
     order_claims: {
       id: string;
@@ -148,7 +150,7 @@ export function OrderRow({
       {order.refund_status === "not_returned" && order.return_deadline && daysLeft(order.return_deadline) >= 0 && (
         <p className={`text-sm ${daysLeft(order.return_deadline) <= 3 ? "font-medium text-red-700" : "text-blue-700"}`}>
           Retour vóór {new Date(order.return_deadline).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} · nog{" "}
-          {daysLeft(order.return_deadline)} dagen{order.return_deadline_source === "lookup" && " (opgezocht)"}
+          {daysLeft(order.return_deadline)} dagen{order.return_deadline_source === "lookup" && " (opgezocht)"}{order.return_deadline_source === "estimate" && " (geschat)"}
         </p>
       )}
       </summary>
@@ -167,6 +169,20 @@ export function OrderRow({
                 : `Retour vóór ${new Date(order.return_deadline).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} · nog ${daysLeft(order.return_deadline)} dagen`}
             </span>
           )}
+          <label className="flex items-center gap-2 text-gray-500">
+            Bezorgd op
+            <input
+              type="date"
+              defaultValue={order.delivered_date ?? ""}
+              onChange={(e) =>
+                startTransition(async () => {
+                  await setDeliveredDate(order.id, e.target.value || null);
+                  router.refresh();
+                })
+              }
+              className="min-h-[40px] rounded-lg border border-gray-300 bg-white px-2 text-gray-800"
+            />
+          </label>
           <label className="flex items-center gap-2 text-gray-500">
             {order.return_deadline ? "Wijzig" : "Retour vóór"}
             <input
