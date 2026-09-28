@@ -22,6 +22,8 @@ const RECEIPT_BUCKET = "receipts";
 export async function createOrderFromReceipt(formData: FormData) {
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) throw new Error("Geen foto ontvangen.");
+  const manualDeadlineInput = (formData.get("manualDeadline") as string) || null;
+  const manualWindowInput = Number(formData.get("manualWindowDays") ?? "");
 
   const supabase = await createClient();
   const {
@@ -37,21 +39,39 @@ export async function createOrderFromReceipt(formData: FormData) {
     ? (ex.purchase_date as string)
     : new Date().toISOString().slice(0, 10);
 
-  let windowDays = ex.return_window_days;
-  let windowFromLookup = false;
-  if (!windowDays) {
-    windowDays = await getReturnWindow(supabase, user.id, ex.merchant_name);
-    windowFromLookup = Boolean(windowDays);
+  // What the user typed in by hand always wins over what was read off the
+  // photo — often faster and more reliable than OCR on a printed term.
+  const manualDeadline =
+    manualDeadlineInput && /^\d{4}-\d{2}-\d{2}$/.test(manualDeadlineInput) ? manualDeadlineInput : null;
+  const manualWindowDays = manualWindowInput > 0 ? Math.round(manualWindowInput) : null;
+
+  let deadline: string;
+  let deadlineSource: "mail" | "lookup" | "estimate" | "manual";
+  let resolvedWindowDays: number | null;
+
+  if (manualDeadline) {
+    deadline = manualDeadline;
+    deadlineSource = "manual";
+    resolvedWindowDays = manualWindowDays;
+  } else {
+    let windowDays = manualWindowDays ?? ex.return_window_days;
+    let windowFromLookup = false;
+    if (!windowDays) {
+      windowDays = await getReturnWindow(supabase, user.id, ex.merchant_name);
+      windowFromLookup = Boolean(windowDays);
+    }
+    const computed = computeDeadline({ orderDate: purchaseDate, deliveredDate: purchaseDate, windowDays });
+    deadline =
+      ex.return_deadline && /^\d{4}-\d{2}-\d{2}$/.test(ex.return_deadline) ? ex.return_deadline : computed.deadline;
+    deadlineSource = manualWindowDays
+      ? "manual"
+      : ex.return_deadline || ex.return_window_days
+        ? "mail"
+        : windowFromLookup
+          ? "lookup"
+          : "estimate";
+    resolvedWindowDays = computed.windowDays;
   }
-  const computed = computeDeadline({ orderDate: purchaseDate, deliveredDate: purchaseDate, windowDays });
-  const deadline = ex.return_deadline && /^\d{4}-\d{2}-\d{2}$/.test(ex.return_deadline) ? ex.return_deadline : computed.deadline;
-  const deadlineSource: "mail" | "lookup" | "estimate" = ex.return_deadline
-    ? "mail"
-    : ex.return_window_days
-      ? "mail"
-      : windowFromLookup
-        ? "lookup"
-        : "estimate";
 
   const safeName = file.name?.replace(/[^a-zA-Z0-9._-]/g, "_") || "bon.jpg";
   const path = `${user.id}/orders/${Date.now()}_${safeName}`;
@@ -69,7 +89,7 @@ export async function createOrderFromReceipt(formData: FormData) {
       receipt_path: path,
       return_deadline: deadline,
       return_deadline_source: deadlineSource,
-      return_window_days: computed.windowDays,
+      return_window_days: resolvedWindowDays,
       delivered_date: purchaseDate,
     })
     .select("id")

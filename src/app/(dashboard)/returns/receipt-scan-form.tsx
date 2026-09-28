@@ -5,116 +5,32 @@ import { useRouter } from "next/navigation";
 import { createOrderFromReceipt } from "@/actions/returns";
 import { canvasToJpegFile, clampCorners, detectCorners, warpToCanvas, type Point } from "@/lib/receipt-scanner";
 
-type Stage = "idle" | "camera" | "adjust" | "uploading";
+type Stage = "pick" | "adjust";
 
 const CORNER_LABELS = ["linksboven", "rechtsboven", "rechtsonder", "linksonder"];
-const DETECT_INTERVAL_MS = 200;
-// Ask for as much resolution as the device/browser will give — getUserMedia
-// streams otherwise often default to something like 640×480, far below what
-// a native camera photo gives you and nowhere near enough to read small
-// receipt text. "ideal" degrades gracefully instead of failing outright.
-const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { ideal: "environment" },
-  width: { ideal: 3840 },
-  height: { ideal: 2160 },
-};
 
-// Photograph a physical (in-store) receipt with a live scanner view: the edge
-// detection runs continuously on the camera feed (like a document-scanner
-// app), the corners it last saw become the starting crop, and the user can
-// still drag them straight before the photo is read.
+// Photograph a physical (in-store) receipt: pick a photo (the phone's own
+// camera app gives the sharpest result), adjust the four corners to crop it
+// straight, and optionally fill in the return term by hand — a printed
+// return term is often easier to just read and type than to trust OCR on.
 export function ReceiptScanForm() {
   const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const liveFrameRef = useRef<HTMLDivElement>(null);
   const adjustFrameRef = useRef<HTMLDivElement>(null);
   const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragIndex = useRef<number | null>(null);
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [stage, setStage] = useState<Stage>("idle");
-  const [cameraReady, setCameraReady] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [liveCorners, setLiveCorners] = useState<[Point, Point, Point, Point] | null>(null);
-  const [video, setVideo] = useState({ w: 0, h: 0 });
-  const [liveDisplayed, setLiveDisplayed] = useState({ w: 1, h: 1 });
+  const [stage, setStage] = useState<Stage>("pick");
 
   const [captured, setCaptured] = useState<{ w: number; h: number } | null>(null);
   const [adjustDisplayed, setAdjustDisplayed] = useState({ w: 1, h: 1 });
   const [corners, setCorners] = useState<[Point, Point, Point, Point] | null>(null);
 
-  // --- Camera lifecycle -----------------------------------------------
-  useEffect(() => {
-    if (stage !== "camera") return;
-    let cancelled = false;
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("no-camera-api");
-      return;
-    }
-
-    navigator.mediaDevices
-      .getUserMedia({ video: VIDEO_CONSTRAINTS, audio: false })
-      .then((stream) => {
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      })
-      .catch(() => {
-        if (!cancelled) setCameraError("denied");
-      });
-
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-  }, [stage]);
-
-  function onVideoReady() {
-    const v = videoRef.current;
-    if (!v) return;
-    setVideo({ w: v.videoWidth, h: v.videoHeight });
-    setCameraReady(true);
-  }
-
-  // Live edge detection loop, throttled — runs on the video feed while
-  // camera stage is active.
-  useEffect(() => {
-    if (stage !== "camera" || !cameraReady) return;
-    const id = window.setInterval(() => {
-      const v = videoRef.current;
-      const frame = liveFrameRef.current;
-      if (!v || v.videoWidth === 0 || !frame) return;
-      setLiveDisplayed({ w: frame.clientWidth, h: frame.clientHeight });
-      setLiveCorners(detectCorners(v, v.videoWidth, v.videoHeight));
-    }, DETECT_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, [stage, cameraReady]);
-
-  function takePhoto() {
-    const v = videoRef.current;
-    if (!v || !v.videoWidth) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = v.videoWidth;
-    canvas.height = v.videoHeight;
-    canvas.getContext("2d")!.drawImage(v, 0, 0);
-    captureCanvasRef.current = canvas;
-
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-
-    setCaptured({ w: v.videoWidth, h: v.videoHeight });
-    setCorners(liveCorners ?? detectCorners(canvas, v.videoWidth, v.videoHeight));
-    setStage("adjust");
-  }
+  const [manualDeadline, setManualDeadline] = useState("");
+  const [manualWindowDays, setManualWindowDays] = useState("");
 
   function handleFilePicked(file: File | undefined) {
     if (!file) return;
@@ -136,14 +52,13 @@ export function ReceiptScanForm() {
   }
 
   function reset() {
-    setStage("idle");
-    setCameraReady(false);
-    setCameraError(null);
-    setLiveCorners(null);
+    setStage("pick");
     setCaptured(null);
     setCorners(null);
     captureCanvasRef.current = null;
     setError(null);
+    setManualDeadline("");
+    setManualWindowDays("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -186,6 +101,8 @@ export function ReceiptScanForm() {
         const file = await canvasToJpegFile(cropped, "bon.jpg");
         const formData = new FormData();
         formData.set("file", file);
+        if (manualDeadline) formData.set("manualDeadline", manualDeadline);
+        else if (manualWindowDays) formData.set("manualWindowDays", manualWindowDays);
         const r = await createOrderFromReceipt(formData);
         setResult(`${r.merchant} toegevoegd — retour vóór ${new Date(r.deadline).toLocaleDateString("nl-NL")}.`);
         reset();
@@ -198,11 +115,11 @@ export function ReceiptScanForm() {
 
   return (
     <div className="space-y-3">
-      {stage === "idle" && (
+      {stage === "pick" && (
         <div className="space-y-3">
           <p className="text-sm text-gray-600">
-            Maak een foto van een kassabon. De app leest winkel, artikelen, bedrag en de retourtermijn die erop
-            staat.
+            Maak een foto van een kassabon. De app leest winkel, artikelen en bedrag — de retourtermijn mag je ook
+            gewoon zelf intypen, dat gaat vaak sneller dan dat de app hem van de bon leest.
           </p>
           <input
             ref={fileInputRef}
@@ -219,91 +136,6 @@ export function ReceiptScanForm() {
           >
             Bonnetje fotograferen
           </label>
-          <button
-            type="button"
-            onClick={() => setStage("camera")}
-            className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700 active:bg-gray-50"
-          >
-            Live scanner gebruiken (randen automatisch volgen)
-          </button>
-          <p className="text-xs text-gray-400">
-            &quot;Bonnetje fotograferen&quot; gebruikt de camera-app van je telefoon en geeft de scherpste foto. De
-            live scanner is handig als je vooraf wil zien hoe de rand wordt herkend, maar kan minder scherp zijn.
-          </p>
-        </div>
-      )}
-
-      {stage === "camera" && (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600">
-            Richt de camera op de bon — de randen worden automatisch gevolgd. Tik op de knop zodra de bon goed in
-            beeld staat.
-          </p>
-
-          {cameraError ? (
-            <div className="space-y-2">
-              <p className="text-sm text-amber-700">
-                {cameraError === "denied"
-                  ? "Geen toegang tot de camera. Zet cameratoegang aan voor deze app, of kies een foto."
-                  : "Live camera wordt niet ondersteund op dit apparaat. Kies een foto."}
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => handleFilePicked(e.target.files?.[0])}
-                className="hidden"
-                id="receipt-file-input"
-              />
-              <label
-                htmlFor="receipt-file-input"
-                className="flex min-h-[52px] w-full items-center justify-center rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800"
-              >
-                Foto kiezen
-              </label>
-            </div>
-          ) : (
-            <>
-              <div ref={liveFrameRef} className="relative w-full overflow-hidden rounded-xl bg-gray-900">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  onLoadedMetadata={onVideoReady}
-                  className="block w-full"
-                />
-                {cameraReady && liveCorners && video.w > 0 && (
-                  <svg
-                    className="pointer-events-none absolute inset-0 h-full w-full"
-                    viewBox={`0 0 ${liveDisplayed.w} ${liveDisplayed.h}`}
-                  >
-                    <polygon
-                      points={liveCorners
-                        .map((p) => `${(p.x / video.w) * liveDisplayed.w},${(p.y / video.h) * liveDisplayed.h}`)
-                        .join(" ")}
-                      className="fill-teal-400/15 stroke-teal-400"
-                      strokeWidth={3}
-                    />
-                  </svg>
-                )}
-                {!cameraReady && (
-                  <p className="absolute inset-0 flex items-center justify-center text-sm text-gray-300">
-                    Camera starten…
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                disabled={!cameraReady}
-                onClick={takePhoto}
-                className="min-h-[52px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
-              >
-                Foto maken
-              </button>
-            </>
-          )}
         </div>
       )}
 
@@ -353,6 +185,41 @@ export function ReceiptScanForm() {
                 </div>
               ))}
           </div>
+
+          <div className="space-y-2 rounded-xl bg-gray-50 p-3">
+            <p className="text-sm font-medium text-gray-700">Retourtermijn (optioneel)</p>
+            <p className="text-xs text-gray-500">
+              Leeg laten = de app probeert de termijn van de bon of van de winkel te bepalen.
+            </p>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              Retour vóór
+              <input
+                type="date"
+                value={manualDeadline}
+                onChange={(e) => {
+                  setManualDeadline(e.target.value);
+                  if (e.target.value) setManualWindowDays("");
+                }}
+                className="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-2 text-gray-900"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              Of: aantal dagen bedenktijd
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                value={manualWindowDays}
+                onChange={(e) => {
+                  setManualWindowDays(e.target.value);
+                  if (e.target.value) setManualDeadline("");
+                }}
+                placeholder="bijv. 30"
+                className="min-h-[44px] w-24 rounded-lg border border-gray-300 bg-white px-2 text-gray-900"
+              />
+            </label>
+          </div>
+
           <div className="flex gap-2">
             <button
               type="button"
