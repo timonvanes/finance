@@ -21,9 +21,12 @@ export type ImageSource = CanvasImageSource;
 // an inset rectangle when nothing usable is found. Cheap enough to call
 // several times a second on a live video frame.
 export function detectCorners(source: ImageSource, w: number, h: number): [Point, Point, Point, Point] {
+  // A visible default margin — if the brightness heuristic below can't find
+  // anything confident, this at least looks like a real crop starting point
+  // instead of "barely trimmed the edges", so it's obvious it needs adjusting.
   const fallback = (): [Point, Point, Point, Point] => {
-    const mx = w * 0.06;
-    const my = h * 0.06;
+    const mx = w * 0.15;
+    const my = h * 0.15;
     return [
       { x: mx, y: my },
       { x: w - mx, y: my },
@@ -83,7 +86,7 @@ export function detectCorners(source: ImageSource, w: number, h: number): [Point
 
   const area = (maxX - minX) * (maxY - minY);
   const totalArea = sw * sh;
-  if (hits === 0 || area < totalArea * 0.15 || area > totalArea * 0.97) {
+  if (hits === 0 || area < totalArea * 0.06 || area > totalArea * 0.98) {
     return fallback();
   }
 

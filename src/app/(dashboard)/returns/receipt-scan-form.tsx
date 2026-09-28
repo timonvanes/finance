@@ -5,10 +5,19 @@ import { useRouter } from "next/navigation";
 import { createOrderFromReceipt } from "@/actions/returns";
 import { canvasToJpegFile, clampCorners, detectCorners, warpToCanvas, type Point } from "@/lib/receipt-scanner";
 
-type Stage = "camera" | "adjust" | "uploading";
+type Stage = "idle" | "camera" | "adjust" | "uploading";
 
 const CORNER_LABELS = ["linksboven", "rechtsboven", "rechtsonder", "linksonder"];
 const DETECT_INTERVAL_MS = 200;
+// Ask for as much resolution as the device/browser will give — getUserMedia
+// streams otherwise often default to something like 640×480, far below what
+// a native camera photo gives you and nowhere near enough to read small
+// receipt text. "ideal" degrades gracefully instead of failing outright.
+const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { ideal: "environment" },
+  width: { ideal: 3840 },
+  height: { ideal: 2160 },
+};
 
 // Photograph a physical (in-store) receipt with a live scanner view: the edge
 // detection runs continuously on the camera feed (like a document-scanner
@@ -27,7 +36,7 @@ export function ReceiptScanForm() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [stage, setStage] = useState<Stage>("camera");
+  const [stage, setStage] = useState<Stage>("idle");
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [liveCorners, setLiveCorners] = useState<[Point, Point, Point, Point] | null>(null);
@@ -49,7 +58,7 @@ export function ReceiptScanForm() {
     }
 
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .getUserMedia({ video: VIDEO_CONSTRAINTS, audio: false })
       .then((stream) => {
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
@@ -127,7 +136,7 @@ export function ReceiptScanForm() {
   }
 
   function reset() {
-    setStage("camera");
+    setStage("idle");
     setCameraReady(false);
     setCameraError(null);
     setLiveCorners(null);
@@ -189,6 +198,41 @@ export function ReceiptScanForm() {
 
   return (
     <div className="space-y-3">
+      {stage === "idle" && (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            Maak een foto van een kassabon. De app leest winkel, artikelen, bedrag en de retourtermijn die erop
+            staat.
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => handleFilePicked(e.target.files?.[0])}
+            className="hidden"
+            id="receipt-file-input"
+          />
+          <label
+            htmlFor="receipt-file-input"
+            className="flex min-h-[52px] w-full items-center justify-center rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800"
+          >
+            Bonnetje fotograferen
+          </label>
+          <button
+            type="button"
+            onClick={() => setStage("camera")}
+            className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700 active:bg-gray-50"
+          >
+            Live scanner gebruiken (randen automatisch volgen)
+          </button>
+          <p className="text-xs text-gray-400">
+            &quot;Bonnetje fotograferen&quot; gebruikt de camera-app van je telefoon en geeft de scherpste foto. De
+            live scanner is handig als je vooraf wil zien hoe de rand wordt herkend, maar kan minder scherp zijn.
+          </p>
+        </div>
+      )}
+
       {stage === "camera" && (
         <div className="space-y-3">
           <p className="text-sm text-gray-600">
