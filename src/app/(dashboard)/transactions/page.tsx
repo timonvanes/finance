@@ -59,6 +59,10 @@ export default async function TransactionsPage({
     .order("booking_date", { ascending: activeSort === "asc" })
     .order("booked_at", { ascending: activeSort === "asc", nullsFirst: false })
     .order("created_at", { ascending: activeSort === "asc" })
+    // Final tiebreak so ties (common for same-day, same-sync-batch rows)
+    // sort identically every refetch — otherwise a row can visibly jump after
+    // categorizing it, since Postgres doesn't guarantee tie order otherwise.
+    .order("id", { ascending: true })
     .limit(limit);
 
   if (activeFilter === "expense") query = query.lt("amount", 0);

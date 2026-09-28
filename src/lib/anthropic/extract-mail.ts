@@ -6,10 +6,12 @@ const MailSchema = z.object({
   kind: z
     .enum(["order_confirmation", "shipped", "delivered", "return_confirmation", "price_adjustment", "other"])
     .describe(
-      "order_confirmation = bevestiging van een nieuwe bestelling; shipped = de bestelling is verzonden of onderweg, meestal met een verwachte bezorgdatum; delivered = pakket is bezorgd of ligt klaar; " +
+      "order_confirmation = bevestiging van een NIEUWE bestelling zonder verzendstatus; " +
+        "shipped = de bestelling is verzonden of onderweg — kies dit ook als de mail zowel bestelgegevens (artikelen, bedrag) ALS een verzend-/bezorgstatus toont (bijv. 'Bestel- en verzendgegevens', 'Geplaatst → In behandeling → Verzonden'), zelfs zonder apart eerder besteld-bericht; " +
+        "delivered = pakket is bezorgd of ligt klaar; " +
         "return_confirmation = bevestiging van een retour, creditnota of terugbetaling van geretourneerde artikelen; " +
         "price_adjustment = de winkel betaalt achteraf geld terug of geeft extra korting op een artikel dat je houdt (prijsverschil, prijsgarantie, compensatie, klachtafhandeling); " +
-        "other = al het andere (reclame, verzendupdate onderweg, etc.)"
+        "other = alleen echt niet-bestelgerelateerde mail (reclame, nieuwsbrief, etc.) — een mail met artikelen en een bedrag is bijna nooit 'other'"
     ),
   merchant_name: z
     .string()
@@ -73,6 +75,8 @@ export async function extractMail(input: { subject: string; from: string; text: 
       `Vandaag is ${today}. Bedragen zijn getallen in euro's zonder €-teken. Datums als YYYY-MM-DD. ` +
       "Geef bij items de prijs per stuk zoals die bij het artikel staat. Bij een retour: geef in items de geretourneerde artikelen. Gebruik null als iets er niet in staat. " +
       "Een verzendupdate zoals 'onderweg' of 'verzonden' is 'shipped'. " +
+      "Woorden tussen [blokhaken] zonder spaties (zoals [logo] of [invoice]) zijn plaatshouders voor afbeeldingen, " +
+      "geen betrouwbare informatie — baseer via_klarna/on_invoice alleen op expliciete tekst als 'Klarna', 'iDEAL', 'op rekening' of 'achteraf betalen'. " +
       "Verzin nooit een retourtermijn of datum.",
     messages: [
       {

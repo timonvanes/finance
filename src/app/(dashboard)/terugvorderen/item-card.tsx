@@ -112,6 +112,24 @@ export function ItemCard({
         </p>
       )}
 
+      {isWbw && item.sourceTotal != null && (
+        <p className="text-sm text-gray-500">
+          Jij:{" "}
+          <span className="font-medium text-gray-900">
+            {euro(
+              Math.max(
+                0,
+                item.sourceTotal -
+                  (item.lines && item.lines.length > 0
+                    ? item.lines.reduce((s, l) => s + l.amount, 0)
+                    : item.amount)
+              )
+            )}
+          </span>{" "}
+          · {personName}: <span className="font-medium text-gray-900">{euro(item.amount)}</span>
+        </p>
+      )}
+
       {item.lines && (
         <ul className="space-y-2">
           {item.lines.map((l, i) => (

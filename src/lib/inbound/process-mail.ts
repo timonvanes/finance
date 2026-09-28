@@ -25,6 +25,11 @@ function cleanMailText(text: string) {
   return text
     .replace(/[<\[]https?:\/\/[^>\]\s]*[>\]]/g, "")
     .replace(/https?:\/\/\S+/g, "")
+    // Image alt-text placeholders like [logo], [circle], [invoice] — that last
+    // one is a real bug bait: some shops name their payment-icon image
+    // "invoice.png" even when the real method is Klarna, so the plain-text
+    // version reads "Betaald met [invoice]" regardless of the actual method.
+    .replace(/\[[^[\]\s]{1,30}\]/g, "")
     .replace(/[​-‏͏⁠﻿­]/g, "")
     .replace(/[ \t ]+/g, " ")
     .replace(/(\r?\n\s*){3,}/g, "\n\n")
@@ -38,6 +43,63 @@ function addDays(iso: string, days: number) {
 }
 
 const isIso = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+// Shared by a fresh order_confirmation and by a "shipped" mail that turns out
+// to be the only mail a shop sends for a genuinely new order.
+async function createOrderFromMail(supabase: SupabaseClient, userId: string, mail: InboundMail, ex: ExtractedMail) {
+  const orderDate = isIso(ex.order_date) ? ex.order_date : new Date().toISOString().slice(0, 10);
+
+  // The term runs from delivery: shop-stated deadline wins; otherwise
+  // delivery date (expected, else estimated) plus the window.
+  let windowDays = ex.return_window_days;
+  let windowFromLookup = false;
+  if (!windowDays) {
+    windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
+    windowFromLookup = Boolean(windowDays);
+  }
+  const expected = isIso(ex.expected_delivery_date) ? ex.expected_delivery_date : null;
+  const computed = computeDeadline({ orderDate, expectedDate: expected, windowDays });
+  const deadline = isIso(ex.return_deadline) ? ex.return_deadline : computed.deadline;
+  const deadlineSource: "mail" | "lookup" | "estimate" = isIso(ex.return_deadline)
+    ? "mail"
+    : computed.basis === "estimate"
+      ? "estimate"
+      : windowFromLookup
+        ? "lookup"
+        : "mail";
+  const { data: order, error } = await supabase
+    .from("orders")
+    .insert({
+      user_id: userId,
+      merchant_name: ex.merchant_name,
+      order_date: orderDate,
+      total_amount: ex.total_amount,
+      source_text: mail.text.slice(0, 20000),
+      payment_method: ex.via_klarna ? "klarna" : ex.on_invoice ? "invoice" : "direct",
+      discount_total: ex.discount_total ?? inferDiscount(ex.items.reduce((s, i) => s + i.price * i.quantity, 0), ex.total_amount),
+      return_deadline: deadline,
+      return_deadline_source: deadlineSource,
+      return_window_days: computed.windowDays,
+      expected_delivery_date: expected,
+      delivered_date: ex.kind === "delivered" && isIso(ex.delivered_date) ? ex.delivered_date : null,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  if (ex.items.length > 0) {
+    const { error: itemsError } = await supabase.from("order_items").insert(
+      ex.items.map((i) => ({
+        user_id: userId,
+        order_id: order.id,
+        description: i.description,
+        price: i.price,
+        quantity: i.quantity,
+      }))
+    );
+    if (itemsError) throw itemsError;
+  }
+  return order.id as string;
+}
 
 function asReturn(m: ExtractedMail): ExtractedReturn {
   return {
@@ -121,62 +183,36 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
       return { outcome: "exists" };
     }
 
-    // The term runs from delivery: shop-stated deadline wins; otherwise
-    // delivery date (expected, else estimated) plus the window.
-    let windowDays = ex.return_window_days;
-    let windowFromLookup = false;
-    if (!windowDays) {
-      windowDays = await getReturnWindow(supabase, userId, ex.merchant_name);
-      windowFromLookup = Boolean(windowDays);
-    }
-    const expected = isIso(ex.expected_delivery_date) ? ex.expected_delivery_date : null;
-    const computed = computeDeadline({ orderDate, expectedDate: expected, windowDays });
-    const deadline = isIso(ex.return_deadline) ? ex.return_deadline : computed.deadline;
-    const deadlineSource: "mail" | "lookup" | "estimate" = isIso(ex.return_deadline)
-      ? "mail"
-      : computed.basis === "estimate"
-        ? "estimate"
-        : windowFromLookup
-          ? "lookup"
-          : "mail";
-    const { data: order, error } = await supabase
-      .from("orders")
-      .insert({
-        user_id: userId,
-        merchant_name: ex.merchant_name,
-        order_date: orderDate,
-        total_amount: ex.total_amount,
-        source_text: mail.text.slice(0, 20000),
-        payment_method: ex.via_klarna ? "klarna" : ex.on_invoice ? "invoice" : "direct",
-        discount_total: ex.discount_total ?? inferDiscount(ex.items.reduce((s, i) => s + i.price * i.quantity, 0), ex.total_amount),
-        return_deadline: deadline,
-        return_deadline_source: deadlineSource,
-        return_window_days: computed.windowDays,
-        expected_delivery_date: expected,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    if (ex.items.length > 0) {
-      const { error: itemsError } = await supabase.from("order_items").insert(
-        ex.items.map((i) => ({
-          user_id: userId,
-          order_id: order.id,
-          description: i.description,
-          price: i.price,
-          quantity: i.quantity,
-        }))
-      );
-      if (itemsError) throw itemsError;
-    }
+    await createOrderFromMail(supabase, userId, mail, ex);
     await record(supabase, userId, mail, ex.kind, `Bestelling toegevoegd: ${ex.merchant_name}`);
     return { outcome: "order_created" };
   }
 
   if (ex.kind === "delivered" || ex.kind === "shipped") {
     const scored = await scoreOrdersForReturn(supabase, asReturn(ex), userId);
-    if (scored.length === 0) {
-      await record(supabase, userId, mail, ex.kind, "Geen bijbehorende bestelling gevonden");
+    // Same-shop repeat orders (e.g. the same chino in two colors, ordered
+    // twice) can score identically on item text alone — picking the "best"
+    // one anyway is how a shipping update for order A silently corrupts
+    // order B. Ambiguous stays unmatched instead of guessing.
+    if (scored.length === 0 || !isConfident(scored)) {
+      // A shipped mail carrying real item/price data may be the only mail
+      // this shop sends for a genuinely new order — create it rather than
+      // losing the data, but only when there is no ambiguity to begin with
+      // (scored.length === 0, not just "not confident").
+      if (ex.kind === "shipped" && scored.length === 0 && ex.items.length > 0) {
+        const created = await createOrderFromMail(supabase, userId, mail, ex);
+        await record(supabase, userId, mail, ex.kind, `Bestelling toegevoegd: ${ex.merchant_name}`);
+        return { outcome: created ? "order_created" : "unmatched" };
+      }
+      await record(
+        supabase,
+        userId,
+        mail,
+        ex.kind,
+        scored.length === 0
+          ? "Geen bijbehorende bestelling gevonden"
+          : "Meerdere bestellingen bij deze winkel passen — niet automatisch gekoppeld"
+      );
       return { outcome: "unmatched" };
     }
     const { data: order } = await supabase
