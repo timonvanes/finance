@@ -11,13 +11,16 @@ export interface Point {
 
 const WORK_SIZE = 220; // downscale for the detection pass — only need a rough box
 
-// Guesses the receipt's four corners (in full-resolution image pixels) by
+// Anything drawImage() accepts and that carries its own pixel dimensions —
+// an <img>, a <video> frame, or an already-captured <canvas>.
+export type ImageSource = CanvasImageSource;
+
+// Guesses the receipt's four corners (in the source's own pixel space) by
 // finding the bounding box of the brightest contiguous area against a darker
 // background (the common case: a receipt on a table/counter). Falls back to
-// an inset rectangle when nothing usable is found.
-export function autoDetectCorners(img: HTMLImageElement): [Point, Point, Point, Point] {
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
+// an inset rectangle when nothing usable is found. Cheap enough to call
+// several times a second on a live video frame.
+export function detectCorners(source: ImageSource, w: number, h: number): [Point, Point, Point, Point] {
   const fallback = (): [Point, Point, Point, Point] => {
     const mx = w * 0.06;
     const my = h * 0.06;
@@ -37,9 +40,9 @@ export function autoDetectCorners(img: HTMLImageElement): [Point, Point, Point, 
   const canvas = document.createElement("canvas");
   canvas.width = sw;
   canvas.height = sh;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return fallback();
-  ctx.drawImage(img, 0, 0, sw, sh);
+  ctx.drawImage(source, 0, 0, sw, sh);
 
   let data: Uint8ClampedArray;
   try {
@@ -132,11 +135,15 @@ const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 // Warps the quad [topLeft, topRight, bottomRight, bottomLeft] flat into a
 // straight rectangle via inverse bilinear-patch sampling (not a full
 // projective homography, but close enough for a phone photo's mild
-// perspective, and far simpler than solving one).
+// perspective, and far simpler than solving one). `source` is already a
+// full-resolution still (a captured <canvas> or a loaded <img>), not a live
+// video element — the caller grabs one frame before calling this.
 export function warpToCanvas(
-  source: HTMLImageElement,
+  source: ImageSource,
+  sourceW: number,
+  sourceH: number,
   corners: [Point, Point, Point, Point],
-  maxLongSide = 1400
+  maxLongSide = 2000
 ): HTMLCanvasElement {
   const [tl, tr, br, bl] = corners;
   const outW = Math.max(dist(tl, tr), dist(bl, br));
@@ -146,10 +153,10 @@ export function warpToCanvas(
   const targetH = Math.max(1, Math.round(outH * scale));
 
   const full = document.createElement("canvas");
-  full.width = source.naturalWidth;
-  full.height = source.naturalHeight;
+  full.width = sourceW;
+  full.height = sourceH;
   const fullCtx = full.getContext("2d")!;
-  fullCtx.drawImage(source, 0, 0);
+  fullCtx.drawImage(source, 0, 0, sourceW, sourceH);
   const srcData = fullCtx.getImageData(0, 0, full.width, full.height);
 
   const out = document.createElement("canvas");
@@ -173,7 +180,7 @@ export function warpToCanvas(
   return out;
 }
 
-export function canvasToJpegFile(canvas: HTMLCanvasElement, name: string, quality = 0.85): Promise<File> {
+export function canvasToJpegFile(canvas: HTMLCanvasElement, name: string, quality = 0.92): Promise<File> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {

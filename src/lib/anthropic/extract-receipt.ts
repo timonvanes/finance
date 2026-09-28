@@ -34,18 +34,25 @@ export async function extractReceipt(imageBase64: string, mediaType: string): Pr
 
   const response = await client.messages.parse({
     model: "claude-haiku-4-5",
-    max_tokens: 2000,
+    max_tokens: 2500,
     system:
       "Je leest een foto van een kassabon of aankoopbewijs (vaak Nederlandstalig) en haalt er gegevens uit. " +
       `Vandaag is ${today}. Bedragen zijn getallen in euro's zonder €-teken. Datums als YYYY-MM-DD. ` +
-      "Geef per artikel de omschrijving, de prijs per stuk en het aantal. Gebruik null als iets niet leesbaar of niet aanwezig is. " +
-      "Verzin nooit een retourtermijn, datum of bedrag dat je niet kunt lezen.",
+      "Ga regel voor regel door de bon, van boven naar beneden. Op een kassabon staat per artikel meestal de " +
+      "omschrijving op één regel, met de prijs erachter of eronder; soms staan aantal en prijs-per-stuk op een " +
+      "aparte regel als 'AANTAL x PRIJS'. Neem elk artikel apart op, ook als de naam een afkorting of kassacode is " +
+      "— schrijf die dan zoals hij op de bon staat, verzin geen productnaam die er niet echt staat. " +
+      "Regels als SUBTOTAAL, BTW, KORTING, STATIEGELD, TOTAAL, PIN, CONTANT, RETOUR of kaartnummers zijn GEEN " +
+      "artikelen — sla die over (korting mag wel apart genoteerd worden als er een discount-veld is, artikelprijzen " +
+      "blijven dan zoals afgedrukt). Als tekst onscherp, afgesneden of onleesbaar is: laat dat artikel liever weg of " +
+      "zet een zo letterlijk mogelijke lezing neer, verzin nooit prijzen of artikelen die je niet kunt lezen. " +
+      "Het totaalbedrag moet, als het leesbaar is, overeenkomen met de som van de artikelen — controleer dat voor je antwoordt.",
     messages: [
       {
         role: "user",
         content: [
           { type: "image", source: { type: "base64", media_type: mediaType as "image/jpeg", data: imageBase64 } },
-          { type: "text", text: "Haal de gegevens uit dit bonnetje." },
+          { type: "text", text: "Haal de gegevens uit dit bonnetje. Lees elke regel zorgvuldig, ook kleine tekst." },
         ],
       },
     ],
