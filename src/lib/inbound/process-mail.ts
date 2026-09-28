@@ -5,7 +5,7 @@ import { sendPush } from "@/lib/push/send";
 import { computeDeadline } from "@/lib/returns/deadline";
 import { getReturnWindow } from "@/lib/returns/policy";
 import { inferDiscount } from "@/lib/returns/amounts";
-import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
+import { applyReturnToOrderCore, findOrderByReference, isConfident, scoreOrdersForReturn } from "@/lib/returns/core";
 
 export interface InboundMail {
   messageId: string;
@@ -73,6 +73,7 @@ async function createOrderFromMail(supabase: SupabaseClient, userId: string, mai
       user_id: userId,
       merchant_name: ex.merchant_name,
       order_date: orderDate,
+      order_reference: ex.order_reference,
       total_amount: ex.total_amount,
       source_text: mail.text.slice(0, 20000),
       payment_method: ex.via_klarna ? "klarna" : ex.on_invoice ? "invoice" : "direct",
@@ -104,7 +105,7 @@ async function createOrderFromMail(supabase: SupabaseClient, userId: string, mai
 function asReturn(m: ExtractedMail): ExtractedReturn {
   return {
     merchant_name: m.merchant_name,
-    order_reference: null,
+    order_reference: m.order_reference,
     returned_items: m.items.map((i) => ({ description: i.description, quantity: i.quantity, amount: i.price * i.quantity })),
     shipping_refunded: m.shipping_refunded,
     return_fee: m.return_fee,
@@ -112,6 +113,24 @@ function asReturn(m: ExtractedMail): ExtractedReturn {
     via_klarna: m.via_klarna,
     klarna_credit_confirmed: m.klarna_credit_confirmed,
   } as ExtractedReturn;
+}
+
+// An exact order-number match is definitive and skips the ambiguity check
+// entirely; otherwise fall back to item-text similarity, which can genuinely
+// be ambiguous between two repeat orders from the same shop.
+async function resolveOrderId(
+  supabase: SupabaseClient,
+  userId: string,
+  reference: string | null,
+  extraction: ExtractedReturn,
+  includeRefunded = false
+): Promise<{ id: string | null; ambiguous: boolean }> {
+  const byRef = await findOrderByReference(supabase, reference, userId);
+  if (byRef) return { id: byRef, ambiguous: false };
+  const scored = await scoreOrdersForReturn(supabase, extraction, userId, includeRefunded);
+  if (scored.length === 0) return { id: null, ambiguous: false };
+  if (!isConfident(scored)) return { id: null, ambiguous: true };
+  return { id: scored[0].id, ambiguous: false };
 }
 
 async function record(
@@ -171,13 +190,16 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
 
   if (ex.kind === "order_confirmation") {
     const orderDate = isIso(ex.order_date) ? ex.order_date : new Date().toISOString().slice(0, 10);
-    const { data: same } = await supabase
-      .from("orders")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("order_date", orderDate)
-      .eq("total_amount", ex.total_amount ?? -1)
-      .ilike("merchant_name", ex.merchant_name);
+    const byRef = await findOrderByReference(supabase, ex.order_reference, userId);
+    const { data: same } = byRef
+      ? { data: [{ id: byRef }] }
+      : await supabase
+          .from("orders")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("order_date", orderDate)
+          .eq("total_amount", ex.total_amount ?? -1)
+          .ilike("merchant_name", ex.merchant_name);
     if ((same ?? []).length > 0) {
       await record(supabase, userId, mail, ex.kind, "Bestelling stond er al");
       return { outcome: "exists" };
@@ -189,36 +211,36 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
   }
 
   if (ex.kind === "delivered" || ex.kind === "shipped") {
-    const scored = await scoreOrdersForReturn(supabase, asReturn(ex), userId);
     // Same-shop repeat orders (e.g. the same chino in two colors, ordered
     // twice) can score identically on item text alone — picking the "best"
     // one anyway is how a shipping update for order A silently corrupts
-    // order B. Ambiguous stays unmatched instead of guessing.
-    if (scored.length === 0 || !isConfident(scored)) {
+    // order B. An exact order-number match resolves that; without one,
+    // ambiguous stays unmatched instead of guessing.
+    const resolved = await resolveOrderId(supabase, userId, ex.order_reference, asReturn(ex));
+    if (!resolved.id) {
       // A shipped mail carrying real item/price data may be the only mail
       // this shop sends for a genuinely new order — create it rather than
-      // losing the data, but only when there is no ambiguity to begin with
-      // (scored.length === 0, not just "not confident").
-      if (ex.kind === "shipped" && scored.length === 0 && ex.items.length > 0) {
-        const created = await createOrderFromMail(supabase, userId, mail, ex);
+      // losing the data, but only when there is no ambiguity to begin with.
+      if (ex.kind === "shipped" && !resolved.ambiguous && ex.items.length > 0) {
+        await createOrderFromMail(supabase, userId, mail, ex);
         await record(supabase, userId, mail, ex.kind, `Bestelling toegevoegd: ${ex.merchant_name}`);
-        return { outcome: created ? "order_created" : "unmatched" };
+        return { outcome: "order_created" };
       }
       await record(
         supabase,
         userId,
         mail,
         ex.kind,
-        scored.length === 0
-          ? "Geen bijbehorende bestelling gevonden"
-          : "Meerdere bestellingen bij deze winkel passen — niet automatisch gekoppeld"
+        resolved.ambiguous
+          ? "Meerdere bestellingen bij deze winkel passen — niet automatisch gekoppeld"
+          : "Geen bijbehorende bestelling gevonden"
       );
       return { outcome: "unmatched" };
     }
     const { data: order } = await supabase
       .from("orders")
       .select("order_date, delivered_date, expected_delivery_date, return_window_days, return_deadline_source")
-      .eq("id", scored[0].id)
+      .eq("id", resolved.id)
       .eq("user_id", userId)
       .single();
     if (!order) return { outcome: "unmatched" };
@@ -251,7 +273,7 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
             ? "lookup"
             : "mail";
     }
-    await supabase.from("orders").update(update).eq("id", scored[0].id).eq("user_id", userId);
+    await supabase.from("orders").update(update).eq("id", resolved.id).eq("user_id", userId);
     await record(
       supabase,
       userId,
@@ -266,9 +288,9 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
 
   if (ex.kind === "return_confirmation") {
     const extraction = asReturn(ex);
-    const scored = await scoreOrdersForReturn(supabase, extraction, userId);
-    if (isConfident(scored)) {
-      const result = await applyReturnToOrderCore(supabase, scored[0].id, extraction, userId);
+    const resolved = await resolveOrderId(supabase, userId, ex.order_reference, extraction);
+    if (resolved.id) {
+      const result = await applyReturnToOrderCore(supabase, resolved.id, extraction, userId);
       await record(
         supabase,
         userId,
@@ -283,9 +305,9 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
       userId,
       mail,
       ex.kind,
-      scored.length === 0
-        ? "Retourmail: geen bijbehorende bestelling gevonden. Plak de mail zelf bij Retouren."
-        : "Retourmail: meerdere bestellingen passen. Plak de mail zelf bij Retouren."
+      resolved.ambiguous
+        ? "Retourmail: meerdere bestellingen passen. Plak de mail zelf bij Retouren."
+        : "Retourmail: geen bijbehorende bestelling gevonden. Plak de mail zelf bij Retouren."
     );
     return { outcome: "needs_review" };
   }
@@ -297,8 +319,8 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
       await record(supabase, userId, mail, ex.kind, "Prijsverschil: bedrag niet gevonden. Voeg het zelf toe bij de bestelling.");
       return { outcome: "needs_review" };
     }
-    const scored = await scoreOrdersForReturn(supabase, asReturn(ex), userId, true);
-    if (!isConfident(scored)) {
+    const resolved = await resolveOrderId(supabase, userId, ex.order_reference, asReturn(ex), true);
+    if (!resolved.id) {
       await record(
         supabase,
         userId,
@@ -311,14 +333,14 @@ export async function processInboundMail(supabase: SupabaseClient, userId: strin
     const { data: order } = await supabase
       .from("orders")
       .select("payment_method")
-      .eq("id", scored[0].id)
+      .eq("id", resolved.id)
       .eq("user_id", userId)
       .single();
     // Credited on an invoice (or Klarna) means nothing will arrive at the bank.
     const credited = order?.payment_method !== "direct" || ex.on_invoice || ex.via_klarna;
     await supabase.from("order_claims").insert({
       user_id: userId,
-      order_id: scored[0].id,
+      order_id: resolved.id,
       reason: `Prijsverschil: ${label}`.slice(0, 200),
       expected_amount: amount,
       status: credited ? "received" : "pending",

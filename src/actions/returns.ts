@@ -7,9 +7,90 @@ import { applyReturnToOrderCore, isConfident, scoreOrdersForReturn } from "@/lib
 import { autoMatchOrderRefunds } from "@/lib/returns/auto-match";
 import { computeDeadline } from "@/lib/returns/deadline";
 import { extractReturnFromEmailText, type ExtractedReturn } from "@/lib/anthropic/extract-return";
+import { extractReceipt } from "@/lib/anthropic/extract-receipt";
+import { getReturnWindow } from "@/lib/returns/policy";
 
 export async function extractOrderPreview(emailText: string) {
   return extractOrderFromEmailText(emailText);
+}
+
+const RECEIPT_BUCKET = "receipts";
+
+// A photographed in-store receipt: same return-deadline logic as an online
+// order, except the "delivery" date is simply the purchase date — you walk
+// out of the shop with the item, there is no shipping.
+export async function createOrderFromReceipt(formData: FormData) {
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) throw new Error("Geen foto ontvangen.");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const mediaType = file.type || "image/jpeg";
+  const ex = await extractReceipt(bytes.toString("base64"), mediaType);
+
+  const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(ex.purchase_date ?? "")
+    ? (ex.purchase_date as string)
+    : new Date().toISOString().slice(0, 10);
+
+  let windowDays = ex.return_window_days;
+  let windowFromLookup = false;
+  if (!windowDays) {
+    windowDays = await getReturnWindow(supabase, user.id, ex.merchant_name);
+    windowFromLookup = Boolean(windowDays);
+  }
+  const computed = computeDeadline({ orderDate: purchaseDate, deliveredDate: purchaseDate, windowDays });
+  const deadline = ex.return_deadline && /^\d{4}-\d{2}-\d{2}$/.test(ex.return_deadline) ? ex.return_deadline : computed.deadline;
+  const deadlineSource: "mail" | "lookup" | "estimate" = ex.return_deadline
+    ? "mail"
+    : ex.return_window_days
+      ? "mail"
+      : windowFromLookup
+        ? "lookup"
+        : "estimate";
+
+  const safeName = file.name?.replace(/[^a-zA-Z0-9._-]/g, "_") || "bon.jpg";
+  const path = `${user.id}/orders/${Date.now()}_${safeName}`;
+  const { error: uploadError } = await supabase.storage.from(RECEIPT_BUCKET).upload(path, bytes, { contentType: mediaType });
+  if (uploadError) throw uploadError;
+
+  const { data: order, error } = await supabase
+    .from("orders")
+    .insert({
+      user_id: user.id,
+      merchant_name: ex.merchant_name,
+      order_date: purchaseDate,
+      total_amount: ex.total_amount,
+      channel: "physical",
+      receipt_path: path,
+      return_deadline: deadline,
+      return_deadline_source: deadlineSource,
+      return_window_days: computed.windowDays,
+      delivered_date: purchaseDate,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+
+  if (ex.items.length > 0) {
+    const { error: itemsError } = await supabase.from("order_items").insert(
+      ex.items.map((i) => ({ order_id: order.id, description: i.description, price: i.price, quantity: i.quantity }))
+    );
+    if (itemsError) throw itemsError;
+  }
+
+  return { merchant: ex.merchant_name, deadline };
+}
+
+export async function getOrderReceiptUrl(receiptPath: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage.from(RECEIPT_BUCKET).createSignedUrl(receiptPath, 60 * 10);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 export async function createOrder(input: {
@@ -71,7 +152,7 @@ export async function getOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      `id, merchant_name, order_date, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, return_deadline_source, delivered_date, expected_delivery_date, return_window_days, discount_total, refund_status, refund_transaction_id, created_at,
+      `id, merchant_name, order_date, order_reference, channel, receipt_path, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, return_deadline_source, delivered_date, expected_delivery_date, return_window_days, discount_total, refund_status, refund_transaction_id, created_at,
       order_items(id, description, price, quantity, returned),
       order_claims(id, reason, expected_amount, status, refund_transaction_id, created_at),
       refund_transaction:transactions!orders_refund_transaction_id_fkey(booking_date, counterparty_name, amount)`

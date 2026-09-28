@@ -11,6 +11,7 @@ import {
   markClaimReceived,
   reopenClaim,
   deleteOrder,
+  getOrderReceiptUrl,
   linkRefundToOrder,
   recordKlarnaCredit,
   setOrderPaymentMethod,
@@ -69,6 +70,8 @@ export function OrderRow({
     return_deadline: string | null;
     return_deadline_source: string | null;
     delivered_date: string | null;
+    channel: string;
+    receipt_path: string | null;
     discount_total: number;
     order_claims: {
       id: string;
@@ -140,6 +143,9 @@ export function OrderRow({
           <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLE[order.refund_status]}`}>
             {STATUS_LABEL[order.refund_status]}
           </span>
+          {order.channel === "physical" && (
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">Fysiek</span>
+          )}
           {order.payment_method !== "direct" && (
             <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700">
               {order.payment_method === "klarna" ? "Klarna" : "Op rekening"}
@@ -610,20 +616,37 @@ export function OrderRow({
         </div>
       </details>
 
-      <button
-        type="button"
-        disabled={isPending}
-        onClick={() => {
-          if (!confirm("Deze bestelling verwijderen?")) return;
-          startTransition(async () => {
-            await deleteOrder(order.id);
-            router.refresh();
-          });
-        }}
-        className="min-h-[44px] self-start text-sm text-red-500 disabled:opacity-50"
-      >
-        Bestelling verwijderen
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        {order.receipt_path && (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              startTransition(async () => {
+                const url = await getOrderReceiptUrl(order.receipt_path!);
+                window.open(url, "_blank");
+              });
+            }}
+            className="min-h-[44px] rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 disabled:opacity-50"
+          >
+            Bon bekijken
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => {
+            if (!confirm("Deze bestelling verwijderen?")) return;
+            startTransition(async () => {
+              await deleteOrder(order.id);
+              router.refresh();
+            });
+          }}
+          className="min-h-[44px] text-sm text-red-500 disabled:opacity-50"
+        >
+          Bestelling verwijderen
+        </button>
+      </div>
       </div>
       </details>
     </li>

@@ -68,6 +68,27 @@ export function isConfident(scored: ScoredOrder[]) {
   return scored.length === 1 || (scored.length > 1 && scored[0].score - scored[1].score >= 3);
 }
 
+const normRef = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// An exact order-number match is definitive — unlike item-text similarity, it
+// tells apart two near-identical repeat orders from the same shop (same
+// product, different color/size) that similarity scoring cannot.
+export async function findOrderByReference(
+  supabase: SupabaseClient,
+  reference: string | null | undefined,
+  userId?: string
+): Promise<string | null> {
+  const ref = reference?.trim();
+  if (!ref || ref.length < 3) return null;
+  const target = normRef(ref);
+
+  let query = supabase.from("orders").select("id, order_reference").not("order_reference", "is", null);
+  if (userId) query = query.eq("user_id", userId);
+  const { data } = await query;
+  const match = (data ?? []).find((o) => o.order_reference && normRef(o.order_reference) === target);
+  return match ? (match.id as string) : null;
+}
+
 // Marks the matching order items as returned, stores refunded shipping and a
 // held-back fee, and — if a refund of exactly the expected amount has
 // already arrived from that shop — links it right away.

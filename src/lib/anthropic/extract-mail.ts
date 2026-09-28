@@ -17,6 +17,10 @@ const MailSchema = z.object({
     .string()
     .describe("Naam van de webshop waar de bestelling is geplaatst (bij een Klarna-mail dus de winkel, niet Klarna zelf)"),
   order_date: z.string().nullable().describe("Besteldatum als YYYY-MM-DD, of null"),
+  order_reference: z
+    .string()
+    .nullable()
+    .describe("Bestelnummer of ordernummer als dat genoemd wordt (bijv. 'Bestelnummer: OL1209637041'), anders null"),
   expected_delivery_date: z
     .string()
     .nullable()

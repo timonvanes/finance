@@ -1,6 +1,7 @@
 import { getInboundMails, getOrders, getUnlinkedIncomingTransactionsForReturns } from "@/actions/returns";
 import { ImportForm } from "./import-form";
 import { OrderRow } from "./order-row";
+import { ReceiptScanForm } from "./receipt-scan-form";
 import { ReturnMailForm } from "./return-mail-form";
 import { InfoButton } from "../info-button";
 
@@ -135,6 +136,15 @@ export default async function ReturnsPage() {
         </summary>
         <div className="px-3 pb-3">
           <ImportForm />
+        </div>
+      </details>
+
+      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
+        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
+          Bonnetje van een winkel scannen
+        </summary>
+        <div className="px-3 pb-3">
+          <ReceiptScanForm />
         </div>
       </details>
     </div>
