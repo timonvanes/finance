@@ -33,7 +33,7 @@ export default async function ReturnsPage() {
     .sort((a, b) => (a.return_deadline! < b.return_deadline! ? -1 : 1))
     .slice(0, 6);
 
-  const sortedOrders = [...orders].sort((a, b) => {
+  const byRecency = (a: (typeof orders)[number], b: (typeof orders)[number]) => {
     const live = (o: (typeof orders)[number]) =>
       o.return_deadline &&
       o.refund_status === "not_returned" &&
@@ -45,7 +45,10 @@ export default async function ReturnsPage() {
     if (la) return -1;
     if (lb) return 1;
     return a.created_at < b.created_at ? 1 : -1;
-  });
+  };
+
+  const onlineOrders = orders.filter((o) => o.channel !== "physical").sort(byRecency);
+  const physicalOrders = orders.filter((o) => o.channel === "physical").sort(byRecency);
 
   return (
     <div className="space-y-5">
@@ -53,18 +56,17 @@ export default async function ReturnsPage() {
         <h1 className="text-3xl font-semibold text-gray-900">Retouren</h1>
         <InfoButton>
           <p>
-            Plak een orderbevestigingsmail om de artikelen te herkennen, vink aan wat je retour
-            stuurt en koppel de restitutie zodra die binnenkomt.
+            Stuur bestel-, verzend- en retourmail door naar je koppeladres, dan komt hij hier vanzelf in te staan.
+            Plak een mail of scan een bonnetje als dat niet lukt.
           </p>
           <p>
-            Krijg je een retourbevestiging of creditnota, plak die dan bij{" "}
-            <span className="font-medium">Retourmail verwerken</span>: de app zoekt de bestelling erbij,
-            markeert de artikelen als retour en vult verzendkosten en retourkosten in.
+            <span className="font-medium">Online bestellingen</span> zijn bezorgd; de retourtermijn loopt vanaf de
+            bezorgdatum. <span className="font-medium">Fysieke aankopen</span> zijn in de winkel gekocht (met een
+            digitaal bonnetje); de termijn loopt vanaf de aankoopdatum zelf.
           </p>
           <p>
-            <span className="font-medium">Verzendkosten terug</span> zijn de verzendkosten van je
-            oorspronkelijke bestelling die de winkel meeteruggeeft.{" "}
-            <span className="font-medium">Retourkosten ingehouden</span> is wat de winkel van het
+            <span className="font-medium">Verzendkosten terug</span> zijn de verzendkosten die de winkel
+            meeteruggeeft. <span className="font-medium">Retourkosten ingehouden</span> is wat de winkel van het
             terug te betalen bedrag afhoudt, bijvoorbeeld voor het retourlabel.
           </p>
         </InfoButton>
@@ -76,7 +78,10 @@ export default async function ReturnsPage() {
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {upcoming.map((o) => (
               <li key={o.id} className="flex min-h-[64px] items-center justify-between gap-3 px-5 py-3">
-                <span className="min-w-0 truncate text-base font-medium text-gray-900">{o.merchant_name}</span>
+                <span className="min-w-0 truncate text-base font-medium text-gray-900">
+                  {o.merchant_name}
+                  {o.channel === "physical" && <span className="ml-2 text-sm text-gray-400">winkel</span>}
+                </span>
                 <span
                   className={`shrink-0 rounded-full px-3 py-1 text-sm font-medium ${
                     daysLeft(o.return_deadline!) <= 3 ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"
@@ -89,6 +94,63 @@ export default async function ReturnsPage() {
           </ul>
         </section>
       )}
+
+      <section>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Online bestellingen ({onlineOrders.length})</h2>
+        {onlineOrders.length > 0 ? (
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
+            {onlineOrders.map((order) => (
+              <OrderRow key={order.id} order={order} incomingTransactions={incomingTransactions} />
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
+            Nog geen online bestellingen toegevoegd.
+          </p>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">
+          Fysieke aankopen ({physicalOrders.length})
+        </h2>
+        {physicalOrders.length > 0 ? (
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
+            {physicalOrders.map((order) => (
+              <OrderRow key={order.id} order={order} incomingTransactions={incomingTransactions} />
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
+            Nog geen fysieke aankopen — scan een bonnetje om er een toe te voegen.
+          </p>
+        )}
+      </section>
+
+      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
+        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
+          Bestelling toevoegen
+        </summary>
+        <div className="space-y-4 px-3 pb-4">
+          <div className="space-y-2">
+            <p className="px-1 text-sm font-medium text-gray-700">Bonnetje van een winkel scannen</p>
+            <ReceiptScanForm />
+          </div>
+          <div className="space-y-2 border-t border-gray-100 pt-4">
+            <p className="px-1 text-sm font-medium text-gray-700">Of: tekst van een mail plakken</p>
+            <ImportForm />
+          </div>
+        </div>
+      </details>
+
+      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
+        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
+          Retourmail zelf plakken
+        </summary>
+        <div className="px-3 pb-3">
+          <ReturnMailForm />
+        </div>
+      </details>
 
       {inboundMails.length > 0 && (
         <details className="rounded-2xl bg-white ring-1 ring-gray-200">
@@ -107,46 +169,6 @@ export default async function ReturnsPage() {
           </ul>
         </details>
       )}
-
-      <section>
-        <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Bestellingen ({orders.length})</h2>
-        {orders.length > 0 ? (
-          <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
-            {sortedOrders.map((order) => (
-              <OrderRow key={order.id} order={order} incomingTransactions={incomingTransactions} />
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">Nog geen bestellingen toegevoegd.</p>
-        )}
-      </section>
-
-      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
-        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
-          Retourmail zelf plakken
-        </summary>
-        <div className="px-3 pb-3">
-          <ReturnMailForm />
-        </div>
-      </details>
-
-      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
-        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
-          Bestelling zelf toevoegen
-        </summary>
-        <div className="px-3 pb-3">
-          <ImportForm />
-        </div>
-      </details>
-
-      <details className="rounded-2xl bg-white ring-1 ring-gray-200">
-        <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">
-          Bonnetje van een winkel scannen
-        </summary>
-        <div className="px-3 pb-3">
-          <ReceiptScanForm />
-        </div>
-      </details>
     </div>
   );
 }

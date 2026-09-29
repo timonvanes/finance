@@ -143,9 +143,6 @@ export function OrderRow({
           <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLE[order.refund_status]}`}>
             {STATUS_LABEL[order.refund_status]}
           </span>
-          {order.channel === "physical" && (
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">Fysiek</span>
-          )}
           {order.payment_method !== "direct" && (
             <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700">
               {order.payment_method === "klarna" ? "Klarna" : "Op rekening"}

@@ -19,6 +19,9 @@ export function ImportForm() {
   const [totalAmount, setTotalAmount] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"direct" | "klarna" | "invoice">("direct");
+  const [physical, setPhysical] = useState(false);
+  const [returnDeadline, setReturnDeadline] = useState("");
+  const [returnWindowDays, setReturnWindowDays] = useState("");
   const [step, setStep] = useState<"paste" | "review">("paste");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -32,6 +35,9 @@ export function ImportForm() {
     setItems([]);
     setStep("paste");
     setPaymentMethod("direct");
+    setPhysical(false);
+    setReturnDeadline("");
+    setReturnWindowDays("");
     setError(null);
   }
 
@@ -43,6 +49,8 @@ export function ImportForm() {
         setMerchantName(result.merchant_name);
         setOrderDate(result.order_date ?? "");
         setTotalAmount(result.total_amount != null ? String(result.total_amount) : "");
+        setReturnDeadline(result.return_deadline ?? "");
+        setReturnWindowDays(result.return_window_days != null ? String(result.return_window_days) : "");
         setItems(
           result.items.length > 0
             ? result.items.map((i) => ({
@@ -71,6 +79,9 @@ export function ImportForm() {
         totalAmount: totalAmount ? Number(totalAmount) : null,
         sourceText: emailText,
         paymentMethod,
+        channel: physical ? "physical" : "online",
+        returnDeadline: returnDeadline || null,
+        returnWindowDays: returnWindowDays ? Number(returnWindowDays) : null,
         items: items
           .filter((i) => i.description.trim() && i.price)
           .map((i) => ({
@@ -88,7 +99,7 @@ export function ImportForm() {
     return (
       <div className="space-y-3 rounded-2xl bg-white ring-1 ring-gray-200 p-4">
         <label className="block text-xs font-medium text-gray-700">
-          Plak hier de tekst van je orderbevestigingsmail
+          Plak hier de tekst van je orderbevestiging of een e-mailbonnetje
         </label>
         <textarea
           value={emailText}
@@ -117,7 +128,7 @@ export function ImportForm() {
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-700">Webshop</label>
+          <label className="mb-1 block text-xs font-medium text-gray-700">Webshop / winkel</label>
           <input
             type="text"
             value={merchantName}
@@ -142,6 +153,41 @@ export function ImportForm() {
             step="0.01"
             value={totalAmount}
             onChange={(e) => setTotalAmount(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+      </div>
+
+      <label className="flex min-h-[44px] items-center gap-3 rounded-xl bg-gray-50 px-3 text-sm text-gray-800">
+        <input
+          type="checkbox"
+          checked={physical}
+          onChange={(e) => setPhysical(e.target.checked)}
+          className="h-5 w-5 accent-teal-700"
+        />
+        Fysieke aankoop (bon per mail ontvangen, geen verzending) — de retourtermijn loopt dan vanaf de besteldatum
+        zelf
+      </label>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700">Retour vóór (optioneel)</label>
+          <input
+            type="date"
+            value={returnDeadline}
+            onChange={(e) => setReturnDeadline(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700">Of: dagen bedenktijd</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1"
+            value={returnWindowDays}
+            onChange={(e) => setReturnWindowDays(e.target.value)}
+            placeholder="bijv. 30"
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
         </div>

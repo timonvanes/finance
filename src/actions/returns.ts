@@ -120,19 +120,58 @@ export async function createOrder(input: {
   sourceText: string;
   paymentMethod?: "direct" | "klarna" | "invoice";
   discountTotal?: number;
+  // A physical purchase (e.g. an emailed receipt for something bought
+  // in-store): the return term runs from the purchase date itself, not from
+  // a shipping/delivery date.
+  channel?: "online" | "physical";
+  returnDeadline?: string | null;
+  returnWindowDays?: number | null;
   items: { description: string; price: number; quantity: number }[];
 }) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+
+  const channel = input.channel ?? "online";
+  const purchaseDate = input.orderDate || new Date().toISOString().slice(0, 10);
+
+  let windowDays = input.returnWindowDays ?? null;
+  let windowFromLookup = false;
+  if (!windowDays) {
+    windowDays = await getReturnWindow(supabase, user.id, input.merchantName);
+    windowFromLookup = Boolean(windowDays);
+  }
+  const computed = computeDeadline({
+    orderDate: purchaseDate,
+    deliveredDate: channel === "physical" ? purchaseDate : null,
+    windowDays,
+  });
+  const deadline = input.returnDeadline || computed.deadline;
+  const deadlineSource: "mail" | "lookup" | "estimate" = input.returnDeadline
+    ? "mail"
+    : input.returnWindowDays
+      ? "mail"
+      : windowFromLookup
+        ? "lookup"
+        : "estimate";
 
   const { data: order, error } = await supabase
     .from("orders")
     .insert({
+      user_id: user.id,
       merchant_name: input.merchantName,
       order_date: input.orderDate,
       total_amount: input.totalAmount,
       source_text: input.sourceText || null,
       payment_method: input.paymentMethod ?? "direct",
       discount_total: input.discountTotal ?? inferDiscount(input.items.reduce((s, i) => s + i.price * i.quantity, 0), input.totalAmount),
+      channel,
+      delivered_date: channel === "physical" ? purchaseDate : null,
+      return_deadline: deadline,
+      return_deadline_source: deadlineSource,
+      return_window_days: computed.windowDays,
     })
     .select("id")
     .single();
