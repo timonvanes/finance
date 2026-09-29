@@ -80,6 +80,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const todayOfMonth = new Date().getDate();
+    const { data: withDay } = await admin
+      .from("user_settings")
+      .select("user_id, invest_reminder_day")
+      .not("invest_reminder_day", "is", null);
+    let sentInvest = 0;
+    for (const s of withDay ?? []) {
+      if (s.invest_reminder_day !== todayOfMonth) continue;
+      await sendPush(s.user_id, "invest_reminder", {
+        title: "Tijd om te beleggen",
+        body: "Dit is de dag van de maand die je hebt gekozen om aandelen te kopen.",
+        url: "/settings/beleggen",
+      });
+      sentInvest++;
+    }
+    report.investReminders = sentInvest;
+  } catch (e) {
+    report.investReminders = e instanceof Error ? e.message : "failed";
+  }
+
+  try {
     const { data: parts } = await admin
       .from("debt_parts")
       .select("user_id, name, rate_fixed_until, is_gift, debts(name)")

@@ -1,9 +1,14 @@
 import Link from "next/link";
-import { getMonthStartDay } from "@/lib/settings";
+import { getMonthStartDay, getInvestReminderDay } from "@/lib/settings";
 
 const GROUPS: {
   title: string;
-  items: { href: string; label: string; description: string; value?: (ctx: { startDay: number }) => string }[];
+  items: {
+    href: string;
+    label: string;
+    description: string;
+    value?: (ctx: { startDay: number; investDay: number | null }) => string;
+  }[];
 }[] = [
   {
     title: "Geld",
@@ -13,6 +18,12 @@ const GROUPS: {
         label: "Begin van de maand",
         description: "Laat je maand beginnen op je salarisdag",
         value: ({ startDay }) => (startDay === 1 ? "1e" : `${startDay}e`),
+      },
+      {
+        href: "/settings/beleggen",
+        label: "Beleggen",
+        description: "Maandelijkse herinnering om aandelen te kopen",
+        value: ({ investDay }) => (investDay ? `dag ${investDay}` : "uit"),
       },
       {
         href: "/settings/overzicht",
@@ -69,7 +80,7 @@ const GROUPS: {
 ];
 
 export default async function SettingsPage() {
-  const startDay = await getMonthStartDay();
+  const [startDay, investDay] = await Promise.all([getMonthStartDay(), getInvestReminderDay()]);
 
   return (
     <div className="space-y-6">
@@ -100,7 +111,7 @@ export default async function SettingsPage() {
                     <span className="block text-sm text-gray-500">{item.description}</span>
                   </span>
                   {item.value && (
-                    <span className="shrink-0 text-base text-gray-500">{item.value({ startDay })}</span>
+                    <span className="shrink-0 text-base text-gray-500">{item.value({ startDay, investDay })}</span>
                   )}
                   <span className="text-2xl text-gray-300">›</span>
                 </Link>

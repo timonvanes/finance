@@ -21,6 +21,26 @@ export async function setMonthStartDay(day: number) {
   if (error) throw error;
 }
 
+export async function setInvestReminderDay(day: number | null) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      {
+        user_id: user.id,
+        invest_reminder_day: day == null ? null : clampStartDay(day),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+  if (error) throw error;
+}
+
 export async function setDashboardModuleVisible(key: string, visible: boolean) {
   if (!DASHBOARD_MODULES.some((m) => m.key === key)) throw new Error("Onbekend onderdeel.");
   const supabase = await createClient();
