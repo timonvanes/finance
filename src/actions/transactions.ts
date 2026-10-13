@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { buildCategorizer, counterpartyKey } from "@/lib/categorization/engine";
+import { WBW_CATEGORY, ensureWbwCategory } from "@/lib/wbw-fronted";
 
 const DEFAULT_CATEGORIES = [
   { name: "Boodschappen", kind: "expense" },
@@ -81,6 +82,18 @@ export async function getCategories() {
     .select("id, name, kind")
     .order("name");
   if (error) throw error;
+
+  // "Via WieBetaaltWat" is a real category (budgetable, shown everywhere); it
+  // is created here once the user has categories at all.
+  if (data.length > 0 && !data.some((c) => c.name === WBW_CATEGORY)) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const created = await ensureWbwCategory(supabase, user.id);
+      if (created) return [...data, created].sort((a, b) => a.name.localeCompare(b.name, "nl"));
+    }
+  }
   return data;
 }
 

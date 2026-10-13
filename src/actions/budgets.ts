@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { dayIndexInPeriod, isoDate, periodKey, periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getContributionAdjustments, netExpenseAmount } from "@/lib/contributions/net-amount";
+import { WBW_CATEGORY } from "@/lib/wbw-fronted";
 
 export async function getBudgets() {
   const supabase = await createClient();
@@ -107,6 +108,13 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
   }
   const adjustments = { expenseReduction, sourceReduction };
 
+  // What others fronted via WieBetaaltWat counts towards that category's budget.
+  const { data: frontedRows } = await supabase
+    .from("wbw_fronted_expenses")
+    .select("period_start, amount")
+    .gte("period_start", isoDate(earliest))
+    .lt("period_start", isoDate(latest));
+
   return budgets
     .map((b, idx) => {
       const period = ((b.period as BudgetPeriod) ?? "month") as BudgetPeriod;
@@ -120,6 +128,11 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
         spent += netExpenseAmount(tx.id, tx.amount, adjustments);
       }
       const category = Array.isArray(b.categories) ? b.categories[0] : b.categories;
+      if (category?.name === WBW_CATEGORY) {
+        for (const f of frontedRows ?? []) {
+          if (f.period_start >= startIso && f.period_start < endIso) spent += Number(f.amount);
+        }
+      }
       const pctUsed = (spent / b.monthly_limit) * 100;
       const elapsed = Math.min(
         100,

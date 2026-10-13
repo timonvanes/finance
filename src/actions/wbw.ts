@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
+import { ensureWbwCategory } from "@/lib/wbw-fronted";
 
 // What was fronted for others this period: WieBetaaltWat reclaims tied to a
 // transaction booked in this period (regardless of paid/open — the fronting
@@ -82,6 +83,7 @@ export async function saveWbwBalance(balance: number) {
         .from("wbw_fronted_expenses")
         .insert({ user_id: user.id, period_start: period.start, amount: gap });
       if (expenseError) throw expenseError;
+      await ensureWbwCategory(supabase, user.id);
     }
   }
   revalidatePath("/", "layout");
