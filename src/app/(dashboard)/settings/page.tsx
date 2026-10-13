@@ -31,6 +31,11 @@ const GROUPS: {
         description: "Kies welke onderdelen je op het overzicht ziet",
       },
       {
+        href: "/settings/rapport",
+        label: "Baten en lasten",
+        description: "Rapport per maand, periode of jaar om af te drukken",
+      },
+      {
         href: "/settings/schulden",
         label: "Schulden en hypotheek",
         description: "Studielening (DUO) en hypotheek met rente en maandlast",

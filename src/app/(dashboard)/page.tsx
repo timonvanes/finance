@@ -372,23 +372,15 @@ export default async function DashboardPage({
       )}
 
       {show("profitLoss") && (
-      <details className={`${card} group`}>
-        <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between gap-3 px-5 [&::-webkit-details-marker]:hidden">
-          <span className="text-lg font-semibold text-gray-900">Baten en lasten</span>
-          <span className="flex items-center gap-2">
-            <span className={`text-base font-semibold ${net >= 0 ? "text-green-700" : "text-red-600"}`}>
-              {net >= 0 ? `${euro(net, 0)} over` : `${euro(Math.abs(net), 0)} te veel`}
-            </span>
-            <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
-          </span>
-        </summary>
-        <div className="space-y-3 border-t border-gray-100 p-3">
-        <div className="rounded-xl bg-gray-50 p-4">
+      <section className="space-y-3">
+        <h2 className="px-1 text-lg font-semibold text-gray-900">Baten en lasten</h2>
+
+        <div className={`${card} p-5`}>
           <p className="text-sm text-gray-500">Netto na potjes</p>
           <p className={`mt-1 text-3xl font-semibold ${net >= 0 ? "text-green-700" : "text-red-600"}`}>
             {net >= 0 ? `${euro(net, 0)} over` : `${euro(Math.abs(net), 0)} te veel uitgegeven`}
           </p>
-          <div className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-200 pt-3 text-base">
+          <div className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-3 text-base">
             <div>
               <p className="text-sm text-gray-500">Baten</p>
               <p className="font-semibold text-green-700">{euro(totalIncome, 0)}</p>
@@ -404,7 +396,7 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        <details className="group rounded-xl ring-1 ring-gray-200">
+        <details className={`${card} group`}>
           <summary className="flex min-h-[60px] cursor-pointer list-none items-center justify-between gap-3 px-5 [&::-webkit-details-marker]:hidden">
             <span className="text-base font-medium text-gray-900">Baten per categorie</span>
             <span className="flex items-center gap-2">
@@ -434,7 +426,7 @@ export default async function DashboardPage({
           )}
         </details>
 
-        <details className="group rounded-xl ring-1 ring-gray-200">
+        <details className={`${card} group`}>
           <summary className="flex min-h-[60px] cursor-pointer list-none items-center justify-between gap-3 px-5 [&::-webkit-details-marker]:hidden">
             <span className="text-base font-medium text-gray-900">Lasten per categorie</span>
             <span className="flex items-center gap-2">
@@ -483,16 +475,7 @@ export default async function DashboardPage({
             <p className="border-t border-gray-100 p-5 text-base text-gray-500">Nog geen lasten in deze periode.</p>
           )}
         </details>
-
-        <Link
-          href={monthsAgo === 0 ? "/settings/rapport?p=maand" : monthsAgo === 1 ? "/settings/rapport?p=vorige" : "/settings/rapport"}
-          className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl px-3 text-base font-medium text-teal-700 active:bg-gray-50"
-        >
-          <span>Volledig rapport, afdrukken of CSV</span>
-          <span className="text-2xl text-teal-300">›</span>
-        </Link>
-        </div>
-      </details>
+      </section>
       )}
 
       {show("fixed") && isCurrentMonth && (

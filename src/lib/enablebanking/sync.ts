@@ -49,7 +49,10 @@ interface BalancesResponse {
   }[];
 }
 
-const BALANCE_TYPE_PRIORITY = ["CLBD", "ITBD", "XPCD"];
+// ITBD is the intraday booked balance (what the account holds right now); CLBD
+// is the closing balance of the last reporting period, which some banks only
+// move at end of day and so lags behind a fresh deposit.
+const BALANCE_TYPE_PRIORITY = ["ITBD", "CLBD", "XPCD"];
 
 async function fetchAccountBalance(accountUid: string, psu?: PsuContext | null): Promise<number | null> {
   try {
@@ -58,6 +61,10 @@ async function fetchAccountBalance(accountUid: string, psu?: PsuContext | null):
       { headers: psuHeaders(psu) }
     );
     if (!balances || balances.length === 0) return null;
+    console.log(
+      `Balances for ${accountUid}:`,
+      balances.map((b) => `${b.balance_type}=${b.balance_amount.amount}`).join(", ")
+    );
 
     for (const type of BALANCE_TYPE_PRIORITY) {
       const match = balances.find((b) => b.balance_type === type);
