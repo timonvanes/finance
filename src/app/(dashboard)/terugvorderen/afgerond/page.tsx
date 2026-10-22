@@ -16,6 +16,7 @@ type Line = {
   iban: string | null;
   amount: number;
   sourceTotal: number | null;
+  note?: string | null;
 };
 
 export default async function AfgerondPage() {
@@ -59,6 +60,7 @@ export default async function AfgerondPage() {
           iban: tx?.counterparty_iban ?? null,
           amount: r.computed_amount,
           sourceTotal: r.source_total_amount,
+          note: r.note ?? r.tikkie_link,
         },
       ],
     });
@@ -77,6 +79,7 @@ export default async function AfgerondPage() {
         iban: ltx?.counterparty_iban ?? null,
         amount: l.computed_amount,
         sourceTotal: l.source_total_amount,
+        note: l.note ?? null,
       };
     });
     items.push({
@@ -152,6 +155,9 @@ export default async function AfgerondPage() {
                       </div>
                       {l.sourceTotal != null && Math.abs(l.sourceTotal - l.amount) > 0.01 && (
                         <p className="mt-1 text-sm text-gray-500">van {euro(l.sourceTotal)} totaal</p>
+                      )}
+                      {l.note && (
+                        <p className="mt-1 whitespace-pre-wrap break-words text-sm italic text-gray-600">{l.note}</p>
                       )}
                       <TxDetails
                         tx={{

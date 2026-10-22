@@ -199,7 +199,7 @@ export async function createSplitReclaim(formData: FormData) {
           amount_value: share,
           computed_amount: share,
           source_total_amount: totalAmount,
-          tikkie_link: tikkieLink,
+          note: tikkieLink,
           settlement_method: settlementMethod,
           reference_code: code,
         }));

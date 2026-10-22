@@ -391,7 +391,7 @@ export function Wizard({
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Tikkie-link of notitie (optioneel)"
+            placeholder="Notitie (optioneel)"
             className="min-h-[52px] w-full rounded-2xl border border-gray-300 px-4 text-base"
           />
 

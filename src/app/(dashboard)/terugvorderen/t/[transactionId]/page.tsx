@@ -46,6 +46,7 @@ export default async function TransactionReclaimsPage({
           method: r.settlement_method === "external_app" ? "external_app" : "bank",
           referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
           description: tx?.counterparty_name ?? undefined,
+          note: r.note ?? r.tikkie_link,
           bunqLink: (() => {
             const l = bunqLinks.find((x) => x.reclaim_id === r.id);
             return l ? { url: l.share_url as string, amount: Number(l.amount), status: l.status as string } : null;

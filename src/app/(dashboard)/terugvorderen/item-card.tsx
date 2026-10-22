@@ -40,8 +40,10 @@ export interface OpenItem {
   tx?: TxInfo | null;
   bunqLink?: { url: string; amount: number; status: string } | null;
   description?: string;
+  note?: string | null;
   lines?: {
     id?: string;
+    note?: string | null;
     title: string;
     date: string | null;
     description: string | null;
@@ -101,6 +103,7 @@ export function ItemCard({
         <div className="min-w-0">
           <p className="truncate text-lg font-medium text-gray-900">{item.title}</p>
           <p className="text-sm text-gray-500">{item.subtitle}</p>
+          {item.note && <p className="mt-1 whitespace-pre-wrap break-words text-sm italic text-gray-600">{item.note}</p>}
         </div>
         <p className="shrink-0 text-lg font-semibold text-gray-900">{euro(item.amount)}</p>
       </div>
@@ -149,6 +152,7 @@ export function ItemCard({
               {l.sourceTotal != null && Math.abs(l.sourceTotal - l.amount) > 0.01 && (
                 <p className="mt-1 text-sm text-gray-500">van {euro(l.sourceTotal)} totaal</p>
               )}
+              {l.note && <p className="mt-1 whitespace-pre-wrap break-words text-sm italic text-gray-600">{l.note}</p>}
               <TxDetails
                 tx={{
                   name: l.title,

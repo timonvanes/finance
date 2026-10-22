@@ -37,6 +37,7 @@ export default async function PersonPage({
     iban: string | null;
     amount: number;
     sourceTotal: number | null;
+    note?: string | null;
   };
   const done: {
     id: string;
@@ -69,6 +70,7 @@ export default async function PersonPage({
         method: r.settlement_method === "external_app" ? "external_app" : "bank",
         referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
         bunqLink: bunqFor("reclaim", r.id),
+        note: r.note ?? r.tikkie_link,
         tx: {
           name: tx?.counterparty_name ?? null,
           date: tx?.booking_date ?? null,
@@ -97,6 +99,7 @@ export default async function PersonPage({
             iban: tx?.counterparty_iban ?? null,
             amount: r.computed_amount,
             sourceTotal: r.source_total_amount,
+            note: r.note ?? r.tikkie_link,
           },
         ],
       });
@@ -117,6 +120,7 @@ export default async function PersonPage({
         iban: ltx?.counterparty_iban ?? null,
         amount: l.computed_amount,
         sourceTotal: l.source_total_amount,
+        note: l.note ?? null,
       };
     });
     const total = lines.reduce((s, l) => s + l.amount, 0);
