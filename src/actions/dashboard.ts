@@ -5,13 +5,20 @@ import { detectRecurringPayments } from "@/lib/dashboard/recurring";
 import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@/lib/contributions/net-amount";
 import { periodKey, periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
-import { wbwFrontedInPeriod } from "@/lib/wbw-fronted";
+import { WBW_CATEGORY, wbwFrontedInPeriod } from "@/lib/wbw-fronted";
+
+export interface CategoryTx {
+  id: string;
+  date: string;
+  name: string;
+  amount: number;
+}
 
 async function spendByCategoryForRange(start: string, end: string, direction: "expense" | "income" = "expense") {
   const supabase = await createClient();
   let query = supabase
     .from("visible_transactions")
-    .select("id, amount, category_id, categories(name)");
+    .select("id, amount, category_id, booking_date, counterparty_name, categories(name)");
   query = direction === "expense" ? query.lt("amount", 0) : query.gt("amount", 0);
   const { data, error } = await query
     .eq("is_transfer", false)
@@ -22,6 +29,7 @@ async function spendByCategoryForRange(start: string, end: string, direction: "e
   const adjustments = await getContributionAdjustments(supabase, (data ?? []).map((tx) => tx.id));
 
   const totals = new Map<string, number>();
+  const txs = new Map<string, CategoryTx[]>();
   for (const tx of data ?? []) {
     const category = Array.isArray(tx.categories) ? tx.categories[0] : tx.categories;
     const name = category?.name ?? "Ongecategoriseerd";
@@ -30,12 +38,25 @@ async function spendByCategoryForRange(start: string, end: string, direction: "e
         ? netExpenseAmount(tx.id, tx.amount, adjustments)
         : netIncomeAmount(tx.id, tx.amount, adjustments);
     totals.set(name, (totals.get(name) ?? 0) + counted);
+    if (counted > 0) {
+      txs.set(name, [
+        ...(txs.get(name) ?? []),
+        { id: tx.id, date: tx.booking_date, name: tx.counterparty_name ?? "Onbekend", amount: counted },
+      ]);
+    }
   }
   if (direction === "expense") {
     const fronted = await wbwFrontedInPeriod(supabase, start);
-    if (fronted > 0) totals.set("Via WieBetaaltWat", (totals.get("Via WieBetaaltWat") ?? 0) + fronted);
+    if (fronted > 0) {
+      totals.set(WBW_CATEGORY, (totals.get(WBW_CATEGORY) ?? 0) + fronted);
+      txs.set(WBW_CATEGORY, [
+        ...(txs.get(WBW_CATEGORY) ?? []),
+        { id: `wbw-${start}`, date: start, name: "Door huisgenoten voorgeschoten", amount: fronted },
+      ]);
+    }
   }
-  return totals;
+  for (const list of txs.values()) list.sort((a, b) => (a.date < b.date ? 1 : -1));
+  return { totals, txs };
 }
 
 // Same as the spend per category, for money coming in (only what is really
@@ -45,14 +66,19 @@ export async function getMonthlyIncomeByCategory(monthsAgo: number = 0) {
   const { start, end } = periodRange(monthsAgo, startDay);
   const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
 
-  const [totals, previousTotals] = await Promise.all([
+  const [{ totals, txs }, { totals: previousTotals }] = await Promise.all([
     spendByCategoryForRange(start, end, "income"),
     spendByCategoryForRange(prevStart, prevEnd, "income"),
   ]);
 
   const names = new Set([...totals.keys(), ...previousTotals.keys()]);
   return [...names]
-    .map((name) => ({ name, total: totals.get(name) ?? 0, previousTotal: previousTotals.get(name) ?? 0 }))
+    .map((name) => ({
+      name,
+      total: totals.get(name) ?? 0,
+      previousTotal: previousTotals.get(name) ?? 0,
+      transactions: txs.get(name) ?? [],
+    }))
     .filter((c) => c.total > 0 || c.previousTotal > 0)
     .sort((a, b) => b.total - a.total);
 }
@@ -64,7 +90,7 @@ export async function getMonthlySpendByCategory(monthsAgo: number = 0) {
   const { start, end } = periodRange(monthsAgo, startDay);
   const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
 
-  const [totals, previousTotals] = await Promise.all([
+  const [{ totals, txs }, { totals: previousTotals }] = await Promise.all([
     spendByCategoryForRange(start, end),
     spendByCategoryForRange(prevStart, prevEnd),
   ]);
@@ -75,6 +101,7 @@ export async function getMonthlySpendByCategory(monthsAgo: number = 0) {
       name,
       total: totals.get(name) ?? 0,
       previousTotal: previousTotals.get(name) ?? 0,
+      transactions: txs.get(name) ?? [],
     }))
     .filter((c) => c.total > 0 || c.previousTotal > 0)
     .sort((a, b) => b.total - a.total);

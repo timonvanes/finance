@@ -9,6 +9,7 @@ import {
   getMonthlySpendByCategory,
   getRecurringPayments,
   getBankConnectionAlerts,
+  type CategoryTx,
 } from "@/actions/dashboard";
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
@@ -31,6 +32,28 @@ const euro = (n: number, digits = 2) =>
   n.toLocaleString("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 const card = "rounded-2xl bg-white ring-1 ring-gray-200";
+
+function TxList({ items, positive }: { items: CategoryTx[]; positive: boolean }) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="mt-3 space-y-1 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+      {items.map((tx) => (
+        <li key={tx.id} className="flex items-start justify-between gap-3">
+          <span className="min-w-0 text-gray-700">
+            <span className="text-gray-400">
+              {new Date(tx.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+            </span>{" "}
+            {tx.name}
+          </span>
+          <span className="shrink-0 text-gray-900">
+            {positive ? "" : "−"}
+            {euro(tx.amount)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 // The after() auto-sync can take a while on a big first sync — give it
 // room instead of being cut off by the default function timeout.
@@ -481,16 +504,24 @@ export default async function DashboardPage({
             <ul className="space-y-4 border-t border-gray-100 p-5">
               {incomeByCategory.map((c) => (
                 <li key={c.name}>
-                  <div className="mb-2 flex items-center justify-between text-base">
-                    <span className="text-gray-900">{c.name}</span>
-                    <span className="font-medium text-gray-900">{euro(c.total, 0)}</span>
-                  </div>
-                  <div className="h-3 rounded-full bg-gray-100">
-                    <div
-                      className="h-3 rounded-full bg-green-600"
-                      style={{ width: `${(c.total / maxIncomeTotal) * 100}%` }}
-                    />
-                  </div>
+                  <details className="group/cat">
+                    <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                      <div className="mb-2 flex items-center justify-between gap-3 text-base">
+                        <span className="text-gray-900">
+                          {c.name}
+                          <span className="ml-1 inline-block text-gray-300 transition-transform group-open/cat:rotate-90">›</span>
+                        </span>
+                        <span className="font-medium text-gray-900">{euro(c.total, 0)}</span>
+                      </div>
+                      <div className="h-3 rounded-full bg-gray-100">
+                        <div
+                          className="h-3 rounded-full bg-green-600"
+                          style={{ width: `${(c.total / maxIncomeTotal) * 100}%` }}
+                        />
+                      </div>
+                    </summary>
+                    <TxList items={c.transactions} positive />
+                  </details>
                 </li>
               ))}
             </ul>
@@ -515,31 +546,41 @@ export default async function DashboardPage({
                 const left = budget ? budget.monthlyLimit - budget.spent : null;
                 return (
                   <li key={c.name}>
-                    <div className="mb-2 flex items-center justify-between text-base">
-                      <span className="text-gray-900">{c.name}</span>
-                      <span className="font-medium text-gray-900">
-                        {euro(c.total, 0)}
-                        {c.previousTotal > 0 && Math.abs(delta) >= 1 && (
-                          <span
-                            className={`ml-1 text-sm font-normal ${delta > 0 ? "text-red-600" : "text-green-700"}`}
-                          >
-                            ({delta > 0 ? "+" : ""}
-                            {euro(delta, 0)})
+                    <details className="group/cat">
+                      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                        <div className="mb-2 flex items-center justify-between gap-3 text-base">
+                          <span className="text-gray-900">
+                            {c.name}
+                            <span className="ml-1 inline-block text-gray-300 transition-transform group-open/cat:rotate-90">›</span>
                           </span>
+                          <span className="font-medium text-gray-900">
+                            {euro(c.total, 0)}
+                            {c.previousTotal > 0 && Math.abs(delta) >= 1 && (
+                              <span
+                                className={`ml-1 text-sm font-normal ${delta > 0 ? "text-red-600" : "text-green-700"}`}
+                              >
+                                ({delta > 0 ? "+" : ""}
+                                {euro(delta, 0)})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="h-3 rounded-full bg-gray-100">
+                          <div
+                            className={`h-3 rounded-full ${budget?.overBudget ? "bg-red-600" : "bg-teal-700"}`}
+                            style={{
+                              width: `${budget ? Math.min(100, budget.pctUsed) : (c.total / maxCategoryTotal) * 100}%`,
+                            }}
+                          />
+                        </div>
+                        {left != null && (
+                          <p className={`mt-1 text-sm ${left >= 0 ? "text-gray-500" : "font-medium text-red-600"}`}>
+                            {left >= 0 ? `${euro(left, 0)} over van je budget` : `${euro(Math.abs(left), 0)} boven je budget`}
+                          </p>
                         )}
-                      </span>
-                    </div>
-                    <div className="h-3 rounded-full bg-gray-100">
-                      <div
-                        className="h-3 rounded-full bg-teal-700"
-                        style={{ width: `${(c.total / maxCategoryTotal) * 100}%` }}
-                      />
-                    </div>
-                    {left != null && (
-                      <p className={`mt-1 text-sm ${left >= 0 ? "text-gray-500" : "font-medium text-red-600"}`}>
-                        {left >= 0 ? `${euro(left, 0)} over van je budget` : `${euro(Math.abs(left), 0)} boven je budget`}
-                      </p>
-                    )}
+                      </summary>
+                      <TxList items={c.transactions} positive={false} />
+                    </details>
                   </li>
                 );
               })}
