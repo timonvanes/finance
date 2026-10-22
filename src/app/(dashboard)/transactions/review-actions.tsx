@@ -35,7 +35,7 @@ export function ReviewActions({
   flaggedForReclaim: boolean;
   isTransfer: boolean;
   // Income transactions can't be "eigen uitgave"/"terugvorderen" — only
-  // the "geen kosten" toggle applies to those.
+  // the "geen kosten" toggle (shown as "geen inkomsten") applies to those.
   isExpense?: boolean;
   hasReclaim?: boolean;
   loanLabel?: string | null;
@@ -99,7 +99,9 @@ export function ReviewActions({
             {loanLabel}
           </Link>
         ) : localIsTransfer ? (
-          <span className="text-sm font-medium text-blue-700">↔ Geen kosten — telt niet mee</span>
+          <span className="text-sm font-medium text-blue-700">
+            ↔ {isExpense ? "Geen kosten" : "Geen inkomsten"} — telt niet mee
+          </span>
         ) : hasReclaim ? (
           <Link
             href={`/terugvorderen/t/${transactionId}`}
@@ -183,7 +185,7 @@ export function ReviewActions({
         onClick={(e) => handle(e.currentTarget, "transfer")}
         className="min-h-[44px] rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-medium text-blue-700 active:bg-blue-100 disabled:opacity-50"
       >
-        Geen kosten
+        {isExpense ? "Geen kosten" : "Geen inkomsten"}
       </button>
     </div>
   );
