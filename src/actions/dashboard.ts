@@ -6,6 +6,7 @@ import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@
 import { periodKey, periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { WBW_CATEGORY, wbwFrontedInPeriod } from "@/lib/wbw-fronted";
+import { SAVINGS_CATEGORY, savingsEntriesInRange } from "@/lib/pots/savings-category";
 
 export interface CategoryTx {
   id: string;
@@ -52,6 +53,17 @@ async function spendByCategoryForRange(start: string, end: string, direction: "e
       txs.set(WBW_CATEGORY, [
         ...(txs.get(WBW_CATEGORY) ?? []),
         { id: `wbw-${start}`, date: start, name: "Door huisgenoten voorgeschoten", amount: fronted },
+      ]);
+    }
+  }
+  if (direction === "expense") {
+    // What went into pots (minus what came out) is spending in its own category.
+    const entries = await savingsEntriesInRange(supabase, start, end);
+    if (entries.length > 0) {
+      totals.set(SAVINGS_CATEGORY, (totals.get(SAVINGS_CATEGORY) ?? 0) + entries.reduce((s, e) => s + e.amount, 0));
+      txs.set(SAVINGS_CATEGORY, [
+        ...(txs.get(SAVINGS_CATEGORY) ?? []),
+        ...entries.map((e) => ({ id: `pot-${e.id}`, date: e.date, name: e.name, amount: e.amount })),
       ]);
     }
   }
@@ -103,7 +115,7 @@ export async function getMonthlySpendByCategory(monthsAgo: number = 0) {
       previousTotal: previousTotals.get(name) ?? 0,
       transactions: txs.get(name) ?? [],
     }))
-    .filter((c) => c.total > 0 || c.previousTotal > 0)
+    .filter((c) => c.total !== 0 || c.previousTotal !== 0)
     .sort((a, b) => b.total - a.total);
 }
 

@@ -205,7 +205,7 @@ export default async function RapportPage({
 
             <div className="flex items-baseline justify-between border-t-2 border-gray-900 pt-3">
               <span className="text-lg font-semibold text-gray-900">
-                {statement.net >= 0 ? "Netto over na potjes" : "Netto te veel uitgegeven"}
+                {statement.net >= 0 ? "Netto over" : "Netto te veel uitgegeven"}
               </span>
               <span className={`text-2xl font-semibold ${statement.net >= 0 ? "text-green-700" : "text-red-600"}`}>
                 {euro(Math.abs(statement.net))}

@@ -15,7 +15,8 @@ import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
 import { getPots } from "@/actions/pots";
 import { computePotBalance } from "@/lib/pots/balance";
-import { netInPeriod, periodMonthly, planCatchUp } from "@/lib/pots/insights";
+import { periodMonthly, planCatchUp } from "@/lib/pots/insights";
+import { SAVINGS_CATEGORY } from "@/lib/pots/savings-category";
 import { CatchUpCard } from "./pots/catch-up-card";
 import { getOpenLoansTotal } from "@/actions/loans";
 import { SyncAllButton } from "./sync-all-button";
@@ -46,8 +47,8 @@ function TxList({ items, positive }: { items: CategoryTx[]; positive: boolean })
             {tx.name}
           </span>
           <span className="shrink-0 text-gray-900">
-            {positive ? "" : "−"}
-            {euro(tx.amount)}
+            {positive ? "" : tx.amount < 0 ? "+" : "−"}
+            {euro(Math.abs(tx.amount))}
           </span>
         </li>
       ))}
@@ -144,9 +145,9 @@ export default async function DashboardPage({
   const maxIncomeTotal = Math.max(1, ...incomeByCategory.map((c) => c.total));
   const totalIncome = incomeByCategory.reduce((s, c) => s + c.total, 0);
   const totalExpense = categorySpend.reduce((s, c) => s + c.total, 0);
-  // Money moved into pots this period: set aside, not spent, but not free either.
-  const reservedTotal = pots.reduce((s, p) => s + netInPeriod(p, monthsAgo, startDay), 0);
-  const net = totalIncome - totalExpense - reservedTotal;
+  // Money moved into pots is booked as spending in the savings category, so it is already in totalExpense.
+  const savingsTotal = categorySpend.find((c) => c.name === SAVINGS_CATEGORY)?.total ?? 0;
+  const net = totalIncome - totalExpense;
   const budgetByName = new Map(budgetStatus.map((b) => [b.categoryName, b]));
   const overBudgets = budgetStatus.filter((b) => b.overBudget);
   // Totals are per month: quarter and year budgets are divided down.
@@ -472,7 +473,7 @@ export default async function DashboardPage({
         <h2 className="px-1 text-lg font-semibold text-gray-900">Baten en lasten</h2>
 
         <div className={`${card} p-5`}>
-          <p className="text-sm text-gray-500">Netto na potjes</p>
+          <p className="text-sm text-gray-500">Netto</p>
           <p className={`mt-1 text-3xl font-semibold ${net >= 0 ? "text-green-700" : "text-red-600"}`}>
             {net >= 0 ? `${euro(net, 0)} over` : `${euro(Math.abs(net), 0)} te veel uitgegeven`}
           </p>
@@ -486,8 +487,8 @@ export default async function DashboardPage({
               <p className="font-semibold text-gray-900">{euro(totalExpense, 0)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Potjes</p>
-              <p className="font-semibold text-teal-700">{euro(reservedTotal, 0)}</p>
+              <p className="text-sm text-gray-500">Waarvan sparen</p>
+              <p className="font-semibold text-teal-700">{euro(savingsTotal, 0)}</p>
             </div>
           </div>
         </div>

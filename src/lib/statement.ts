@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@/lib/contributions/net-amount";
+import { SAVINGS_CATEGORY, savingsEntriesInRange } from "@/lib/pots/savings-category";
+import { addDays } from "@/lib/returns/deadline";
 
 export interface StatementTx {
   id: string;
@@ -130,13 +132,34 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     expense.set(group.name, group);
   }
 
-  // Money moved into pots in the period: set aside, so it is taken off the result.
-  const { data: potRows } = await supabase
-    .from("pot_entries")
-    .select("amount")
-    .gte("entry_date", from)
-    .lte("entry_date", to);
-  const reserved = (potRows ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  // Money moved into pots (net of withdrawals) is booked under its own
+  // category, so what you set aside shows up with the other expenses.
+  const savingsEntries = await savingsEntriesInRange(supabase, from, addDays(to, 1));
+  if (savingsEntries.length > 0) {
+    const group: CategoryGroup = { name: SAVINGS_CATEGORY, total: 0, transactions: [] };
+    for (const e of savingsEntries) {
+      group.total += e.amount;
+      group.transactions.push({
+        id: `pot-${e.id}`,
+        date: e.date,
+        name: e.name,
+        description: null,
+        category: group.name,
+        amount: e.amount,
+      });
+      const key = e.date.slice(0, 7);
+      const m = monthly.get(key) ?? { income: 0, expense: 0 };
+      m.expense += e.amount;
+      monthly.set(key, m);
+    }
+    const existing = expense.get(group.name);
+    if (existing) {
+      existing.total += group.total;
+      existing.transactions.push(...group.transactions);
+    } else {
+      expense.set(group.name, group);
+    }
+  }
 
   const sorted = (m: Map<string, CategoryGroup>) => [...m.values()].sort((a, b) => b.total - a.total);
   const incomeGroups = sorted(income);
@@ -151,8 +174,8 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     expense: expenseGroups,
     totalIncome,
     totalExpense,
-    reserved,
-    net: totalIncome - totalExpense - reserved,
+    reserved: 0,
+    net: totalIncome - totalExpense,
     monthly: [...monthly.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([key, v]) => ({ key, ...v })),
   };
 }

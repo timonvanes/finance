@@ -5,6 +5,7 @@ import { dayIndexInPeriod, isoDate, periodKey, periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getContributionAdjustments, netExpenseAmount } from "@/lib/contributions/net-amount";
 import { WBW_CATEGORY } from "@/lib/wbw-fronted";
+import { SAVINGS_CATEGORY, savingsEntriesInRange } from "@/lib/pots/savings-category";
 
 export async function getBudgets() {
   const supabase = await createClient();
@@ -115,6 +116,14 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
     .gte("period_start", isoDate(earliest))
     .lt("period_start", isoDate(latest));
 
+  // Money put into pots counts towards the savings budget.
+  const savingsEntries = budgets.some((b) => {
+    const c = Array.isArray(b.categories) ? b.categories[0] : b.categories;
+    return c?.name === SAVINGS_CATEGORY;
+  })
+    ? await savingsEntriesInRange(supabase, isoDate(earliest), isoDate(latest))
+    : [];
+
   return budgets
     .map((b, idx) => {
       const period = ((b.period as BudgetPeriod) ?? "month") as BudgetPeriod;
@@ -128,6 +137,11 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
         spent += netExpenseAmount(tx.id, tx.amount, adjustments);
       }
       const category = Array.isArray(b.categories) ? b.categories[0] : b.categories;
+      if (category?.name === SAVINGS_CATEGORY) {
+        for (const e of savingsEntries) {
+          if (e.date >= startIso && e.date < endIso) spent += e.amount;
+        }
+      }
       if (category?.name === WBW_CATEGORY) {
         for (const f of frontedRows ?? []) {
           if (f.period_start >= startIso && f.period_start < endIso) spent += Number(f.amount);
