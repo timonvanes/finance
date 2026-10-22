@@ -151,6 +151,31 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
   };
 }
 
+const EXPIRING_SOON_DAYS = 7;
+
+// Banks have to be re-linked every so often. Without this the sync quietly
+// stops and balances and transactions go stale.
+export async function getBankConnectionAlerts() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("bank_connections")
+    .select("id, institution_name, consent_status, consent_expires_at")
+    .in("consent_status", ["linked", "expired"]);
+
+  const now = Date.now();
+  const expired: string[] = [];
+  const expiringSoon: { name: string; daysLeft: number }[] = [];
+  for (const c of data ?? []) {
+    const expiresAt = c.consent_expires_at ? Date.parse(c.consent_expires_at) : null;
+    if (c.consent_status === "expired" || (expiresAt != null && expiresAt <= now)) {
+      expired.push(c.institution_name);
+    } else if (expiresAt != null && expiresAt - now <= EXPIRING_SOON_DAYS * 86_400_000) {
+      expiringSoon.push({ name: c.institution_name, daysLeft: Math.ceil((expiresAt - now) / 86_400_000) });
+    }
+  }
+  return { expired, expiringSoon };
+}
+
 export async function getRecurringPayments() {
   const supabase = await createClient();
   return detectRecurringPayments(supabase);

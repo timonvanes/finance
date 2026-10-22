@@ -8,6 +8,7 @@ import {
   getMonthlyIncomeByCategory,
   getMonthlySpendByCategory,
   getRecurringPayments,
+  getBankConnectionAlerts,
 } from "@/actions/dashboard";
 import { getBudgetStatus, getSpendingAnomaly } from "@/actions/budgets";
 import { autoSyncStaleConnections, getPsuContext } from "@/actions/bank-connections";
@@ -58,7 +59,7 @@ export default async function DashboardPage({
   const hiddenModules = new Set(await getHiddenDashboardModules());
   const show = (key: string) => !hiddenModules.has(key);
 
-  const [debtCosts, summary, categorySpend, incomeByCategory, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans] =
+  const [debtCosts, summary, categorySpend, incomeByCategory, recurring, budgetStatus, anomaly, balances, pots, freeToSpend, loans, bankAlerts] =
     await Promise.all([
       getDebtFixedCosts(),
       getDashboardSummary(monthsAgo),
@@ -71,6 +72,7 @@ export default async function DashboardPage({
       getPots(),
       getFreeToSpendPerMonth(),
       getOpenLoansTotal(),
+      getBankConnectionAlerts(),
     ]);
 
   const potBalances = new Map(pots.map((p) => [p.id, computePotBalance(p)]));
@@ -145,6 +147,33 @@ export default async function DashboardPage({
         <h1 className="text-3xl font-semibold text-gray-900">Overzicht</h1>
         <SyncAllButton />
       </div>
+
+      {bankAlerts.expired.length > 0 && (
+        <Link
+          href="/settings/bank-connections"
+          className="flex min-h-[64px] items-center justify-between gap-3 rounded-2xl bg-red-600 px-5 py-3 text-base font-medium text-white active:bg-red-700"
+        >
+          <span>
+            Koppel {bankAlerts.expired.join(" en ")} opnieuw: de koppeling is verlopen, dus saldo en transacties worden
+            niet meer bijgewerkt.
+          </span>
+          <span className="text-2xl text-red-200">›</span>
+        </Link>
+      )}
+      {bankAlerts.expiringSoon.length > 0 && (
+        <Link
+          href="/settings/bank-connections"
+          className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl bg-amber-50 px-5 py-3 text-base text-amber-800 ring-1 ring-amber-200 active:bg-amber-100"
+        >
+          <span>
+            {bankAlerts.expiringSoon
+              .map((c) => `${c.name} verloopt over ${c.daysLeft} ${c.daysLeft === 1 ? "dag" : "dagen"}`)
+              .join(", ")}
+            . Koppel op tijd opnieuw.
+          </span>
+          <span className="text-2xl text-amber-300">›</span>
+        </Link>
+      )}
 
       {show("accounts") && balances.accounts.length > 0 && (
         <section className={`${card} p-5`}>
