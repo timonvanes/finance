@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { extractOrderFromEmailText } from "@/lib/anthropic/extract-order";
 import { inferDiscount } from "@/lib/returns/amounts";
@@ -211,7 +212,7 @@ export async function getOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      `id, merchant_name, order_date, order_reference, channel, receipt_path, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, return_deadline_source, delivered_date, expected_delivery_date, return_window_days, discount_total, refund_status, refund_transaction_id, created_at,
+      `id, merchant_name, order_date, order_reference, channel, receipt_path, total_amount, refunded_shipping, return_fee, payment_method, credited_amount, return_deadline, return_deadline_source, delivered_date, expected_delivery_date, return_window_days, discount_total, refund_status, refund_transaction_id, return_closed, return_note, created_at,
       order_items(id, description, price, quantity, returned),
       order_claims(id, reason, expected_amount, status, refund_transaction_id, created_at),
       refund_transaction:transactions!orders_refund_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -381,6 +382,18 @@ export async function setReturnDeadline(orderId: string, deadline: string | null
   const supabase = await createClient();
   const { error } = await supabase.from("orders").update({ return_deadline: deadline || null, return_deadline_source: deadline ? "manual" : null }).eq("id", orderId);
   if (error) throw error;
+}
+
+// "Nothing more will be returned from this order": ticks it off, with an
+// optional remark, and stops deadline reminders and calendar entries.
+export async function setReturnClosed(orderId: string, closed: boolean, note: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("orders")
+    .update({ return_closed: closed, return_note: closed ? note?.trim() || null : null })
+    .eq("id", orderId);
+  if (error) throw error;
+  revalidatePath("/", "layout");
 }
 
 export async function getInboundMails() {

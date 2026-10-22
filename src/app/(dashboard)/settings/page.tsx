@@ -53,6 +53,16 @@ const GROUPS: {
     ],
   },
   {
+    title: "Retouren",
+    items: [
+      {
+        href: "/settings/agenda",
+        label: "Agenda",
+        description: "Zet retourtermijnen automatisch in je agenda",
+      },
+    ],
+  },
+  {
     title: "Rekeningen",
     items: [
       {

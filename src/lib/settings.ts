@@ -20,3 +20,9 @@ export const getInvestReminderDay = cache(async (): Promise<number | null> => {
   const { data } = await supabase.from("user_settings").select("invest_reminder_day").maybeSingle();
   return data?.invest_reminder_day ?? null;
 });
+
+export const getCalendarToken = cache(async (): Promise<string | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("calendar_token").maybeSingle();
+  return data?.calendar_token ?? null;
+});

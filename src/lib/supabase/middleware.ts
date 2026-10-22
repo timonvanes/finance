@@ -16,6 +16,8 @@ const PUBLIC_PATHS = [
   "/terms",
   "/api/enablebanking/callback",
   "/api/cron/keep-alive",
+  "/api/cron/daily",
+  "/api/calendar",
   "/api/inbound/mail",
   "/api/bunq/callback",
   "/sw.js",

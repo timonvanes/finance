@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       .from("orders")
       .select("id, user_id, merchant_name, return_deadline, order_items(returned)")
       .eq("refund_status", "not_returned")
+      .eq("return_closed", false)
       .not("return_deadline", "is", null);
 
     const today = new Date().toISOString().slice(0, 10);

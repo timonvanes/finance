@@ -26,6 +26,7 @@ export default async function ReturnsPage() {
     .filter(
       (o) =>
         o.return_deadline &&
+        !o.return_closed &&
         o.refund_status === "not_returned" &&
         o.order_items.some((i: { returned: boolean }) => !i.returned) &&
         daysLeft(o.return_deadline) >= 0
@@ -36,6 +37,7 @@ export default async function ReturnsPage() {
   const byRecency = (a: (typeof orders)[number], b: (typeof orders)[number]) => {
     const live = (o: (typeof orders)[number]) =>
       o.return_deadline &&
+      !o.return_closed &&
       o.refund_status === "not_returned" &&
       o.order_items.some((i: { returned: boolean }) => !i.returned) &&
       daysLeft(o.return_deadline) >= 0;

@@ -16,6 +16,7 @@ import {
   recordKlarnaCredit,
   setOrderPaymentMethod,
   setDeliveredDate,
+  setReturnClosed,
   setReturnDeadline,
   toggleItemReturned,
   unlinkRefund,
@@ -73,6 +74,8 @@ export function OrderRow({
     channel: string;
     receipt_path: string | null;
     discount_total: number;
+    return_closed: boolean;
+    return_note: string | null;
     order_claims: {
       id: string;
       reason: string | null;
@@ -96,6 +99,7 @@ export function OrderRow({
   const [klarnaAmount, setKlarnaAmount] = useState("");
   const [claimReason, setClaimReason] = useState("");
   const [claimAmount, setClaimAmount] = useState("");
+  const [closeNote, setCloseNote] = useState("");
   const router = useRouter();
 
   const itemsTotal = order.order_items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -140,9 +144,13 @@ export function OrderRow({
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLE[order.refund_status]}`}>
-            {STATUS_LABEL[order.refund_status]}
-          </span>
+          {order.return_closed ? (
+            <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">✓ Afgehandeld</span>
+          ) : (
+            <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLE[order.refund_status]}`}>
+              {STATUS_LABEL[order.refund_status]}
+            </span>
+          )}
           {order.payment_method !== "direct" && (
             <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700">
               {order.payment_method === "klarna" ? "Klarna" : "Op rekening"}
@@ -150,7 +158,10 @@ export function OrderRow({
           )}
         </div>
       </div>
-      {order.refund_status === "not_returned" && order.return_deadline && daysLeft(order.return_deadline) >= 0 && (
+      {order.return_closed && order.return_note && (
+        <p className="whitespace-pre-wrap break-words text-sm italic text-gray-600">{order.return_note}</p>
+      )}
+      {!order.return_closed && order.refund_status === "not_returned" && order.return_deadline && daysLeft(order.return_deadline) >= 0 && (
         <p className={`text-sm ${daysLeft(order.return_deadline) <= 3 ? "font-medium text-red-700" : "text-blue-700"}`}>
           Retour vóór {new Date(order.return_deadline).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} · nog{" "}
           {daysLeft(order.return_deadline)} dagen{order.return_deadline_source === "lookup" && " (opgezocht)"}{order.return_deadline_source === "estimate" && " (geschat)"}
@@ -159,7 +170,52 @@ export function OrderRow({
       </summary>
 
       <div className="flex flex-col gap-3 px-5 pb-4">
-      {order.refund_status === "not_returned" && (
+      {order.refund_status === "not_returned" &&
+        (order.return_closed ? (
+          <div className="space-y-2 rounded-xl bg-green-50 p-4">
+            <p className="text-sm font-medium text-green-800">Je gaat hier niks meer van retourneren.</p>
+            {order.return_note && (
+              <p className="whitespace-pre-wrap break-words text-sm text-green-900">{order.return_note}</p>
+            )}
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => {
+                  await setReturnClosed(order.id, false, null);
+                  router.refresh();
+                })
+              }
+              className="min-h-[44px] rounded-xl border border-green-200 bg-white px-4 text-sm font-medium text-gray-700 active:bg-gray-50 disabled:opacity-50"
+            >
+              Weer openzetten
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2 rounded-xl bg-gray-50 p-4">
+            <input
+              value={closeNote}
+              onChange={(e) => setCloseNote(e.target.value)}
+              placeholder="Opmerking (optioneel), bijv. alles gehouden"
+              className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base"
+            />
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => {
+                  await setReturnClosed(order.id, true, closeNote);
+                  setCloseNote("");
+                  router.refresh();
+                })
+              }
+              className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
+            >
+              Ik ga hier niks meer van retourneren
+            </button>
+          </div>
+        ))}
+      {order.refund_status === "not_returned" && !order.return_closed && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {order.return_deadline && (
             <span

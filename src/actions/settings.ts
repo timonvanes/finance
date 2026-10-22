@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { clampStartDay } from "@/lib/month";
 import { DASHBOARD_MODULES } from "@/lib/dashboard/modules";
@@ -57,6 +58,22 @@ export async function setDashboardModuleVisible(key: string, visible: boolean) {
   const { error } = await supabase
     .from("user_settings")
     .upsert({ user_id: user.id, dashboard_hidden: [...hidden], updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) throw error;
+  revalidatePath("/", "layout");
+}
+
+// (Re)creates the secret in the calendar subscription URL; the old link stops working.
+export async function createCalendarToken() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+
+  const token = randomBytes(24).toString("base64url");
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, calendar_token: token, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   if (error) throw error;
   revalidatePath("/", "layout");
 }
