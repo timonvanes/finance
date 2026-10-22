@@ -124,6 +124,19 @@ export default async function DashboardPage({
   const net = totalIncome - totalExpense - reservedTotal;
   const budgetByName = new Map(budgetStatus.map((b) => [b.categoryName, b]));
   const overBudgets = budgetStatus.filter((b) => b.overBudget);
+  // Totals are per month: quarter and year budgets are divided down.
+  const monthsInPeriod = { month: 1, quarter: 3, year: 12 } as const;
+  const spentByName = new Map(categorySpend.map((c) => [c.name, c.total]));
+  const budgetRows = budgetStatus.map((b) => {
+    const limit = b.monthlyLimit / monthsInPeriod[b.period];
+    const spent = spentByName.get(b.categoryName) ?? 0;
+    return { limit, spent, over: Math.max(0, spent - limit) };
+  });
+  const totalBudget = budgetRows.reduce((s, r) => s + r.limit, 0);
+  const totalBudgetSpent = budgetRows.reduce((s, r) => s + r.spent, 0);
+  const totalOverBudget = budgetRows.reduce((s, r) => s + r.over, 0);
+  const unbudgeted = categorySpend.filter((c) => c.total > 0 && !budgetByName.has(c.name));
+  const totalUnbudgeted = unbudgeted.reduce((s, c) => s + c.total, 0);
   const expenseDelta = summary.monthExpense - summary.previousMonthExpense;
 
   return (
@@ -319,13 +332,33 @@ export default async function DashboardPage({
       </section>
       )}
 
-      {show("budgets") && isCurrentMonth && budgetStatus.length > 0 && (
+      {show("budgets") && isCurrentMonth && (budgetStatus.length > 0 || unbudgeted.length > 0) && (
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold text-gray-900">Budgetten</h2>
             <Link href="/settings/budgets" className="flex min-h-[44px] items-center text-sm text-teal-700">
               Aanpassen
             </Link>
+          </div>
+          <div className={`${card} grid grid-cols-3 gap-3 p-5`}>
+            <div>
+              <p className="text-sm text-gray-500">Budget</p>
+              <p className="text-lg font-semibold text-gray-900">{euro(totalBudget, 0)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Uitgegeven</p>
+              <p className="text-lg font-semibold text-gray-900">{euro(totalBudgetSpent + totalUnbudgeted, 0)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Overheen</p>
+              <p className={`text-lg font-semibold ${totalOverBudget > 0 ? "text-red-700" : "text-gray-900"}`}>
+                {euro(totalOverBudget, 0)}
+              </p>
+            </div>
+            <p className="col-span-3 -mt-1 text-xs text-gray-400">
+              per maand
+              {totalUnbudgeted > 0 && ` · waarvan ${euro(totalUnbudgeted, 0)} zonder budget`}
+            </p>
           </div>
           <ul className={`${card} space-y-4 p-5`}>
             {budgetStatus.map((b) => (
@@ -364,6 +397,17 @@ export default async function DashboardPage({
                     style={{ left: `${b.pctOfMonthElapsed}%` }}
                     title="Zover is de maand"
                   />
+                </div>
+              </li>
+            ))}
+            {unbudgeted.map((c) => (
+              <li key={`nobudget-${c.name}`}>
+                <div className="flex items-center justify-between text-base">
+                  <span className="text-gray-900">{c.name}</span>
+                  <span className="font-medium text-gray-900">
+                    {euro(c.total, 0)}
+                    <span className="ml-1 text-xs font-normal text-gray-400">geen budget</span>
+                  </span>
                 </div>
               </li>
             ))}
