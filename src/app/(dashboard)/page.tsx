@@ -141,13 +141,15 @@ export default async function DashboardPage({
     viewedDate.getFullYear() === now.getFullYear()
       ? MONTH_NAMES[viewedDate.getMonth()]
       : `${MONTH_NAMES[viewedDate.getMonth()]} ${viewedDate.getFullYear()}`;
-  const maxCategoryTotal = Math.max(1, ...categorySpend.map((c) => c.total));
+  // Saving is an expense (money out) but not a cost: it is listed apart from the "lasten".
+  const savingsCategory = categorySpend.find((c) => c.name === SAVINGS_CATEGORY) ?? null;
+  const costCategories = categorySpend.filter((c) => c.name !== SAVINGS_CATEGORY);
+  const maxCategoryTotal = Math.max(1, ...costCategories.map((c) => c.total));
   const maxIncomeTotal = Math.max(1, ...incomeByCategory.map((c) => c.total));
   const totalIncome = incomeByCategory.reduce((s, c) => s + c.total, 0);
-  const totalExpense = categorySpend.reduce((s, c) => s + c.total, 0);
-  // Money moved into pots is booked as spending in the savings category, so it is already in totalExpense.
-  const savingsTotal = categorySpend.find((c) => c.name === SAVINGS_CATEGORY)?.total ?? 0;
-  const net = totalIncome - totalExpense;
+  const totalExpense = costCategories.reduce((s, c) => s + c.total, 0);
+  const savingsTotal = savingsCategory?.total ?? 0;
+  const net = totalIncome - totalExpense - savingsTotal;
   const budgetByName = new Map(budgetStatus.map((b) => [b.categoryName, b]));
   const overBudgets = budgetStatus.filter((b) => b.overBudget);
   // Totals are per month: quarter and year budgets are divided down.
@@ -487,7 +489,7 @@ export default async function DashboardPage({
               <p className="font-semibold text-gray-900">{euro(totalExpense, 0)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Waarvan sparen</p>
+              <p className="text-sm text-gray-500">Sparen</p>
               <p className="font-semibold text-teal-700">{euro(savingsTotal, 0)}</p>
             </div>
           </div>
@@ -539,9 +541,9 @@ export default async function DashboardPage({
               <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
             </span>
           </summary>
-          {categorySpend.length > 0 ? (
+          {costCategories.length > 0 ? (
             <ul className="space-y-4 border-t border-gray-100 p-5">
-              {categorySpend.map((c) => {
+              {costCategories.map((c) => {
                 const delta = c.total - c.previousTotal;
                 const budget = isCurrentMonth ? budgetByName.get(c.name) : undefined;
                 const left = budget ? budget.monthlyLimit - budget.spent : null;
@@ -590,6 +592,24 @@ export default async function DashboardPage({
             <p className="border-t border-gray-100 p-5 text-base text-gray-500">Nog geen lasten in deze periode.</p>
           )}
         </details>
+
+        {savingsCategory && (
+          <details className="group rounded-xl ring-1 ring-gray-200">
+            <summary className="flex min-h-[60px] cursor-pointer list-none items-center justify-between gap-3 px-5 [&::-webkit-details-marker]:hidden">
+              <span>
+                <span className="block text-base font-medium text-gray-900">Sparen en beleggen</span>
+                <span className="block text-xs text-gray-400">een uitgave, maar geen last</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="text-base font-semibold text-teal-700">{euro(savingsTotal, 0)}</span>
+                <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
+              </span>
+            </summary>
+            <div className="border-t border-gray-100 p-5 pt-2">
+              <TxList items={savingsCategory.transactions} positive={false} />
+            </div>
+          </details>
+        )}
       </section>
       )}
 

@@ -26,6 +26,7 @@ export interface Statement {
   totalIncome: number;
   totalExpense: number;
   reserved: number;
+  savings: CategoryGroup | null;
   net: number;
   monthly: { key: string; income: number; expense: number }[];
 }
@@ -132,34 +133,25 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     expense.set(group.name, group);
   }
 
-  // Money moved into pots (net of withdrawals) is booked under its own
-  // category, so what you set aside shows up with the other expenses.
+  // Money moved into pots (net of withdrawals) is spent but not a cost: it gets
+  // its own block next to the expenses and is taken off the result.
   const savingsEntries = await savingsEntriesInRange(supabase, from, addDays(to, 1));
-  if (savingsEntries.length > 0) {
-    const group: CategoryGroup = { name: SAVINGS_CATEGORY, total: 0, transactions: [] };
-    for (const e of savingsEntries) {
-      group.total += e.amount;
-      group.transactions.push({
-        id: `pot-${e.id}`,
-        date: e.date,
-        name: e.name,
-        description: null,
-        category: group.name,
-        amount: e.amount,
-      });
-      const key = e.date.slice(0, 7);
-      const m = monthly.get(key) ?? { income: 0, expense: 0 };
-      m.expense += e.amount;
-      monthly.set(key, m);
-    }
-    const existing = expense.get(group.name);
-    if (existing) {
-      existing.total += group.total;
-      existing.transactions.push(...group.transactions);
-    } else {
-      expense.set(group.name, group);
-    }
-  }
+  const savings: CategoryGroup | null =
+    savingsEntries.length > 0
+      ? {
+          name: SAVINGS_CATEGORY,
+          total: savingsEntries.reduce((s, e) => s + e.amount, 0),
+          transactions: savingsEntries.map((e) => ({
+            id: `pot-${e.id}`,
+            date: e.date,
+            name: e.name,
+            description: null,
+            category: SAVINGS_CATEGORY,
+            amount: e.amount,
+          })),
+        }
+      : null;
+  const reserved = savings?.total ?? 0;
 
   const sorted = (m: Map<string, CategoryGroup>) => [...m.values()].sort((a, b) => b.total - a.total);
   const incomeGroups = sorted(income);
@@ -174,8 +166,9 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     expense: expenseGroups,
     totalIncome,
     totalExpense,
-    reserved: 0,
-    net: totalIncome - totalExpense,
+    reserved,
+    savings,
+    net: totalIncome - totalExpense - reserved,
     monthly: [...monthly.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([key, v]) => ({ key, ...v })),
   };
 }

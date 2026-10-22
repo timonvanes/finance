@@ -167,17 +167,25 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
     .filter((tx) => tx.amount > 0)
     .reduce((sum, tx) => sum + netIncomeAmount(tx.id, tx.amount, adjustments), 0);
   const wbwFronted = await wbwFrontedInPeriod(supabase, start);
+  // Money put into pots (net of withdrawals) is spent, though it is not a cost.
+  const [savingsNow, savingsPrev] = await Promise.all([
+    savingsEntriesInRange(supabase, start, end),
+    savingsEntriesInRange(supabase, prevStart, prevEnd),
+  ]);
+  const sumEntries = (list: { amount: number }[]) => list.reduce((s, e) => s + e.amount, 0);
   const monthExpense =
     (monthTx ?? [])
       .filter((tx) => tx.amount < 0)
-      .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0) + wbwFronted;
+      .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, adjustments), 0) +
+    wbwFronted +
+    sumEntries(savingsNow);
   // What came in but is not counted as your income (passed on, netted, paid back).
   const monthIncomeNotCounted = (monthTx ?? [])
     .filter((tx) => tx.amount > 0)
     .reduce((sum, tx) => sum + Math.min(tx.amount, adjustments.sourceReduction.get(tx.id) ?? 0), 0);
   const previousMonthExpense = (prevMonthTx ?? [])
     .filter((tx) => tx.amount < 0)
-    .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, prevAdjustments), 0);
+    .reduce((sum, tx) => sum + netExpenseAmount(tx.id, tx.amount, prevAdjustments), 0) + sumEntries(savingsPrev);
 
   return {
     unreviewedCount: unreviewedCount ?? 0,

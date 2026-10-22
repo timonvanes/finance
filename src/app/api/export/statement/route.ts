@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   for (const [kind, groups] of [
     ["Bate", statement.income],
     ["Last", statement.expense],
+    ["Sparen", statement.savings ? [statement.savings] : []],
   ] as const) {
     for (const group of groups) {
       for (const tx of group.transactions) {
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
   rows.push([]);
   rows.push(["", "", "", "Totaal baten", statement.totalIncome.toFixed(2)]);
   rows.push(["", "", "", "Totaal lasten", (-statement.totalExpense).toFixed(2)]);
+  rows.push(["", "", "", "Sparen en beleggen", (-statement.reserved).toFixed(2)]);
   rows.push(["", "", "", "Netto", statement.net.toFixed(2)]);
 
   return new NextResponse(toCsv(rows), {
