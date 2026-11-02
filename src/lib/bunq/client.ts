@@ -150,10 +150,30 @@ async function startSession(userId: string, creds: Creds): Promise<Creds> {
   return next;
 }
 
+// A new session normally works with the stored installation. If bunq no longer
+// accepts that installation/device registration (they can be dropped), register
+// the app again from scratch once and retry; if that fails too the API key
+// itself is no longer valid and the error says so.
+async function renewSession(userId: string, creds: Creds): Promise<Creds> {
+  try {
+    return await startSession(userId, creds);
+  } catch (first) {
+    let fresh: Creds;
+    try {
+      fresh = await install(userId);
+    } catch (second) {
+      const a = first instanceof Error ? first.message : String(first);
+      const b = second instanceof Error ? second.message : String(second);
+      throw new Error(`${a} (opnieuw koppelen mislukt: ${b})`);
+    }
+    return startSession(userId, fresh);
+  }
+}
+
 async function ensureCreds(userId: string): Promise<Creds> {
   let creds = await loadCreds(userId);
   if (!creds) creds = await install(userId);
-  if (!creds.session_token || !creds.bunq_user_id) creds = await startSession(userId, creds);
+  if (!creds.session_token || !creds.bunq_user_id) creds = await renewSession(userId, creds);
   return creds;
 }
 
@@ -162,7 +182,7 @@ export async function bunqApi(userId: string, method: string, path: string, body
   const call = () => rawRequest(method, path, { body, token: creds.session_token!, privateKey: creds.private_key });
   let res = await call();
   if (res.status === 401 || res.status === 403) {
-    creds = await startSession(userId, creds);
+    creds = await renewSession(userId, creds);
     res = await call();
   }
   if (res.status >= 400) throw new Error(`bunq: ${errorText(res.json)}`);
