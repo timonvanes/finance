@@ -2,22 +2,38 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { periodRange } from "@/lib/month";
+import { isoDate, periodRange, periodStartFor } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { ensureWbwCategory } from "@/lib/wbw-fronted";
 
-// What was fronted for others this period: WieBetaaltWat reclaims tied to a
-// transaction booked in this period (regardless of paid/open — the fronting
-// happened when the transaction happened).
-async function frontedInPeriod(supabase: Awaited<ReturnType<typeof createClient>>, start: string, end: string) {
+type Db = Awaited<ReturnType<typeof createClient>>;
+
+// What was fronted for others between two days (after `after`, up to and
+// including `until`): WieBetaaltWat reclaims tied to a transaction booked then
+// (regardless of paid/open — the fronting happened when the transaction
+// happened). !inner is required: without it the date filter only trims the
+// embedded transaction and every reclaim is still counted.
+async function frontedBetween(supabase: Db, after: string, until: string) {
   const { data } = await supabase
     .from("reclaims")
-    .select("computed_amount, transactions!reclaims_transaction_id_fkey(booking_date)")
+    .select("computed_amount, transactions!reclaims_transaction_id_fkey!inner(booking_date)")
+    .eq("settlement_method", "external_app")
+    .gt("transactions.booking_date", after)
+    .lte("transactions.booking_date", until);
+  return (data ?? []).reduce((sum, r) => sum + Number(r.computed_amount), 0);
+}
+
+async function frontedInPeriod(supabase: Db, start: string, end: string) {
+  const { data } = await supabase
+    .from("reclaims")
+    .select("computed_amount, transactions!reclaims_transaction_id_fkey!inner(booking_date)")
     .eq("settlement_method", "external_app")
     .gte("transactions.booking_date", start)
     .lt("transactions.booking_date", end);
   return (data ?? []).reduce((sum, r) => sum + Number(r.computed_amount), 0);
 }
+
+const dayOf = (iso: string) => iso.slice(0, 10);
 
 export async function getWbwStatus() {
   const supabase = await createClient();
@@ -26,7 +42,11 @@ export async function getWbwStatus() {
   const prevPeriod = periodRange(1, startDay);
 
   const [{ data: entries }, fronted, prevFronted] = await Promise.all([
-    supabase.from("wbw_balances").select("period_start, balance").order("period_start", { ascending: false }).limit(2),
+    supabase
+      .from("wbw_balances")
+      .select("period_start, balance, created_at")
+      .order("period_start", { ascending: false })
+      .limit(2),
     frontedInPeriod(supabase, period.start, period.end),
     frontedInPeriod(supabase, prevPeriod.start, prevPeriod.end),
   ]);
@@ -34,7 +54,11 @@ export async function getWbwStatus() {
   const current = entries?.find((e) => e.period_start === period.start) ?? null;
   const previous = entries?.find((e) => e.period_start !== period.start) ?? null;
 
-  const expected = previous ? Number(previous.balance) + fronted : null;
+  // What you fronted for others since the previous balance was entered.
+  const frontedSincePrevious = previous
+    ? await frontedBetween(supabase, dayOf(previous.created_at), isoDate(new Date()))
+    : 0;
+  const expected = previous ? Number(previous.balance) + frontedSincePrevious : null;
 
   return {
     periodStart: period.start,
@@ -49,7 +73,10 @@ export async function getWbwStatus() {
 }
 
 // Saves this period's WBW balance and, if a previous balance is known, books
-// the gap (others fronted more than expected) as an expense.
+// the gap (others fronted more than expected) as an expense. The gap covers
+// the time between the two balance entries, so it is booked in the period that
+// stretch mostly falls in (usually the one that just ended), not in the period
+// the balance happens to be entered in.
 export async function saveWbwBalance(balance: number) {
   const supabase = await createClient();
   const {
@@ -62,7 +89,7 @@ export async function saveWbwBalance(balance: number) {
 
   const { data: prevRows } = await supabase
     .from("wbw_balances")
-    .select("period_start, balance")
+    .select("period_start, balance, created_at")
     .lt("period_start", period.start)
     .order("period_start", { ascending: false })
     .limit(1);
@@ -70,18 +97,24 @@ export async function saveWbwBalance(balance: number) {
 
   const { error } = await supabase
     .from("wbw_balances")
-    .upsert({ user_id: user.id, period_start: period.start, balance }, { onConflict: "user_id,period_start" });
+    .upsert(
+      { user_id: user.id, period_start: period.start, balance, created_at: new Date().toISOString() },
+      { onConflict: "user_id,period_start" }
+    );
   if (error) throw error;
 
-  await supabase.from("wbw_fronted_expenses").delete().eq("period_start", period.start);
+  await supabase.from("wbw_fronted_expenses").delete().eq("balance_period_start", period.start);
   if (previous) {
-    const fronted = await frontedInPeriod(supabase, period.start, period.end);
+    const now = new Date();
+    const fronted = await frontedBetween(supabase, dayOf(previous.created_at), isoDate(now));
     const expected = Number(previous.balance) + fronted;
     const gap = Math.round((expected - balance) * 100) / 100;
     if (gap > 0.5) {
+      const midpoint = new Date((new Date(previous.created_at).getTime() + now.getTime()) / 2);
+      const bookedIn = isoDate(periodStartFor(midpoint, startDay));
       const { error: expenseError } = await supabase
         .from("wbw_fronted_expenses")
-        .insert({ user_id: user.id, period_start: period.start, amount: gap });
+        .insert({ user_id: user.id, period_start: bookedIn, balance_period_start: period.start, amount: gap });
       if (expenseError) throw expenseError;
       await ensureWbwCategory(supabase, user.id);
     }
