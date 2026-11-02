@@ -31,7 +31,28 @@ export async function testBunqConnection() {
 }
 
 // Creates (or reuses) a bunq.me payment link for one reclaim or one combined request.
-export async function createBunqPaymentLink(kind: "reclaim" | "request", id: string, description: string) {
+// Failures come back as a value: a thrown error reaches the browser as a
+// generic "An error occurred in the Server Components render" in production.
+export async function createBunqPaymentLink(
+  kind: "reclaim" | "request",
+  id: string,
+  description: string
+): Promise<{ url: string } | { error: string }> {
+  try {
+    return await createBunqPaymentLinkOrThrow(kind, id, description);
+  } catch (e) {
+    console.error("createBunqPaymentLink failed", e);
+    const message =
+      e instanceof Error
+        ? e.message
+        : e && typeof e === "object" && "message" in e
+          ? String((e as { message: unknown }).message)
+          : "onbekende fout";
+    return { error: `Betaallink maken mislukt: ${message}` };
+  }
+}
+
+async function createBunqPaymentLinkOrThrow(kind: "reclaim" | "request", id: string, description: string) {
   if (!isBunqConfigured()) throw new Error("bunq is nog niet gekoppeld.");
   const { supabase, userId } = await requireUserId();
 

@@ -48,6 +48,10 @@ export function RequestShare({
     setNotice(null);
     try {
       const r = await createBunqPaymentLink(kind, id, desc.trim() || description);
+      if ("error" in r) {
+        setNotice(r.error);
+        return;
+      }
       setBunqUrl(r.url);
       router.refresh();
       // Straight into WhatsApp with the finished message; a share sheet would
