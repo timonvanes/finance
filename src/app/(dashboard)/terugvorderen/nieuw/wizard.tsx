@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSplitReclaim } from "@/actions/reclaims";
+import { createGuest } from "@/actions/people";
 import { TxDetails } from "../tx-details";
 
 interface Tx {
@@ -24,13 +25,17 @@ const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", curre
 
 export function Wizard({
   transactions,
-  people,
+  people: savedPeople,
   initialTransactionId,
 }: {
   transactions: Tx[];
   people: Person[];
   initialTransactionId?: string;
 }) {
+  const [guests, setGuests] = useState<Person[]>([]);
+  const [guestName, setGuestName] = useState("");
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const people = [...savedPeople, ...guests.filter((g) => !savedPeople.some((p) => p.id === g.id))];
   const [step, setStep] = useState(initialTransactionId ? 2 : 1);
   const [selectedTx, setSelectedTx] = useState<Record<string, boolean>>(
     initialTransactionId ? { [initialTransactionId]: true } : {}
@@ -83,6 +88,20 @@ export function Wizard({
         return copy;
       });
     }
+  }
+
+  function addGuest() {
+    setGuestError(null);
+    startTransition(async () => {
+      const r = await createGuest(guestName);
+      if ("error" in r) {
+        setGuestError(r.error);
+        return;
+      }
+      setGuests((prev) => (prev.some((g) => g.id === r.id) ? prev : [...prev, { id: r.id, name: r.name, isSelf: false, groupName: "Gast" }]));
+      setShares((prev) => ({ ...prev, [r.id]: 1 }));
+      setGuestName("");
+    });
   }
 
   function submit() {
@@ -331,6 +350,28 @@ export function Wizard({
                 <ul className="space-y-2">{section.people.map(renderPerson)}</ul>
               </section>
             ))}
+          </div>
+
+          <div className="space-y-2 rounded-2xl bg-white p-4 ring-1 ring-gray-200">
+            <p className="text-sm font-medium text-gray-700">Gast (eenmalig, komt niet in je mensen)</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Naam"
+                className="min-h-[48px] min-w-0 flex-1 rounded-xl border border-gray-300 px-3 text-base"
+              />
+              <button
+                type="button"
+                disabled={isPending || !guestName.trim()}
+                onClick={addGuest}
+                className="min-h-[48px] rounded-xl bg-gray-900 px-4 text-base font-medium text-white active:bg-gray-700 disabled:opacity-40"
+              >
+                Toevoegen
+              </button>
+            </div>
+            {guestError && <p className="text-sm text-red-600">{guestError}</p>}
           </div>
 
           {checkedIds.length > 0 && Math.abs(total - entered) > 0.01 && (

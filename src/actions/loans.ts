@@ -64,7 +64,7 @@ export async function getLoans() {
 export async function getLoanPickerData(transactionIds: string[]) {
   const supabase = await createClient();
   const [{ data: people }, loans, { data: entries }] = await Promise.all([
-    supabase.from("people").select("id, name, is_self").order("name"),
+    supabase.from("people").select("id, name, is_self").eq("is_guest", false).order("name"),
     getLoans(),
     transactionIds.length > 0
       ? supabase

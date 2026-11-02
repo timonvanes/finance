@@ -29,7 +29,18 @@ export default async function TransactionReclaimsPage({
   const tx = first ? one(first.transactions) : null;
 
   const open: { item: OpenItem; personId: string }[] = [];
-  const done: { id: string; person: string; amount: number; status: string }[] = [];
+  const done: {
+    id: string;
+    person: string;
+    amount: number;
+    status: string;
+    paidAt: string | null;
+    method: string;
+    referenceCode: string | null;
+    sourceTotal: number | null;
+    note: string | null;
+    settledText: string | null;
+  }[] = [];
 
   for (const r of mine) {
     const personName = one(r.people)?.name ?? "Onbekend";
@@ -54,7 +65,21 @@ export default async function TransactionReclaimsPage({
         },
       });
     } else {
-      done.push({ id: r.id, person: personName, amount: r.computed_amount, status: r.status });
+      const settled = one(r.settled_transaction);
+      done.push({
+        id: r.id,
+        person: personName,
+        amount: r.computed_amount,
+        status: r.status,
+        paidAt: r.paid_at,
+        method: r.settlement_method === "external_app" ? "WieBetaaltWat" : "Bank / Tikkie",
+        referenceCode: r.reference_code,
+        sourceTotal: r.source_total_amount,
+        note: r.note ?? r.tikkie_link,
+        settledText: settled
+          ? `${settled.counterparty_name ?? "onbekend"} · ${new Date(settled.booking_date).toLocaleDateString("nl-NL")} · ${euro(settled.amount)}`
+          : null,
+      });
     }
   }
 
@@ -140,15 +165,39 @@ export default async function TransactionReclaimsPage({
           <h2 className="px-1 text-lg font-semibold text-gray-900">Afgerond</h2>
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {done.map((d) => (
-              <li key={d.id} className="space-y-2 px-5 py-3 text-base text-gray-700">
-                <div className="flex min-h-[44px] items-center justify-between">
-                  <span>
-                    {d.person}
-                    {d.status === "written_off" && " · niet inbaar"}
-                  </span>
-                  <span className="font-medium text-gray-900">{euro(d.amount)}</span>
-                </div>
-                <DoneActions kind="reclaim" id={d.id} status={d.status} />
+              <li key={d.id}>
+                <details className="group">
+                  <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 px-5 py-2 text-base text-gray-700 [&::-webkit-details-marker]:hidden">
+                    <span>
+                      {d.person}
+                      {d.status === "written_off" && " · niet inbaar"}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900">{euro(d.amount)}</span>
+                      <span className="text-2xl text-gray-300 transition-transform group-open:rotate-90">›</span>
+                    </span>
+                  </summary>
+                  <div className="space-y-2 px-5 pb-4 text-base text-gray-700">
+                    <p className="text-sm text-gray-500">
+                      {d.status === "written_off"
+                        ? "Niet inbaar"
+                        : d.paidAt
+                          ? `Ontvangen op ${new Date(d.paidAt).toLocaleDateString("nl-NL")}`
+                          : "Ontvangen"}
+                      {" · "}
+                      {d.method}
+                    </p>
+                    {d.sourceTotal != null && Math.abs(d.sourceTotal - d.amount) > 0.01 && (
+                      <p className="text-sm text-gray-500">
+                        Jouw deel {euro(d.amount)} van {euro(d.sourceTotal)} totaal
+                      </p>
+                    )}
+                    {d.referenceCode && <p className="text-sm text-gray-500">Referentiecode {d.referenceCode}</p>}
+                    {d.note && <p className="whitespace-pre-wrap break-words text-sm italic text-gray-600">{d.note}</p>}
+                    {d.settledText && <p className="text-sm text-gray-500">Gekoppelde betaling: {d.settledText}</p>}
+                    <DoneActions kind="reclaim" id={d.id} status={d.status} />
+                  </div>
+                </details>
               </li>
             ))}
           </ul>
