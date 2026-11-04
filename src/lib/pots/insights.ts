@@ -51,9 +51,26 @@ export interface Schedule {
   expectedNow: number;
 }
 
-// Straight line from the starting balance (at the pot's start) to the target
-// on the target date, compared with where the pot actually is today.
-export function computeSchedule(pot: PotForInsights, balance: number, now = new Date()): Schedule {
+// Saving happens once per period, so with a start day the plan is a staircase:
+// one equal installment per period start between the pot's creation and the
+// target date. An installment counts as due a few days after its period starts,
+// so the pot is not "behind" on payday while the transfer is still on its way.
+// Without a start day (or no period start fits) it is a straight line.
+const INSTALLMENT_GRACE_DAYS = 7;
+
+function installmentDates(createdAt: Date, end: Date, startDay: number): Date[] {
+  const dates: Date[] = [];
+  let s = periodStartFor(createdAt, startDay);
+  for (let i = 0; i < 240; i++) {
+    s = new Date(s.getFullYear(), s.getMonth() + 1, startDay);
+    if (s > end) break;
+    dates.push(s);
+  }
+  return dates;
+}
+
+// Compares where the pot is today with where the plan says it should be.
+export function computeSchedule(pot: PotForInsights, balance: number, now = new Date(), startDay?: number): Schedule {
   if (!pot.target_amount || !pot.target_date) return { status: "none", difference: 0, expectedNow: balance };
   if (balance >= pot.target_amount) return { status: "done", difference: balance - pot.target_amount, expectedNow: pot.target_amount };
 
@@ -69,9 +86,19 @@ export function computeSchedule(pot: PotForInsights, balance: number, now = new 
       .filter((e) => e.entry_date <= createdDay)
       .reduce((sum, e) => sum + e.amount, 0);
   const end = new Date(pot.target_date);
-  const span = end.getTime() - createdAt.getTime();
-  const fraction = span <= 0 ? 1 : Math.min(1, Math.max(0, (now.getTime() - createdAt.getTime()) / span));
-  const expectedNow = startBalance + (pot.target_amount - startBalance) * fraction;
+
+  const installments = startDay != null ? installmentDates(createdAt, end, startDay) : [];
+  let expectedNow: number;
+  if (installments.length > 0) {
+    const perInstallment = (pot.target_amount - startBalance) / installments.length;
+    const graceMs = INSTALLMENT_GRACE_DAYS * 24 * 60 * 60 * 1000;
+    const due = installments.filter((d) => d.getTime() + graceMs <= now.getTime()).length;
+    expectedNow = Math.min(pot.target_amount, startBalance + perInstallment * due);
+  } else {
+    const span = end.getTime() - createdAt.getTime();
+    const fraction = span <= 0 ? 1 : Math.min(1, Math.max(0, (now.getTime() - createdAt.getTime()) / span));
+    expectedNow = startBalance + (pot.target_amount - startBalance) * fraction;
+  }
   const difference = balance - expectedNow;
   const tolerance = Math.max(5, pot.target_amount * 0.02);
   const status: ScheduleStatus =

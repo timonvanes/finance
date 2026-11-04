@@ -145,7 +145,7 @@ export default async function PotsPage() {
           <ul className="space-y-3">
             {pots.map((pot) => {
               const balance = balances.get(pot.id) ?? 0;
-              const schedule = computeSchedule(pot, balance);
+              const schedule = computeSchedule(pot, balance, new Date(), startDay);
               const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
               return (
                 <li key={pot.id}>

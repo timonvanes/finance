@@ -25,7 +25,7 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   if (!pot) notFound();
 
   const balance = computePotBalance(pot);
-  const schedule = computeSchedule(pot, balance);
+  const schedule = computeSchedule(pot, balance, new Date(), startDay);
   const required = computeRequiredMonthlyDeposit(balance, pot.target_amount, pot.target_date);
   const pace = averageMonthlyNet(pot, startDay);
   const finish = projectedFinish(balance, pot.target_amount, pace);
@@ -56,8 +56,10 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
         <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold text-gray-900">{pot.name}</h1>
         <InfoButton>
           <p>
-            <span className="font-medium">Op schema</span> vergelijkt je saldo met een rechte lijn
-            van je startbedrag naar het doel op de doeldatum. <span className="font-medium">Tempo</span>{" "}
+            <span className="font-medium">Op schema</span> vergelijkt je saldo met een trap: elke maand
+            hoort er een gelijk deel bij te komen, tot het doel op de doeldatum. Een deel telt een week na het
+            begin van je maand mee, zodat je niet achter staat terwijl de overboeking nog onderweg is.{" "}
+            <span className="font-medium">Tempo</span>{" "}
             is je gemiddelde netto inleg over de laatste afgeronde perioden; daarmee schat de app
             wanneer je het doel haalt.
           </p>
