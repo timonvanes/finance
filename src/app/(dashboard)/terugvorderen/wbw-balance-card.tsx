@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addWbwSettlement, deleteWbwEntry, saveWbwBalance } from "@/actions/wbw";
+import { addWbwSettlement, deleteWbwEntry, saveWbwBalance, syncWbwBalance } from "@/actions/wbw";
 import type { WbwCandidate, WbwEntryRow } from "@/actions/wbw";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -13,6 +13,7 @@ const toNumber = (s: string) => Number(s.replace(",", "."));
 
 export interface WbwStatus {
   periodLabel: string;
+  configured: boolean;
   latestBalance: number | null;
   latestDate: string | null;
   othersFrontedThisPeriod: number;
@@ -86,6 +87,24 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
     );
   }
 
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  function syncNow() {
+    setError(null);
+    setSyncNote(null);
+    startTransition(async () => {
+      const r = await syncWbwBalance();
+      if ("error" in r) {
+        setError(r.error);
+        return;
+      }
+      setSyncNote(
+        `Saldo opgehaald: ${euro(r.balance)} over ${r.lists} lijsten.` +
+          (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "")
+      );
+      router.refresh();
+    });
+  }
+
   const candidates = status.candidates.filter((c) => (dir === "in" ? c.amount > 0 : c.amount < 0));
 
   return (
@@ -107,8 +126,28 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
           {status.latestDate && <> (op basis van je saldo van {shortDate(status.latestDate)})</>}
         </p>
 
+        {status.configured && (
+          <section className="space-y-2">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={syncNow}
+              className="min-h-[48px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
+            >
+              {isPending ? "Bezig…" : "Saldo ophalen uit WieBetaaltWat"}
+            </button>
+            {syncNote && <p className="text-sm text-teal-700">{syncNote}</p>}
+            <p className="text-sm text-gray-500">
+              Haalt je saldo van al je lijsten op (alleen lezen) en slaat het op als het saldo van vandaag. Dit gebeurt
+              ook elke dag automatisch.
+            </p>
+          </section>
+        )}
+
         <section className="space-y-3">
-          <h3 className="text-base font-medium text-gray-900">Saldo invullen</h3>
+          <h3 className="text-base font-medium text-gray-900">
+            {status.configured ? "Of zelf invullen" : "Saldo invullen"}
+          </h3>
           <p className="text-sm text-gray-500">
             Op elke dag, zo vaak je wilt. Vul op de eerste dag van je maand in, dan sluit de vorige maand precies af.
           </p>

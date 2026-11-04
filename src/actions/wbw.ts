@@ -4,12 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
-import { ensureWbwCategory, getWbwFrontedRows } from "@/lib/wbw-fronted";
+import { getWbwFrontedRows } from "@/lib/wbw-fronted";
+import { fetchWbwBalances, isWbwConfigured } from "@/lib/wbw/client";
+import { recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-// "Today" the way the user sees it (the server runs in UTC).
-const todayAmsterdam = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
 
 export interface WbwEntryRow {
   id: string;
@@ -73,6 +72,7 @@ export async function getWbwStatus() {
 
   return {
     periodLabel: period.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" }),
+    configured: isWbwConfigured(),
     latestBalance: latest ? latest.amount : null,
     latestDate: latest ? latest.date : null,
     othersFrontedThisPeriod: rows.find((r) => r.period_start === period.start)?.amount ?? 0,
@@ -86,7 +86,6 @@ export async function getWbwStatus() {
 // thrown messages are hidden in production.
 export async function saveWbwBalance(balance: number, date?: string): Promise<{ error?: string }> {
   const day = date && ISO_DAY.test(date) ? date : todayAmsterdam();
-  if (!Number.isFinite(balance)) return { error: "Vul een geldig bedrag in." };
 
   const supabase = await createClient();
   const {
@@ -94,15 +93,35 @@ export async function saveWbwBalance(balance: number, date?: string): Promise<{ 
   } = await supabase.auth.getUser();
   if (!user) return { error: "Niet ingelogd." };
 
-  await supabase.from("wbw_entries").delete().eq("kind", "balance").eq("entry_date", day);
-  const { error } = await supabase
-    .from("wbw_entries")
-    .insert({ user_id: user.id, entry_date: day, kind: "balance", amount: Math.round(balance * 100) / 100 });
-  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+  const result = await recordWbwBalance(supabase, user.id, balance, day);
+  if (!result.error) revalidatePath("/", "layout");
+  return result;
+}
 
-  await ensureWbwCategory(supabase, user.id);
-  revalidatePath("/", "layout");
-  return {};
+// Reads the saldo of all lists from WieBetaaltWat itself (read-only) and stores
+// it as today's saldo, so it no longer has to be typed in.
+export async function syncWbwBalance(): Promise<{ error: string } | { balance: number; lists: number; other: string[] }> {
+  try {
+    if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "Niet ingelogd." };
+
+    const b = await fetchWbwBalances();
+    const result = await recordWbwBalance(supabase, user.id, b.eur, todayAmsterdam());
+    if (result.error) return { error: result.error };
+    revalidatePath("/", "layout");
+    return {
+      balance: b.eur,
+      lists: b.lists,
+      other: b.other.map((o) => `${o.currency} ${o.amount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}`),
+    };
+  } catch (e) {
+    console.error("syncWbwBalance failed", e);
+    return { error: e instanceof Error ? e.message : "Saldo ophalen mislukt." };
+  }
 }
 
 // Squaring up: money that went back and forth to bring the saldo toward 0.

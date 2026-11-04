@@ -5,6 +5,8 @@ import { ensureBunqCallback, isBunqConfigured } from "@/lib/bunq/client";
 import { processBunqForUser } from "@/lib/bunq/process";
 import { sendPush } from "@/lib/push/send";
 import { clampStartDay } from "@/lib/month";
+import { fetchWbwBalances, isWbwConfigured } from "@/lib/wbw/client";
+import { recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
 
 export const maxDuration = 60;
 
@@ -57,7 +59,8 @@ export async function GET(request: NextRequest) {
   try {
     const todayOfMonth = new Date().getDate();
     const { data: balanceUsers } = await admin.from("wbw_entries").select("user_id").eq("kind", "balance");
-    const withBalances = [...new Set((balanceUsers ?? []).map((b) => b.user_id))];
+    // With the WieBetaaltWat link on the saldo fills itself in, so no reminder.
+    const withBalances = isWbwConfigured() ? [] : [...new Set((balanceUsers ?? []).map((b) => b.user_id))];
     let sentWbw = 0;
     for (const userId of withBalances) {
       // Each user's "1st of the month" is their own period start day (e.g. salary day).
@@ -132,13 +135,30 @@ export async function GET(request: NextRequest) {
     report.bankSync = e instanceof Error ? e.message : "failed";
   }
 
+  // The single user of this app (same lookup for bunq and WieBetaaltWat).
+  const resolveUserId = async () => {
+    const fromEnv = process.env.INBOUND_MAIL_USER_ID ?? null;
+    if (fromEnv) return fromEnv;
+    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
+    return data.users[0]?.id ?? null;
+  };
+
+  if (isWbwConfigured()) {
+    try {
+      const userId = await resolveUserId();
+      if (userId) {
+        const b = await fetchWbwBalances();
+        const r = await recordWbwBalance(admin, userId, b.eur, todayAmsterdam());
+        report.wbw = r.error ? r.error : { saldo: b.eur, lists: b.lists };
+      }
+    } catch (e) {
+      report.wbw = e instanceof Error ? e.message : "failed";
+    }
+  }
+
   if (isBunqConfigured()) {
     try {
-      let userId = process.env.INBOUND_MAIL_USER_ID ?? null;
-      if (!userId) {
-        const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
-        userId = data.users[0]?.id ?? null;
-      }
+      const userId = await resolveUserId();
       if (userId) {
         await ensureBunqCallback(userId);
         report.bunq = await processBunqForUser(userId);
