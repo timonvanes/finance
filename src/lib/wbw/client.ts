@@ -48,13 +48,22 @@ export function euroSaldo(lists: WbwListBalance[], excluded: string[]): number {
   return cents / 100;
 }
 
+// The headers the website's own client sends with every call (read from its
+// code). The API answers 400 without the version header.
 const HEADERS = {
   "Content-Type": "application/json",
   Accept: "application/json",
+  "Accept-Version": "11",
+  "Accept-Language": "nl",
+  "X-App-React": "true",
+  "Cache-Control": "no-cache",
   Origin: "https://app.wiebetaaltwat.nl",
   Referer: "https://app.wiebetaaltwat.nl/",
   "User-Agent": "Mozilla/5.0 (compatible; finance-app)",
 };
+
+// A stable id for this server, like the device id the website keeps in the browser.
+const DEVICE_ID = process.env.WBW_DEVICE_ID || "6f1c2b7e-3a49-4d58-9d0e-5b8a1c2e7f43";
 
 function cookiesFrom(res: Response) {
   const raw = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
@@ -66,21 +75,26 @@ export async function fetchWbwBalances(): Promise<WbwListBalance[]> {
   const password = process.env.WBW_PASSWORD;
   if (!email || !password) throw new Error("WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel.");
 
+  const headers = { ...HEADERS, "X-Device-Id": DEVICE_ID };
   const login = await fetch(`${BASE}/users/sign_in`, {
     method: "POST",
-    headers: HEADERS,
+    headers,
     body: JSON.stringify({ user: { email, password } }),
     cache: "no-store",
   });
   if (login.status === 401 || login.status === 422) {
     throw new Error("Inloggen bij WieBetaaltWat mislukt: het e-mailadres of wachtwoord klopt niet. Werkt je account alleen met Google of Apple, dan gaat dit niet.");
   }
-  if (!login.ok) throw new Error(`Inloggen bij WieBetaaltWat mislukt (status ${login.status}).`);
+  if (!login.ok) {
+    // The reason the API gives (never the request, so no password) helps to see what is missing.
+    const reason = (await login.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+    throw new Error(`Inloggen bij WieBetaaltWat mislukt (status ${login.status})${reason ? `: ${reason}` : ""}.`);
+  }
 
   const cookie = cookiesFrom(login);
   if (!cookie) throw new Error("Inloggen bij WieBetaaltWat gaf geen sessie terug.");
 
-  const res = await fetch(`${BASE}/balances`, { headers: { ...HEADERS, Cookie: cookie }, cache: "no-store" });
+  const res = await fetch(`${BASE}/balances`, { headers: { ...headers, Cookie: cookie }, cache: "no-store" });
   if (!res.ok) throw new Error(`Saldo's ophalen bij WieBetaaltWat mislukt (status ${res.status}).`);
   return parseWbwBalances(await res.json());
 }
