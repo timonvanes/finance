@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addWbwSettlement, deleteWbwEntry, saveWbwBalance, syncWbwBalance } from "@/actions/wbw";
+import { addWbwSettlement, deleteWbwEntry, saveWbwBalance, setWbwListIncluded, syncWbwBalance } from "@/actions/wbw";
 import type { WbwCandidate, WbwEntryRow } from "@/actions/wbw";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -14,6 +14,7 @@ const toNumber = (s: string) => Number(s.replace(",", "."));
 export interface WbwStatus {
   periodLabel: string;
   configured: boolean;
+  lists: { id: string; name: string; currency: string; amount: number; included: boolean }[];
   latestBalance: number | null;
   latestDate: string | null;
   othersFrontedThisPeriod: number;
@@ -141,6 +142,42 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
               Haalt je saldo van al je lijsten op (alleen lezen) en slaat het op als het saldo van vandaag. Dit gebeurt
               ook elke dag automatisch.
             </p>
+          </section>
+        )}
+
+        {status.configured && status.lists.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-base font-medium text-gray-900">Lijsten die meetellen</h3>
+            <p className="text-sm text-gray-500">
+              Haal een lijst uit je saldo, bijvoorbeeld een testlijst of een oude vakantie. Lijsten in een andere munt
+              tellen niet mee.
+            </p>
+            <ul className="divide-y divide-gray-100 rounded-xl ring-1 ring-gray-200">
+              {status.lists.map((l) => {
+                const foreign = l.currency !== "EUR";
+                return (
+                  <li key={l.id}>
+                    <label className="flex min-h-[52px] items-center justify-between gap-3 px-4 py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate text-base text-gray-900">{l.name}</span>
+                        <span className="block text-sm text-gray-500">
+                          {foreign
+                            ? `${l.currency} ${l.amount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })} · andere munt`
+                            : euro(l.amount)}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={l.included && !foreign}
+                        disabled={isPending || foreign}
+                        onChange={(e) => run(() => setWbwListIncluded(l.id, e.target.checked))}
+                        className="h-6 w-6 shrink-0 accent-teal-700"
+                      />
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
           </section>
         )}
 

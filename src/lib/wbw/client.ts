@@ -9,37 +9,43 @@ export function isWbwConfigured() {
   return Boolean(process.env.WBW_EMAIL && process.env.WBW_PASSWORD);
 }
 
-export interface WbwBalances {
-  // Net saldo over all lists in euros (+ = you still get, - = you still owe).
-  eur: number;
-  lists: number;
-  // Lists in another currency; these are not part of the euro saldo.
-  other: { currency: string; amount: number }[];
+// Your saldo in one WieBetaaltWat list (+ = you still get, - = you still owe).
+export interface WbwListBalance {
+  id: string;
+  name: string;
+  currency: string;
+  amount: number;
 }
 
-// The API returns { data: [{ balance: { list, member, amount: { currency, fractional } } }] }
+// The API returns { data: [{ balance: { list: {id, name}, member, amount: { currency, fractional } } }] }
 // with fractional in the smallest unit (cents).
-export function parseWbwBalances(json: unknown): WbwBalances {
+export function parseWbwBalances(json: unknown): WbwListBalance[] {
   const data = (json as { data?: unknown } | null)?.data;
   if (!Array.isArray(data)) throw new Error("WieBetaaltWat gaf een onverwacht antwoord (geen lijst met saldo's).");
 
-  let eurCents = 0;
-  let lists = 0;
-  const otherCents = new Map<string, number>();
+  const lists: WbwListBalance[] = [];
   for (const item of data) {
-    const amount = (item as { balance?: { amount?: { currency?: unknown; fractional?: unknown } } })?.balance?.amount;
-    const cents = Number(amount?.fractional);
-    const currency = typeof amount?.currency === "string" ? amount.currency : null;
-    if (!currency || !Number.isFinite(cents)) continue;
-    lists++;
-    if (currency === "EUR") eurCents += cents;
-    else otherCents.set(currency, (otherCents.get(currency) ?? 0) + cents);
+    const b = (
+      item as {
+        balance?: { list?: { id?: unknown; name?: unknown }; amount?: { currency?: unknown; fractional?: unknown } };
+      }
+    )?.balance;
+    const cents = Number(b?.amount?.fractional);
+    const currency = typeof b?.amount?.currency === "string" ? b.amount.currency : null;
+    const id = typeof b?.list?.id === "string" ? b.list.id : null;
+    if (!id || !currency || !Number.isFinite(cents)) continue;
+    lists.push({ id, name: typeof b?.list?.name === "string" ? b.list.name.trim() : "Lijst", currency, amount: cents / 100 });
   }
-  return {
-    eur: eurCents / 100,
-    lists,
-    other: [...otherCents].filter(([, c]) => c !== 0).map(([currency, c]) => ({ currency, amount: c / 100 })),
-  };
+  return lists;
+}
+
+// Net euro saldo over the lists that count. Other currencies never count.
+export function euroSaldo(lists: WbwListBalance[], excluded: string[]): number {
+  const skip = new Set(excluded);
+  const cents = lists
+    .filter((l) => l.currency === "EUR" && !skip.has(l.id))
+    .reduce((sum, l) => sum + Math.round(l.amount * 100), 0);
+  return cents / 100;
 }
 
 const HEADERS = {
@@ -55,7 +61,7 @@ function cookiesFrom(res: Response) {
   return raw.map((c) => c.split(";")[0]).join("; ");
 }
 
-export async function fetchWbwBalances(): Promise<WbwBalances> {
+export async function fetchWbwBalances(): Promise<WbwListBalance[]> {
   const email = process.env.WBW_EMAIL;
   const password = process.env.WBW_PASSWORD;
   if (!email || !password) throw new Error("WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel.");

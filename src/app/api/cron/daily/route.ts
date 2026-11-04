@@ -6,7 +6,7 @@ import { processBunqForUser } from "@/lib/bunq/process";
 import { sendPush } from "@/lib/push/send";
 import { clampStartDay } from "@/lib/month";
 import { fetchWbwBalances, isWbwConfigured } from "@/lib/wbw/client";
-import { recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
+import { applyWbwLists, todayAmsterdam } from "@/lib/wbw/record";
 
 export const maxDuration = 60;
 
@@ -147,9 +147,9 @@ export async function GET(request: NextRequest) {
     try {
       const userId = await resolveUserId();
       if (userId) {
-        const b = await fetchWbwBalances();
-        const r = await recordWbwBalance(admin, userId, b.eur, todayAmsterdam());
-        report.wbw = r.error ? r.error : { saldo: b.eur, lists: b.lists };
+        const lists = await fetchWbwBalances();
+        const r = await applyWbwLists(admin, userId, lists, todayAmsterdam());
+        report.wbw = r.error ? r.error : { saldo: r.balance, lists: lists.length };
       }
     } catch (e) {
       report.wbw = e instanceof Error ? e.message : "failed";

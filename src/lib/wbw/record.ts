@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureWbwCategory } from "@/lib/wbw-fronted";
+import { euroSaldo, type WbwListBalance } from "@/lib/wbw/client";
 
 // "Today" the way the user sees it (the server runs in UTC).
 export const todayAmsterdam = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
@@ -23,4 +24,26 @@ export async function recordWbwBalance(
 
   await ensureWbwCategory(supabase, userId);
   return {};
+}
+
+// Stores freshly read lists and today's saldo over the lists that count. The
+// lists are kept (name, currency, saldo) so the choice of which ones count can
+// be changed later without logging in to WieBetaaltWat again.
+export async function applyWbwLists(
+  supabase: SupabaseClient,
+  userId: string,
+  lists: WbwListBalance[],
+  day: string
+): Promise<{ balance: number; error?: string }> {
+  const { data } = await supabase.from("user_settings").select("wbw_excluded_lists").eq("user_id", userId).maybeSingle();
+  const excluded = (data?.wbw_excluded_lists ?? []) as string[];
+
+  const { error: saveError } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: userId, wbw_lists: lists, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (saveError) return { balance: 0, error: "Opslaan mislukt. Probeer het opnieuw." };
+
+  const balance = euroSaldo(lists, excluded);
+  const result = await recordWbwBalance(supabase, userId, balance, day);
+  return { balance, ...result };
 }

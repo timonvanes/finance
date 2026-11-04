@@ -6,7 +6,8 @@ import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getWbwFrontedRows } from "@/lib/wbw-fronted";
 import { fetchWbwBalances, isWbwConfigured } from "@/lib/wbw/client";
-import { recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
+import { applyWbwLists, recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
+import { euroSaldo, type WbwListBalance } from "@/lib/wbw/client";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -36,6 +37,12 @@ export async function getWbwStatus() {
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(40);
+
+  const { data: settings } = await supabase.from("user_settings").select("wbw_excluded_lists, wbw_lists").maybeSingle();
+  const excludedIds = new Set<string>((settings?.wbw_excluded_lists ?? []) as string[]);
+  const wbwLists = ((settings?.wbw_lists ?? []) as WbwListBalance[])
+    .map((l) => ({ ...l, included: !excludedIds.has(l.id) }))
+    .sort((a, b) => a.name.localeCompare(b.name, "nl"));
 
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const [rows, { data: recent }] = await Promise.all([
@@ -73,6 +80,7 @@ export async function getWbwStatus() {
   return {
     periodLabel: period.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" }),
     configured: isWbwConfigured(),
+    lists: wbwLists,
     latestBalance: latest ? latest.amount : null,
     latestDate: latest ? latest.date : null,
     othersFrontedThisPeriod: rows.find((r) => r.period_start === period.start)?.amount ?? 0,
@@ -109,14 +117,16 @@ export async function syncWbwBalance(): Promise<{ error: string } | { balance: n
     } = await supabase.auth.getUser();
     if (!user) return { error: "Niet ingelogd." };
 
-    const b = await fetchWbwBalances();
-    const result = await recordWbwBalance(supabase, user.id, b.eur, todayAmsterdam());
+    const lists = await fetchWbwBalances();
+    const result = await applyWbwLists(supabase, user.id, lists, todayAmsterdam());
     if (result.error) return { error: result.error };
     revalidatePath("/", "layout");
     return {
-      balance: b.eur,
-      lists: b.lists,
-      other: b.other.map((o) => `${o.currency} ${o.amount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}`),
+      balance: result.balance,
+      lists: lists.length,
+      other: lists
+        .filter((l) => l.currency !== "EUR" && l.amount !== 0)
+        .map((l) => `${l.currency} ${l.amount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })} (${l.name})`),
     };
   } catch (e) {
     console.error("syncWbwBalance failed", e);
@@ -156,6 +166,34 @@ export async function addWbwSettlement(
       .from("transactions")
       .update({ is_transfer: true, reviewed: true, flagged_for_reclaim: false })
       .eq("id", transactionId);
+  }
+  revalidatePath("/", "layout");
+  return {};
+}
+
+// Chooses whether a WieBetaaltWat list counts towards the saldo. Today's saldo
+// is worked out again from the lists read last time, without logging in again.
+export async function setWbwListIncluded(listId: string, included: boolean): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Niet ingelogd." };
+
+  const { data } = await supabase.from("user_settings").select("wbw_excluded_lists, wbw_lists").maybeSingle();
+  const excluded = new Set<string>((data?.wbw_excluded_lists ?? []) as string[]);
+  if (included) excluded.delete(listId);
+  else excluded.add(listId);
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, wbw_excluded_lists: [...excluded], updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+
+  const lists = (data?.wbw_lists ?? null) as WbwListBalance[] | null;
+  if (lists && lists.length > 0) {
+    const result = await recordWbwBalance(supabase, user.id, euroSaldo(lists, [...excluded]), todayAmsterdam());
+    if (result.error) return result;
   }
   revalidatePath("/", "layout");
   return {};
