@@ -74,7 +74,6 @@ export function RequestShare({
     const cents = Math.round(amount * 100);
     if (cents > 0) params.set("totalAmountInCents", String(cents));
     params.set("description", text);
-    setNotice(`Tikkie opent met ${euro(amount)} en "${text}" al ingevuld. Maak het Tikkie en deel het via WhatsApp.`);
     window.location.href = `tikkie://payment_request?${params.toString().replace(/\+/g, "%20")}`;
   }
 
