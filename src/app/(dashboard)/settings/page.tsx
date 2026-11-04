@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getMonthStartDay, getInvestReminderDay, getBunqPaymentLinksEnabled } from "@/lib/settings";
+import { getMonthStartDay, getInvestReminderDay, getBunqPaymentLinksEnabled, getPotGraceDays } from "@/lib/settings";
 
 const GROUPS: {
   title: string;
@@ -7,7 +7,7 @@ const GROUPS: {
     href: string;
     label: string;
     description: string;
-    value?: (ctx: { startDay: number; investDay: number | null; bunqLinks: boolean }) => string;
+    value?: (ctx: { startDay: number; investDay: number | null; bunqLinks: boolean; graceDays: number }) => string;
   }[];
 }[] = [
   {
@@ -24,6 +24,12 @@ const GROUPS: {
         label: "Beleggen",
         description: "Maandelijkse herinnering om aandelen te kopen",
         value: ({ investDay }) => (investDay ? `dag ${investDay}` : "uit"),
+      },
+      {
+        href: "/settings/potjes",
+        label: "Potjes",
+        description: "Speling rond de stortingsdag van het spaarschema",
+        value: ({ graceDays }) => (graceDays === 0 ? "geen" : `± ${graceDays} d`),
       },
       {
         href: "/settings/overzicht",
@@ -96,10 +102,11 @@ const GROUPS: {
 ];
 
 export default async function SettingsPage() {
-  const [startDay, investDay, bunqLinks] = await Promise.all([
+  const [startDay, investDay, bunqLinks, graceDays] = await Promise.all([
     getMonthStartDay(),
     getInvestReminderDay(),
     getBunqPaymentLinksEnabled(),
+    getPotGraceDays(),
   ]);
 
   return (
@@ -131,7 +138,7 @@ export default async function SettingsPage() {
                     <span className="block text-sm text-gray-500">{item.description}</span>
                   </span>
                   {item.value && (
-                    <span className="shrink-0 text-base text-gray-500">{item.value({ startDay, investDay, bunqLinks })}</span>
+                    <span className="shrink-0 text-base text-gray-500">{item.value({ startDay, investDay, bunqLinks, graceDays })}</span>
                   )}
                   <span className="text-2xl text-gray-300">›</span>
                 </Link>

@@ -59,6 +59,21 @@ export async function setBunqPaymentLinksEnabled(enabled: boolean) {
   revalidatePath("/", "layout");
 }
 
+export async function setPotGraceDays(days: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+
+  const clamped = Math.min(14, Math.max(0, Math.round(days) || 0));
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, pot_grace_days: clamped, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) throw error;
+  revalidatePath("/", "layout");
+}
+
 export async function setDashboardModuleVisible(key: string, visible: boolean) {
   if (!DASHBOARD_MODULES.some((m) => m.key === key)) throw new Error("Onbekend onderdeel.");
   const supabase = await createClient();

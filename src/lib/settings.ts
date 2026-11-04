@@ -28,7 +28,14 @@ export const getBunqPaymentLinksEnabled = cache(async (): Promise<boolean> => {
   return data?.use_bunq_payment_links === true;
 });
 
-export const getCalendarToken =cache(async (): Promise<string | null> => {
+// Days of slack around a pot's deposit day (see computeSchedule).
+export const getPotGraceDays = cache(async (): Promise<number> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("pot_grace_days").maybeSingle();
+  return data?.pot_grace_days ?? 3;
+});
+
+export const getCalendarToken = cache(async (): Promise<string | null> => {
   const supabase = await createClient();
   const { data } = await supabase.from("user_settings").select("calendar_token").maybeSingle();
   return data?.calendar_token ?? null;

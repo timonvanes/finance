@@ -10,12 +10,30 @@ export interface PotForInsights {
   monthly_amount: number | null;
   monthly_auto?: boolean;
   plan_start_date?: string | null;
+  // Day of the month the monthly deposit is due; null = start of the user's month.
+  schedule_day?: number | null;
   pot_period_decisions?: { period_start: string; decision: string }[];
-  pot_entries: { amount: number; entry_date: string }[];
+  pot_entries: PotEntryForInsights[];
+}
+
+export interface PotEntryForInsights {
+  amount: number;
+  entry_date: string;
+  // Withdrawals: "yes" = spent on the goal (the goal was lowered by it, whole or
+  // `goal_spend_amount`), "no" = not for the goal, null = not answered yet.
+  goal_spend?: string | null;
+  goal_spend_amount?: number | null;
 }
 
 const counted = (pot: PotForInsights) =>
   pot.pot_entries.filter((e) => e.entry_date >= pot.opening_balance_date);
+
+// What was spent on the goal itself; that lowered the target, so the plan is
+// measured against the original target and the money counts as still "saved".
+const goalSpentOf = (entries: PotEntryForInsights[]) =>
+  entries
+    .filter((e) => e.goal_spend === "yes")
+    .reduce((sum, e) => sum + Number(e.goal_spend_amount ?? Math.abs(e.amount)), 0);
 
 // What was put into the pot (deposits only) during one budget period.
 export function depositedInPeriod(pot: PotForInsights, monthsAgo: number, startDay: number): number {
@@ -51,18 +69,21 @@ export interface Schedule {
   expectedNow: number;
 }
 
-// Saving happens once per period, so with a start day the plan is a staircase:
-// one equal installment per period start between the pot's creation and the
-// target date. An installment counts as due a few days after its period starts,
-// so the pot is not "behind" on payday while the transfer is still on its way.
-// Without a start day (or no period start fits) it is a straight line.
-const INSTALLMENT_GRACE_DAYS = 7;
+// Saving happens once per period, so with a deposit day the plan is a staircase:
+// one equal installment on that day each month between the pot's creation and
+// the target date. The deposit day is the pot's own (schedule_day) or else the
+// start of the user's month. Around each deposit day there is some slack: from
+// `graceDays` before to `graceDays` after, depositing or not both count as on
+// schedule, so a transfer a few days early or late does not change the status.
+// Without a day (or no deposit day fits) it is a straight line.
+const DAY_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_GRACE_DAYS = 3;
 
-function installmentDates(createdAt: Date, end: Date, startDay: number): Date[] {
+function installmentDates(createdAt: Date, end: Date, day: number): Date[] {
   const dates: Date[] = [];
-  let s = periodStartFor(createdAt, startDay);
+  let s = periodStartFor(createdAt, day);
   for (let i = 0; i < 240; i++) {
-    s = new Date(s.getFullYear(), s.getMonth() + 1, startDay);
+    s = new Date(s.getFullYear(), s.getMonth() + 1, day);
     if (s > end) break;
     dates.push(s);
   }
@@ -70,7 +91,13 @@ function installmentDates(createdAt: Date, end: Date, startDay: number): Date[] 
 }
 
 // Compares where the pot is today with where the plan says it should be.
-export function computeSchedule(pot: PotForInsights, balance: number, now = new Date(), startDay?: number): Schedule {
+export function computeSchedule(
+  pot: PotForInsights,
+  balance: number,
+  now = new Date(),
+  startDay?: number,
+  graceDays = DEFAULT_GRACE_DAYS
+): Schedule {
   if (!pot.target_amount || !pot.target_date) return { status: "none", difference: 0, expectedNow: balance };
   if (balance >= pot.target_amount) return { status: "done", difference: balance - pot.target_amount, expectedNow: pot.target_amount };
 
@@ -87,23 +114,38 @@ export function computeSchedule(pot: PotForInsights, balance: number, now = new 
       .reduce((sum, e) => sum + e.amount, 0);
   const end = new Date(pot.target_date);
 
-  const installments = startDay != null ? installmentDates(createdAt, end, startDay) : [];
+  // Money spent on the goal lowered the target; undo that on both sides so it
+  // does not look like falling behind.
+  const goalSpent = goalSpentOf(counted(pot));
+  const target = pot.target_amount + goalSpent;
+  const adjBalance = balance + goalSpent;
+
+  const depositDay = pot.schedule_day ?? startDay;
+  const installments = depositDay != null ? installmentDates(createdAt, end, depositDay) : [];
   let expectedNow: number;
   if (installments.length > 0) {
-    const perInstallment = (pot.target_amount - startBalance) / installments.length;
-    const graceMs = INSTALLMENT_GRACE_DAYS * 24 * 60 * 60 * 1000;
-    const due = installments.filter((d) => d.getTime() + graceMs <= now.getTime()).length;
-    expectedNow = Math.min(pot.target_amount, startBalance + perInstallment * due);
+    const perInstallment = (target - startBalance) / installments.length;
+    const graceMs = Math.max(0, graceDays) * DAY_MS;
+    let due = 0; // certainly due: the slack after the deposit day has passed
+    let inSlack = 0; // within the slack around the deposit day: either way is fine
+    for (const d of installments) {
+      const t = d.getTime();
+      if (now.getTime() >= t + graceMs + DAY_MS) due++;
+      else if (now.getTime() >= t - graceMs) inSlack++;
+    }
+    const low = startBalance + perInstallment * due;
+    const high = startBalance + perInstallment * (due + inSlack);
+    expectedNow = Math.min(target, Math.min(high, Math.max(low, adjBalance)));
   } else {
     const span = end.getTime() - createdAt.getTime();
     const fraction = span <= 0 ? 1 : Math.min(1, Math.max(0, (now.getTime() - createdAt.getTime()) / span));
-    expectedNow = startBalance + (pot.target_amount - startBalance) * fraction;
+    expectedNow = startBalance + (target - startBalance) * fraction;
   }
-  const difference = balance - expectedNow;
+  const difference = adjBalance - expectedNow;
   const tolerance = Math.max(5, pot.target_amount * 0.02);
   const status: ScheduleStatus =
     difference > tolerance ? "ahead" : difference < -tolerance ? "behind" : "on_track";
-  return { status, difference, expectedNow };
+  return { status, difference, expectedNow: expectedNow - goalSpent };
 }
 
 // When the target is reached if the recent pace continues; null = never at this pace.
@@ -121,12 +163,51 @@ export function netInPeriod(pot: PotForInsights, monthsAgo: number, startDay: nu
     .reduce((sum, e) => sum + e.amount, 0);
 }
 
+// What to put in during the period that starts at `periodStart`, so the pot is
+// on its schedule again afterwards: the period's installment plus whatever is
+// still missing from before, such as money taken out that was not for the goal
+// (it is added in full to the next deposit, not spread over the remaining
+// months). Undefined when there is no schedule to measure against yet.
+function amountToGetOnSchedule(
+  pot: PotForInsights,
+  baseBalance: number,
+  periodStart: Date,
+  startDay: number
+): number | undefined {
+  if (!pot.target_amount || !pot.target_date) return undefined;
+  const createdAt = pot.created_at ? new Date(pot.created_at) : periodStart;
+  const createdDay = createdAt.toISOString().slice(0, 10);
+  const entries = counted(pot);
+  const startBalance =
+    pot.opening_balance + entries.filter((e) => e.entry_date <= createdDay).reduce((sum, e) => sum + e.amount, 0);
+
+  const installments = installmentDates(createdAt, new Date(pot.target_date), pot.schedule_day ?? startDay);
+  const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, startDay);
+  const dueByPeriodEnd = installments.filter((d) => d < periodEnd).length;
+  if (installments.length === 0 || dueByPeriodEnd === 0) return undefined;
+
+  const target = pot.target_amount + goalSpentOf(entries);
+  const perInstallment = (target - startBalance) / installments.length;
+  const expectedAfter = Math.min(target, startBalance + perInstallment * dueByPeriodEnd);
+  const base = baseBalance + goalSpentOf(entries.filter((e) => e.entry_date < isoDate(periodStart)));
+  return expectedAfter - base;
+}
+
 // The monthly amount to save: either the fixed plan, or — when the plan is
 // automatic — whatever it takes to reach the target by the target date
 // (rounded up to whole euros). baseBalance should be the balance at the
 // start of the period so the amount doesn't shrink as you deposit into it.
-export function effectiveMonthly(pot: PotForInsights, baseBalance: number, ref: Date = new Date()): number | null {
+export function effectiveMonthly(
+  pot: PotForInsights,
+  baseBalance: number,
+  ref: Date = new Date(),
+  startDay?: number
+): number | null {
   if (pot.monthly_auto && pot.target_amount && pot.target_date) {
+    if (startDay != null) {
+      const needed = amountToGetOnSchedule(pot, baseBalance, ref, startDay);
+      if (needed !== undefined) return needed > 0.005 ? Math.ceil(needed - 0.005) : null;
+    }
     const required = computeRequiredMonthlyDeposit(baseBalance, pot.target_amount, pot.target_date, ref);
     return required && required > 0 ? Math.ceil(required) : null;
   }
@@ -178,7 +259,12 @@ export function planCatchUp(pot: PotForInsights, startDay: number, now = new Dat
   }
 
   const deposited = entries.filter((e) => e.entry_date >= isoDate(first)).reduce((sum, e) => sum + e.amount, 0);
-  const shortfall = Math.max(0, expected - deposited);
+  // Money taken out in an earlier period that was not for the goal has to go
+  // back in as well, on top of the plan.
+  const takenOut = counted(pot)
+    .filter((e) => e.amount < 0 && e.goal_spend === "no" && e.entry_date >= isoDate(first) && e.entry_date < isoDate(current))
+    .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+  const shortfall = Math.max(0, expected + takenOut - deposited);
   return { shortfall, pending: shortfall > 0.5 ? pending : [] };
 }
 
@@ -187,5 +273,5 @@ export function planCatchUp(pot: PotForInsights, startDay: number, now = new Dat
 // depositing during the month never changes what was expected for that month.
 export function periodMonthly(pot: PotForInsights, balance: number, startDay: number): number | null {
   const range = periodRange(0, startDay);
-  return effectiveMonthly(pot, balance - netInPeriod(pot, 0, startDay), range.startDate);
+  return effectiveMonthly(pot, balance - netInPeriod(pot, 0, startDay), range.startDate, startDay);
 }

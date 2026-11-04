@@ -14,7 +14,7 @@ export async function getPots() {
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
+      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, schedule_day, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -107,6 +107,15 @@ export async function updatePotOpeningBalance(potId: string, amount: number, dat
     .update({ opening_balance: amount || 0, opening_balance_date: date })
     .eq("id", potId);
   if (error) throw error;
+}
+
+// The day of the month the monthly deposit is due; null = start of your month.
+export async function setPotScheduleDay(potId: string, day: number | null) {
+  const supabase = await createClient();
+  const value = day == null ? null : Math.min(28, Math.max(1, Math.round(day)));
+  const { error } = await supabase.from("pots").update({ schedule_day: value }).eq("id", potId);
+  if (error) throw error;
+  revalidatePath("/", "layout");
 }
 
 export async function deletePot(potId: string) {

@@ -7,6 +7,7 @@ import {
   deletePot,
   deletePotEntry,
   setPotMonthlyPlan,
+  setPotScheduleDay,
   updatePotMatchText,
   updatePotOpeningBalance,
   updatePotTarget,
@@ -236,6 +237,57 @@ export function EntryForm({ potId, hasTarget }: { potId: string; hasTarget: bool
         </button>
       </div>
       <Message message={message} />
+    </div>
+  );
+}
+
+// The day of the month the monthly deposit is due: by default the start of your
+// month (the day your budget month begins), or a day of your own for this pot.
+export function ScheduleDayForm({
+  potId,
+  day,
+  startDay,
+}: {
+  potId: string;
+  day: number | null;
+  startDay: number;
+}) {
+  const [custom, setCustom] = useState(day != null);
+  const [value, setValue] = useState(day ?? startDay);
+  const save$ = useRun();
+  const choice = (active: boolean) =>
+    `min-h-[48px] flex-1 rounded-xl px-2 text-base font-medium ring-1 ${
+      active ? "bg-teal-700 text-white ring-teal-700" : "bg-white text-gray-800 ring-gray-300"
+    }`;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setCustom(false)} className={choice(!custom)}>
+          Begin van mijn maand ({startDay}e)
+        </button>
+        <button type="button" onClick={() => setCustom(true)} className={choice(custom)}>
+          Andere dag
+        </button>
+      </div>
+      {custom && (
+        <select value={value} onChange={(e) => setValue(Number(e.target.value))} className={input}>
+          {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+            <option key={d} value={d}>
+              Elke {d}e
+            </option>
+          ))}
+        </select>
+      )}
+      <button
+        type="button"
+        disabled={save$.isPending}
+        onClick={() => save$.run(async () => { await setPotScheduleDay(potId, custom ? value : null); return "Opgeslagen."; })}
+        className={primary}
+      >
+        Stortingsdag opslaan
+      </button>
+      <Message message={save$.message} />
     </div>
   );
 }

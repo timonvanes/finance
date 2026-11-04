@@ -5,7 +5,7 @@ import { computePotBalance } from "@/lib/pots/balance";
 import { computeSchedule, depositedInPeriod, netInPeriod, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./catch-up-card";
 import { periodRange } from "@/lib/month";
-import { getMonthStartDay } from "@/lib/settings";
+import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { InfoButton } from "../info-button";
 import { PlanRow } from "./plan-row";
 import { SavingsInbox } from "./inbox";
@@ -16,10 +16,11 @@ import { GoalSpendCard } from "./goal-spend-card";
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
 export default async function PotsPage() {
-  const [pots, inbox, startDay] = await Promise.all([
+  const [pots, inbox, startDay, graceDays] = await Promise.all([
     getPots(),
     getSavingsInbox(),
     getMonthStartDay(),
+    getPotGraceDays(),
   ]);
   const summary = pots.length > 0 ? await getDashboardSummary(0) : null;
 
@@ -145,7 +146,7 @@ export default async function PotsPage() {
           <ul className="space-y-3">
             {pots.map((pot) => {
               const balance = balances.get(pot.id) ?? 0;
-              const schedule = computeSchedule(pot, balance, new Date(), startDay);
+              const schedule = computeSchedule(pot, balance, new Date(), startDay, graceDays);
               const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
               return (
                 <li key={pot.id}>
