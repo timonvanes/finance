@@ -656,7 +656,7 @@ export default async function DashboardPage({
                 >
                   <div className="min-w-0">
                     <p className="truncate text-base font-medium text-gray-900">{r.counterpartyName}</p>
-                    <p className="text-sm text-gray-500">{r.occurrences}x in de laatste 90 dagen</p>
+                    <p className="text-sm text-gray-500">{r.occurrences}x in de laatste 4 maanden</p>
                   </div>
                   <span className="shrink-0 text-base font-medium text-gray-900">
                     ~{euro(r.averageAmount)}
@@ -666,7 +666,7 @@ export default async function DashboardPage({
             </ul>
           ) : (
             <p className={`${card} p-5 text-base text-gray-500`}>
-              Nog geen vaste lasten herkend — dit werkt beter zodra er meer historie is.
+              Nog geen vaste lasten herkend. Een vaste last verschijnt zodra dezelfde betaling 3 keer met vrijwel hetzelfde bedrag is voorgekomen.
             </p>
           )}
         </section>

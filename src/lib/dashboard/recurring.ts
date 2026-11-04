@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeCounterparty } from "@/lib/categorization/engine";
 
-const LOOKBACK_DAYS = 90;
-const MIN_OCCURRENCES = 2;
-const MAX_RELATIVE_SPREAD = 0.15; // amounts within ~15% of their average
+// Three monthly payments need a bit more than 90 days to all fall inside the
+// window, so look back about four months.
+const LOOKBACK_DAYS = 120;
+const MIN_OCCURRENCES = 3;
+const MAX_RELATIVE_SPREAD = 0.05; // practically the same amount: within 5% of the average
 
 export interface RecurringPayment {
   counterpartyName: string;
