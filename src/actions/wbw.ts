@@ -2,122 +2,162 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isoDate, periodRange, periodStartFor } from "@/lib/month";
+import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
-import { ensureWbwCategory } from "@/lib/wbw-fronted";
+import { ensureWbwCategory, getWbwFrontedRows } from "@/lib/wbw-fronted";
 
-type Db = Awaited<ReturnType<typeof createClient>>;
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-// What was fronted for others between two days (after `after`, up to and
-// including `until`): WieBetaaltWat reclaims tied to a transaction booked then
-// (regardless of paid/open — the fronting happened when the transaction
-// happened). !inner is required: without it the date filter only trims the
-// embedded transaction and every reclaim is still counted.
-async function frontedBetween(supabase: Db, after: string, until: string) {
-  const { data } = await supabase
-    .from("reclaims")
-    .select("computed_amount, transactions!reclaims_transaction_id_fkey!inner(booking_date)")
-    .eq("settlement_method", "external_app")
-    .gt("transactions.booking_date", after)
-    .lte("transactions.booking_date", until);
-  return (data ?? []).reduce((sum, r) => sum + Number(r.computed_amount), 0);
+// "Today" the way the user sees it (the server runs in UTC).
+const todayAmsterdam = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
+
+export interface WbwEntryRow {
+  id: string;
+  date: string;
+  kind: "balance" | "settlement";
+  amount: number;
+  transactionName: string | null;
 }
 
-async function frontedInPeriod(supabase: Db, start: string, end: string) {
-  const { data } = await supabase
-    .from("reclaims")
-    .select("computed_amount, transactions!reclaims_transaction_id_fkey!inner(booking_date)")
-    .eq("settlement_method", "external_app")
-    .gte("transactions.booking_date", start)
-    .lt("transactions.booking_date", end);
-  return (data ?? []).reduce((sum, r) => sum + Number(r.computed_amount), 0);
+export interface WbwCandidate {
+  id: string;
+  date: string;
+  name: string;
+  amount: number;
 }
-
-const dayOf = (iso: string) => iso.slice(0, 10);
 
 export async function getWbwStatus() {
   const supabase = await createClient();
   const startDay = await getMonthStartDay();
   const period = periodRange(0, startDay);
-  const prevPeriod = periodRange(1, startDay);
 
-  const [{ data: entries }, fronted, prevFronted] = await Promise.all([
+  const { data: entries } = await supabase
+    .from("wbw_entries")
+    .select("id, entry_date, kind, amount, transaction_id, created_at, transactions(counterparty_name)")
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(40);
+
+  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [rows, { data: recent }] = await Promise.all([
+    getWbwFrontedRows(),
     supabase
-      .from("wbw_balances")
-      .select("period_start, balance, created_at")
-      .order("period_start", { ascending: false })
-      .limit(2),
-    frontedInPeriod(supabase, period.start, period.end),
-    frontedInPeriod(supabase, prevPeriod.start, prevPeriod.end),
+      .from("visible_transactions")
+      .select("id, booking_date, amount, counterparty_name")
+      .eq("is_transfer", false)
+      .gte("booking_date", since)
+      .order("booking_date", { ascending: false })
+      .limit(60),
   ]);
 
-  const current = entries?.find((e) => e.period_start === period.start) ?? null;
-  const previous = entries?.find((e) => e.period_start !== period.start) ?? null;
-
-  // What you fronted for others since the previous balance was entered.
-  const frontedSincePrevious = previous
-    ? await frontedBetween(supabase, dayOf(previous.created_at), isoDate(new Date()))
-    : 0;
-  const expected = previous ? Number(previous.balance) + frontedSincePrevious : null;
+  const list: WbwEntryRow[] = (entries ?? []).map((e) => {
+    const tx = Array.isArray(e.transactions) ? e.transactions[0] : e.transactions;
+    return {
+      id: e.id,
+      date: e.entry_date,
+      kind: e.kind as "balance" | "settlement",
+      amount: Number(e.amount),
+      transactionName: tx?.counterparty_name ?? null,
+    };
+  });
+  const latest = list.find((e) => e.kind === "balance") ?? null;
+  const linked = new Set((entries ?? []).map((e) => e.transaction_id).filter(Boolean));
+  const candidates: WbwCandidate[] = (recent ?? [])
+    .filter((t) => !linked.has(t.id))
+    .map((t) => ({
+      id: t.id,
+      date: t.booking_date,
+      name: t.counterparty_name ?? "Onbekend",
+      amount: Number(t.amount),
+    }));
 
   return {
-    periodStart: period.start,
     periodLabel: period.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" }),
-    hasCurrent: Boolean(current),
-    currentBalance: current ? Number(current.balance) : null,
-    previousBalance: previous ? Number(previous.balance) : null,
-    frontedThisPeriod: fronted,
-    prevFrontedThisPeriod: prevFronted,
-    expected,
+    latestBalance: latest ? latest.amount : null,
+    latestDate: latest ? latest.date : null,
+    othersFrontedThisPeriod: rows.find((r) => r.period_start === period.start)?.amount ?? 0,
+    entries: list,
+    candidates,
   };
 }
 
-// Saves this period's WBW balance and, if a previous balance is known, books
-// the gap (others fronted more than expected) as an expense. The gap covers
-// the time between the two balance entries, so it is booked in the period that
-// stretch mostly falls in (usually the one that just ended), not in the period
-// the balance happens to be entered in.
-export async function saveWbwBalance(balance: number) {
+// A saldo can be filled in on any day, as often as you like. The same day twice
+// is a correction: the later one replaces the earlier. Returns {error} because
+// thrown messages are hidden in production.
+export async function saveWbwBalance(balance: number, date?: string): Promise<{ error?: string }> {
+  const day = date && ISO_DAY.test(date) ? date : todayAmsterdam();
+  if (!Number.isFinite(balance)) return { error: "Vul een geldig bedrag in." };
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Niet ingelogd.");
+  if (!user) return { error: "Niet ingelogd." };
 
-  const startDay = await getMonthStartDay();
-  const period = periodRange(0, startDay);
-
-  const { data: prevRows } = await supabase
-    .from("wbw_balances")
-    .select("period_start, balance, created_at")
-    .lt("period_start", period.start)
-    .order("period_start", { ascending: false })
-    .limit(1);
-  const previous = prevRows?.[0] ?? null;
-
+  await supabase.from("wbw_entries").delete().eq("kind", "balance").eq("entry_date", day);
   const { error } = await supabase
-    .from("wbw_balances")
-    .upsert(
-      { user_id: user.id, period_start: period.start, balance, created_at: new Date().toISOString() },
-      { onConflict: "user_id,period_start" }
-    );
-  if (error) throw error;
+    .from("wbw_entries")
+    .insert({ user_id: user.id, entry_date: day, kind: "balance", amount: Math.round(balance * 100) / 100 });
+  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
 
-  await supabase.from("wbw_fronted_expenses").delete().eq("balance_period_start", period.start);
-  if (previous) {
-    const now = new Date();
-    const fronted = await frontedBetween(supabase, dayOf(previous.created_at), isoDate(now));
-    const expected = Number(previous.balance) + fronted;
-    const gap = Math.round((expected - balance) * 100) / 100;
-    if (gap > 0.5) {
-      const midpoint = new Date((new Date(previous.created_at).getTime() + now.getTime()) / 2);
-      const bookedIn = isoDate(periodStartFor(midpoint, startDay));
-      const { error: expenseError } = await supabase
-        .from("wbw_fronted_expenses")
-        .insert({ user_id: user.id, period_start: bookedIn, balance_period_start: period.start, amount: gap });
-      if (expenseError) throw expenseError;
-      await ensureWbwCategory(supabase, user.id);
-    }
+  await ensureWbwCategory(supabase, user.id);
+  revalidatePath("/", "layout");
+  return {};
+}
+
+// Squaring up: money that went back and forth to bring the saldo toward 0.
+// received > 0 = you received, < 0 = you paid. It moves the saldo but is no
+// cost. A linked bank payment becomes an own-account transfer, so it counts as
+// neither income nor spending.
+export async function addWbwSettlement(
+  received: number,
+  date: string,
+  transactionId: string | null
+): Promise<{ error?: string }> {
+  if (!Number.isFinite(received) || received === 0) return { error: "Vul een bedrag in." };
+  if (!ISO_DAY.test(date)) return { error: "Kies een geldige datum." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Niet ingelogd." };
+
+  const { error } = await supabase.from("wbw_entries").insert({
+    user_id: user.id,
+    entry_date: date,
+    kind: "settlement",
+    amount: Math.round(received * 100) / 100,
+    transaction_id: transactionId,
+  });
+  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+
+  if (transactionId) {
+    await supabase
+      .from("transactions")
+      .update({ is_transfer: true, reviewed: true, flagged_for_reclaim: false })
+      .eq("id", transactionId);
   }
   revalidatePath("/", "layout");
+  return {};
+}
+
+export async function deleteWbwEntry(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: entry } = await supabase
+    .from("wbw_entries")
+    .select("id, kind, transaction_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!entry) return { error: "Niet gevonden." };
+
+  const { error } = await supabase.from("wbw_entries").delete().eq("id", id);
+  if (error) return { error: "Verwijderen mislukt." };
+
+  // The payment was made an own-account transfer for this entry; undo that.
+  if (entry.kind === "settlement" && entry.transaction_id) {
+    await supabase.from("transactions").update({ is_transfer: false }).eq("id", entry.transaction_id);
+  }
+  revalidatePath("/", "layout");
+  return {};
 }

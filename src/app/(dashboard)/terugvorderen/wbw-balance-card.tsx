@@ -2,98 +2,268 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveWbwBalance } from "@/actions/wbw";
+import { addWbwSettlement, deleteWbwEntry, saveWbwBalance } from "@/actions/wbw";
+import type { WbwCandidate, WbwEntryRow } from "@/actions/wbw";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+const today = () => new Date().toLocaleDateString("sv-SE");
+const shortDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+const toNumber = (s: string) => Number(s.replace(",", "."));
 
 export interface WbwStatus {
   periodLabel: string;
-  hasCurrent: boolean;
-  currentBalance: number | null;
-  previousBalance: number | null;
-  frontedThisPeriod: number;
-  expected: number | null;
+  latestBalance: number | null;
+  latestDate: string | null;
+  othersFrontedThisPeriod: number;
+  entries: WbwEntryRow[];
+  candidates: WbwCandidate[];
 }
 
-// Once a period: what does WieBetaaltWat (net over all groups) say you stand
-// at? The gap with what's expected (last balance + what you fronted this
-// period) becomes what housemates fronted for you.
+const toggle = (active: boolean, dark = false) =>
+  `min-h-[48px] flex-1 rounded-xl text-base font-medium ring-1 ${
+    active
+      ? dark
+        ? "bg-gray-900 text-white ring-gray-900"
+        : "bg-teal-700 text-white ring-teal-700"
+      : "bg-white text-gray-800 ring-gray-300"
+  }`;
+
+// Fill in your WieBetaaltWat saldo (net over all groups) on any day, as often
+// as you like, and square up ("recht trekken") when money goes back and forth.
+// What housemates fronted for you is worked out from those.
 export function WbwBalanceCard({ status }: { status: WbwStatus }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [sign, setSign] = useState<1 | -1>(status.currentBalance != null && status.currentBalance < 0 ? -1 : 1);
-  const [amount, setAmount] = useState(status.currentBalance != null ? String(Math.abs(status.currentBalance)) : "");
   const [error, setError] = useState<string | null>(null);
 
-  function save() {
+  const [sign, setSign] = useState<1 | -1>(status.latestBalance != null && status.latestBalance < 0 ? -1 : 1);
+  const [amount, setAmount] = useState("");
+  const [balanceDate, setBalanceDate] = useState(today());
+
+  const [dir, setDir] = useState<"in" | "out">("in");
+  const [settleAmount, setSettleAmount] = useState("");
+  const [settleDate, setSettleDate] = useState(today());
+  const [txId, setTxId] = useState("");
+
+  function run(fn: () => Promise<{ error?: string }>, after?: () => void) {
     setError(null);
-    const n = Number(amount.replace(",", "."));
+    startTransition(async () => {
+      const r = await fn();
+      if (r.error) {
+        setError(r.error);
+        return;
+      }
+      after?.();
+      router.refresh();
+    });
+  }
+
+  function saveBalance() {
+    const n = toNumber(amount);
     if (!Number.isFinite(n) || n < 0) {
       setError("Vul een geldig bedrag in.");
       return;
     }
-    startTransition(async () => {
-      try {
-        await saveWbwBalance(sign * n);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Opslaan mislukt");
-      }
-    });
+    run(
+      () => saveWbwBalance(sign * n, balanceDate),
+      () => setAmount("")
+    );
   }
+
+  function saveSettlement() {
+    const n = toNumber(settleAmount);
+    if (!Number.isFinite(n) || n <= 0) {
+      setError("Vul een geldig bedrag in.");
+      return;
+    }
+    run(
+      () => addWbwSettlement(dir === "in" ? n : -n, settleDate, txId || null),
+      () => {
+        setSettleAmount("");
+        setTxId("");
+      }
+    );
+  }
+
+  const candidates = status.candidates.filter((c) => (dir === "in" ? c.amount > 0 : c.amount < 0));
 
   return (
     <details className="rounded-2xl bg-white ring-1 ring-gray-200">
       <summary className="flex min-h-[60px] cursor-pointer list-none items-center justify-between gap-3 px-5 [&::-webkit-details-marker]:hidden">
         <span className="text-base font-medium text-gray-900">WieBetaaltWat</span>
         <span className="flex items-center gap-2">
-          {status.hasCurrent && (
-            <span className="text-base text-gray-600">{euro(status.currentBalance ?? 0)}</span>
+          {status.latestBalance != null && (
+            <span className="text-base text-gray-600">{euro(status.latestBalance)}</span>
           )}
           <span className="text-2xl text-gray-300">›</span>
         </span>
       </summary>
-      <div className="space-y-3 border-t border-gray-100 p-5">
-        <p className="text-sm text-gray-500">Saldo in WBW voor {status.periodLabel} (al je groepen samen)</p>
-        <div className="flex gap-2">
+
+      <div className="space-y-5 border-t border-gray-100 p-5">
+        <p className="text-sm text-gray-500">
+          Door huisgenoten voorgeschoten in {status.periodLabel}:{" "}
+          <span className="font-medium text-gray-900">{euro(status.othersFrontedThisPeriod)}</span>
+          {status.latestDate && <> (op basis van je saldo van {shortDate(status.latestDate)})</>}
+        </p>
+
+        <section className="space-y-3">
+          <h3 className="text-base font-medium text-gray-900">Saldo invullen</h3>
+          <p className="text-sm text-gray-500">
+            Op elke dag, zo vaak je wilt. Vul op de eerste dag van je maand in, dan sluit de vorige maand precies af.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setSign(1)} className={toggle(sign === 1)}>
+              Ik krijg nog
+            </button>
+            <button type="button" onClick={() => setSign(-1)} className={toggle(sign === -1, true)}>
+              Ik moet nog
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <label className="flex h-[52px] min-w-0 flex-1 items-center gap-1 rounded-xl border border-gray-300 bg-white px-3">
+              <span className="text-gray-400">€</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0,00"
+                className="h-full w-full min-w-0 bg-transparent text-lg outline-none"
+              />
+            </label>
+            <input
+              type="date"
+              value={balanceDate}
+              max={today()}
+              onChange={(e) => setBalanceDate(e.target.value)}
+              className="h-[52px] w-[150px] shrink-0 rounded-xl border border-gray-300 bg-white px-3 text-base"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => setSign(1)}
-            className={`min-h-[48px] flex-1 rounded-xl text-base font-medium ring-1 ${
-              sign === 1 ? "bg-teal-700 text-white ring-teal-700" : "bg-white text-gray-800 ring-gray-300"
-            }`}
+            disabled={isPending || !amount || !balanceDate}
+            onClick={saveBalance}
+            className="min-h-[48px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
           >
-            Ik krijg nog
+            {isPending ? "Bezig…" : "Saldo opslaan"}
           </button>
+        </section>
+
+        <section className="space-y-3 border-t border-gray-100 pt-5">
+          <h3 className="text-base font-medium text-gray-900">Recht trekken</h3>
+          <p className="text-sm text-gray-500">
+            Heb je met iemand afgerekend (Tikkie of overboeking), dan verandert je saldo zonder dat het een kost is.
+            Leg het hier vast, geheel of gedeeltelijk.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDir("in");
+                setTxId("");
+              }}
+              className={toggle(dir === "in")}
+            >
+              Ik ontving
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDir("out");
+                setTxId("");
+              }}
+              className={toggle(dir === "out", true)}
+            >
+              Ik betaalde
+            </button>
+          </div>
+          <select
+            value={txId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setTxId(id);
+              const c = status.candidates.find((x) => x.id === id);
+              if (c) {
+                setSettleAmount(String(Math.abs(c.amount)).replace(".", ","));
+                setSettleDate(c.date);
+              }
+            }}
+            className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900"
+          >
+            <option value="">Koppel bankbetaling (aanbevolen)…</option>
+            {candidates.map((c) => (
+              <option key={c.id} value={c.id}>
+                {shortDate(c.date)} · {c.name} · {euro(c.amount)}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <label className="flex h-[52px] min-w-0 flex-1 items-center gap-1 rounded-xl border border-gray-300 bg-white px-3">
+              <span className="text-gray-400">€</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={settleAmount}
+                onChange={(e) => setSettleAmount(e.target.value)}
+                placeholder="0,00"
+                className="h-full w-full min-w-0 bg-transparent text-lg outline-none"
+              />
+            </label>
+            <input
+              type="date"
+              value={settleDate}
+              max={today()}
+              onChange={(e) => setSettleDate(e.target.value)}
+              className="h-[52px] w-[150px] shrink-0 rounded-xl border border-gray-300 bg-white px-3 text-base"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => setSign(-1)}
-            className={`min-h-[48px] flex-1 rounded-xl text-base font-medium ring-1 ${
-              sign === -1 ? "bg-gray-900 text-white ring-gray-900" : "bg-white text-gray-800 ring-gray-300"
-            }`}
+            disabled={isPending || !settleAmount || !settleDate}
+            onClick={saveSettlement}
+            className="min-h-[48px] w-full rounded-xl border border-gray-300 text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
           >
-            Ik moet nog
+            Recht trekken vastleggen
           </button>
-        </div>
-        <label className="flex h-[52px] items-center gap-1 rounded-xl border border-gray-300 bg-white px-3">
-          <span className="text-gray-400">€</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0,00"
-            className="h-full w-full min-w-0 bg-transparent text-lg outline-none"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={isPending || !amount}
-          onClick={save}
-          className="min-h-[48px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
-        >
-          Opslaan
-        </button>
+          {txId && (
+            <p className="text-sm text-gray-500">
+              De gekoppelde bankbetaling wordt een overboeking en telt niet meer als inkomen of uitgave.
+            </p>
+          )}
+        </section>
+
+        {status.entries.length > 0 && (
+          <section className="space-y-2 border-t border-gray-100 pt-5">
+            <h3 className="text-base font-medium text-gray-900">Eerder ingevuld</h3>
+            <ul className="divide-y divide-gray-100">
+              {status.entries.map((e) => (
+                <li key={e.id} className="flex min-h-[48px] items-center justify-between gap-3 py-1">
+                  <span className="min-w-0 text-sm text-gray-700">
+                    <span className="text-gray-500">{shortDate(e.date)}</span>{" "}
+                    {e.kind === "balance"
+                      ? `Saldo ${euro(e.amount)}`
+                      : `${e.amount > 0 ? "Ontvangen" : "Betaald"} ${euro(Math.abs(e.amount))}${
+                          e.transactionName ? ` · ${e.transactionName}` : ""
+                        }`}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => {
+                      if (!confirm("Deze invulling verwijderen?")) return;
+                      run(() => deleteWbwEntry(e.id));
+                    }}
+                    className="min-h-[44px] shrink-0 px-2 text-sm font-medium text-red-600 disabled:opacity-50"
+                  >
+                    Wis
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
     </details>

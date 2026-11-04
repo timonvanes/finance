@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const todayOfMonth = new Date().getDate();
-    const { data: balanceUsers } = await admin.from("wbw_balances").select("user_id");
+    const { data: balanceUsers } = await admin.from("wbw_entries").select("user_id").eq("kind", "balance");
     const withBalances = [...new Set((balanceUsers ?? []).map((b) => b.user_id))];
     let sentWbw = 0;
     for (const userId of withBalances) {

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { dayIndexInPeriod, isoDate, periodKey, periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getContributionAdjustments, netExpenseAmount } from "@/lib/contributions/net-amount";
-import { WBW_CATEGORY } from "@/lib/wbw-fronted";
+import { WBW_CATEGORY, getWbwFrontedRows } from "@/lib/wbw-fronted";
 import { SAVINGS_CATEGORY, savingsEntriesInRange } from "@/lib/pots/savings-category";
 
 export async function getBudgets() {
@@ -110,11 +110,9 @@ export async function getBudgetStatus(): Promise<BudgetStatus[]> {
   const adjustments = { expenseReduction, sourceReduction };
 
   // What others fronted via WieBetaaltWat counts towards that category's budget.
-  const { data: frontedRows } = await supabase
-    .from("wbw_fronted_expenses")
-    .select("period_start, amount")
-    .gte("period_start", isoDate(earliest))
-    .lt("period_start", isoDate(latest));
+  const frontedRows = (await getWbwFrontedRows()).filter(
+    (r) => r.period_start >= isoDate(earliest) && r.period_start < isoDate(latest)
+  );
 
   // Money put into pots counts towards the savings budget.
   const savingsEntries = budgets.some((b) => {

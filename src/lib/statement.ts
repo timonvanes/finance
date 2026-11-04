@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getContributionAdjustments, netExpenseAmount, netIncomeAmount } from "@/lib/contributions/net-amount";
 import { SAVINGS_CATEGORY, savingsEntriesInRange } from "@/lib/pots/savings-category";
 import { addDays } from "@/lib/returns/deadline";
+import { getWbwFrontedRows } from "@/lib/wbw-fronted";
 
 export interface StatementTx {
   id: string;
@@ -107,11 +108,7 @@ export async function buildStatement(supabase: SupabaseClient, from: string, to:
     monthly.set(key, m);
   }
 
-  const { data: frontedRows } = await supabase
-    .from("wbw_fronted_expenses")
-    .select("period_start, amount")
-    .gte("period_start", from)
-    .lte("period_start", to);
+  const frontedRows = (await getWbwFrontedRows()).filter((r) => r.period_start >= from && r.period_start <= to);
   const fronted = (frontedRows ?? []).reduce((s, r) => s + Number(r.amount), 0);
   if (fronted > 0.5) {
     const group: CategoryGroup = { name: "Via WieBetaaltWat", total: 0, transactions: [] };

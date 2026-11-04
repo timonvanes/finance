@@ -47,7 +47,7 @@ async function spendByCategoryForRange(start: string, end: string, direction: "e
     }
   }
   if (direction === "expense") {
-    const fronted = await wbwFrontedInPeriod(supabase, start);
+    const fronted = await wbwFrontedInPeriod(start);
     if (fronted > 0) {
       totals.set(WBW_CATEGORY, (totals.get(WBW_CATEGORY) ?? 0) + fronted);
       txs.set(WBW_CATEGORY, [
@@ -166,7 +166,7 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
   const monthIncome = (monthTx ?? [])
     .filter((tx) => tx.amount > 0)
     .reduce((sum, tx) => sum + netIncomeAmount(tx.id, tx.amount, adjustments), 0);
-  const wbwFronted = await wbwFrontedInPeriod(supabase, start);
+  const wbwFronted = await wbwFrontedInPeriod(start);
   // Money put into pots (net of withdrawals) is spent, though it is not a cost.
   const [savingsNow, savingsPrev] = await Promise.all([
     savingsEntriesInRange(supabase, start, end),
