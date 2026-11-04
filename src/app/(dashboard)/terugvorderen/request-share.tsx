@@ -11,6 +11,7 @@ export function RequestShare({
   amount,
   referenceCode,
   description,
+  note,
   proofHref,
   kind,
   id,
@@ -21,6 +22,7 @@ export function RequestShare({
   amount: number;
   referenceCode: string | null;
   description: string;
+  note?: string | null;
   proofHref: string;
   kind: "reclaim" | "request";
   id: string;
@@ -135,7 +137,10 @@ export function RequestShare({
           onClick={() => {
             // Tikkie's payment_request deeplink (found in the app itself) opens
             // the create screen with amount (in cents) and description filled in.
-            const text = `${(desc.trim() || description).trim()} ${referenceCode}`.trim();
+            // The note typed with the reclaim becomes the Tikkie description,
+            // followed by the reference code in brackets.
+            const base = (note?.trim() || desc.trim() || description).trim();
+            const text = `${base} (${referenceCode})`.trim();
             const params = new URLSearchParams();
             const cents = Math.round(amount * 100);
             if (cents > 0) params.set("totalAmountInCents", String(cents));

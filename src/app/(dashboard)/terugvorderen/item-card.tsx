@@ -202,6 +202,11 @@ export function ItemCard({
           personName={personName}
           amount={item.amount}
           referenceCode={item.referenceCode}
+          note={
+            item.kind === "request"
+              ? (item.lines ?? []).map((l) => l.note?.trim()).filter(Boolean).join(", ") || null
+              : item.note?.trim() || null
+          }
           description={item.kind === "request" ? (item.lines ?? []).map((l) => l.title).join(", ") : item.description ?? item.title}
           proofHref={`/terugvorderen/bewijs/${item.kind}/${item.id}`}
           kind={item.kind}
