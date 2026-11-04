@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  changeReclaimMethod,
   deleteReclaim,
   linkReclaimToTransaction,
   markReclaimPaid,
@@ -308,6 +309,22 @@ export function ItemCard({
             </select>
           )}
         </div>
+      )}
+
+      {item.kind === "reclaim" && (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() =>
+            run(async () => {
+              const r = await changeReclaimMethod(item.id, isWbw ? "bank" : "external_app");
+              if (r.error) throw new Error(r.error);
+            })
+          }
+          className="min-h-[44px] w-full rounded-xl text-sm font-medium text-teal-700 active:bg-gray-50 disabled:opacity-50"
+        >
+          {isWbw ? "Toch via Tikkie / bank laten betalen" : "Toch via WieBetaaltWat laten lopen"}
+        </button>
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}

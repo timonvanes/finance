@@ -399,6 +399,42 @@ export async function unlinkReclaim(reclaimId: string) {
   }
 }
 
+// Switches an open reclaim between WieBetaaltWat and Tikkie/bank, either way.
+// To bank it gets a reference code (and is matched against payments that
+// already arrived); to WieBetaaltWat the code is dropped. Combined requests
+// are bank-only, so a reclaim inside one has to be taken out first. Returns
+// {error} instead of throwing because thrown messages are hidden in production.
+export async function changeReclaimMethod(
+  reclaimId: string,
+  method: "bank" | "external_app"
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: reclaim, error: fetchError } = await supabase
+    .from("reclaims")
+    .select("id, status, settlement_method, payment_request_id, reference_code")
+    .eq("id", reclaimId)
+    .single();
+  if (fetchError || !reclaim) return { error: "Terugvordering niet gevonden." };
+  if (reclaim.status !== "requested") return { error: "Deze terugvordering is al afgerond." };
+  if (reclaim.settlement_method === method) return {};
+  if (reclaim.payment_request_id) {
+    return { error: "Haal hem eerst uit het gecombineerde verzoek." };
+  }
+
+  const { error } = await supabase
+    .from("reclaims")
+    .update({
+      settlement_method: method,
+      reference_code: method === "bank" ? reclaim.reference_code ?? generateReferenceCode() : null,
+    })
+    .eq("id", reclaimId);
+  if (error) return { error: "Wijzigen mislukt. Probeer het opnieuw." };
+
+  if (method === "bank") await autoMatchNewReclaim(supabase, reclaimId);
+  revalidatePath("/", "layout");
+  return {};
+}
+
 export async function updateReclaimNote(reclaimId: string, note: string) {
   const supabase = await createClient();
   const { error } = await supabase
