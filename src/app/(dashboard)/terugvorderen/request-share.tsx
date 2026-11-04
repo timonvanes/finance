@@ -132,19 +132,20 @@ export function RequestShare({
       {referenceCode && (
         <button
           type="button"
-          onClick={async () => {
+          onClick={() => {
+            // Tikkie's payment_request deeplink (found in the app itself) opens
+            // the create screen with amount (in cents) and description filled in.
             const text = `${(desc.trim() || description).trim()} ${referenceCode}`.trim();
-            try {
-              await navigator.clipboard.writeText(text);
-              setNotice(`Gekopieerd: "${text}". Vul in Tikkie ${euro(amount)} in en plak de omschrijving.`);
-            } catch {
-              setNotice(`Vul in Tikkie ${euro(amount)} in met omschrijving: ${text}`);
-            }
-            window.location.href = "tikkie://";
+            const params = new URLSearchParams();
+            const cents = Math.round(amount * 100);
+            if (cents > 0) params.set("totalAmountInCents", String(cents));
+            params.set("description", text);
+            setNotice(`Tikkie opent met ${euro(amount)} en "${text}" al ingevuld. Maak het Tikkie en deel het via WhatsApp.`);
+            window.location.href = `tikkie://payment_request?${params.toString().replace(/\+/g, "%20")}`;
           }}
           className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-900 active:bg-gray-50"
         >
-          Open Tikkie (omschrijving kopiëren)
+          Open Tikkie (bedrag en omschrijving ingevuld)
         </button>
       )}
       {bunqUrl && (
