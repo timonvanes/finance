@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { checkBunqPayments, createBunqPaymentLink } from "@/actions/bunq";
+import { updatePaymentRequestNote } from "@/actions/payment-requests";
+import { updateReclaimNote } from "@/actions/reclaims";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -32,7 +34,10 @@ export function RequestShare({
   const router = useRouter();
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [desc, setDesc] = useState(description);
+  // What you typed is kept (as the note) so it is still there next time;
+  // the transaction description is only the starting point.
+  const [desc, setDesc] = useState(note?.trim() || description);
+  const [savedNote, setSavedNote] = useState(note?.trim() ?? "");
   const [bunqUrl, setBunqUrl] = useState<string | null>(
     bunqLink && Math.abs(bunqLink.amount - amount) < 0.005 ? bunqLink.url : null
   );
@@ -43,6 +48,34 @@ export function RequestShare({
     const lines = [`${text} (${euro(amount)})`];
     if (referenceCode) lines.push(`Zet "${referenceCode}" erbij in de omschrijving.`);
     return lines.join("\n");
+  }
+
+  async function saveNote() {
+    const v = desc.trim();
+    const toSave = v === description.trim() ? "" : v;
+    if (toSave === savedNote) return;
+    try {
+      if (kind === "reclaim") await updateReclaimNote(id, toSave);
+      else await updatePaymentRequestNote(id, toSave);
+      setSavedNote(toSave);
+    } catch {
+      // not critical: the text stays in the field
+    }
+  }
+
+  // Tikkie's payment_request deeplink (found in the app itself) opens the
+  // create screen with the amount (in cents) and description filled in. The
+  // description is what you typed, with the reference code in brackets.
+  function openTikkie() {
+    void saveNote();
+    const base = (desc.trim() || description).trim();
+    const text = referenceCode ? `${base} (${referenceCode})` : base;
+    const params = new URLSearchParams();
+    const cents = Math.round(amount * 100);
+    if (cents > 0) params.set("totalAmountInCents", String(cents));
+    params.set("description", text);
+    setNotice(`Tikkie opent met ${euro(amount)} en "${text}" al ingevuld. Maak het Tikkie en deel het via WhatsApp.`);
+    window.location.href = `tikkie://payment_request?${params.toString().replace(/\+/g, "%20")}`;
   }
 
   async function makeLink() {
@@ -111,19 +144,30 @@ export function RequestShare({
       <input
         value={desc}
         onChange={(e) => setDesc(e.target.value)}
+        onBlur={saveNote}
         disabled={Boolean(bunqUrl)}
         placeholder="Omschrijving voor het bericht"
         className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base disabled:bg-gray-50 disabled:text-gray-500"
       />
       <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={bunqEnabled && !bunqUrl ? makeLink : share}
-          className="min-h-[52px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
-        >
-          {busy ? "Bezig…" : bunqEnabled && !bunqUrl ? "Maak betaalverzoek" : "Vraag terug"}
-        </button>
+        {bunqEnabled ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={bunqUrl ? share : makeLink}
+            className="min-h-[52px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
+          >
+            {busy ? "Bezig…" : bunqUrl ? "Vraag terug" : "Maak betaalverzoek"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={openTikkie}
+            className="min-h-[52px] flex-1 rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800"
+          >
+            Maak Tikkie aan
+          </button>
+        )}
         <Link
           href={proofHref}
           className="flex min-h-[52px] flex-1 items-center justify-center rounded-xl border border-gray-300 text-base font-medium text-gray-900 active:bg-gray-50"
@@ -131,26 +175,13 @@ export function RequestShare({
           Overzicht / bewijs
         </Link>
       </div>
-      {referenceCode && (
+      {bunqEnabled && (
         <button
           type="button"
-          onClick={() => {
-            // Tikkie's payment_request deeplink (found in the app itself) opens
-            // the create screen with amount (in cents) and description filled in.
-            // The note typed with the reclaim becomes the Tikkie description,
-            // followed by the reference code in brackets.
-            const base = (note?.trim() || desc.trim() || description).trim();
-            const text = `${base} (${referenceCode})`.trim();
-            const params = new URLSearchParams();
-            const cents = Math.round(amount * 100);
-            if (cents > 0) params.set("totalAmountInCents", String(cents));
-            params.set("description", text);
-            setNotice(`Tikkie opent met ${euro(amount)} en "${text}" al ingevuld. Maak het Tikkie en deel het via WhatsApp.`);
-            window.location.href = `tikkie://payment_request?${params.toString().replace(/\+/g, "%20")}`;
-          }}
+          onClick={openTikkie}
           className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-900 active:bg-gray-50"
         >
-          Open Tikkie (bedrag en omschrijving ingevuld)
+          Maak Tikkie aan
         </button>
       )}
       {bunqUrl && (

@@ -21,7 +21,14 @@ export const getInvestReminderDay = cache(async (): Promise<number | null> => {
   return data?.invest_reminder_day ?? null;
 });
 
-export const getCalendarToken = cache(async (): Promise<string | null> => {
+// bunq payment links need a paid bunq plan, so they are off unless switched on.
+export const getBunqPaymentLinksEnabled = cache(async (): Promise<boolean> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("use_bunq_payment_links").maybeSingle();
+  return data?.use_bunq_payment_links === true;
+});
+
+export const getCalendarToken =cache(async (): Promise<string | null> => {
   const supabase = await createClient();
   const { data } = await supabase.from("user_settings").select("calendar_token").maybeSingle();
   return data?.calendar_token ?? null;

@@ -9,7 +9,7 @@ export async function getPaymentRequests() {
   const { data, error } = await supabase
     .from("payment_requests")
     .select(
-      `id, person_id, reference_code, tikkie_link, status, paid_at, created_at, settled_transaction_id,
+      `id, person_id, reference_code, tikkie_link, note, status, paid_at, created_at, settled_transaction_id,
       people(name, person_groups(name)),
       reclaims(id, computed_amount, source_total_amount, note, receipt_path, transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, counterparty_iban, raw_description, amount)),
       settled_transaction:transactions!payment_requests_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -17,6 +17,16 @@ export async function getPaymentRequests() {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
+}
+
+// The description for the Tikkie / message, kept so it stays when you leave the page.
+export async function updatePaymentRequestNote(paymentRequestId: string, note: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("payment_requests")
+    .update({ note: note.trim() || null })
+    .eq("id", paymentRequestId);
+  if (error) throw error;
 }
 
 // Bundles several open, not-yet-combined reclaims for the SAME person into

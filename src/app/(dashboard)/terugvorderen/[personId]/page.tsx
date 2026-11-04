@@ -3,6 +3,7 @@ import { getReclaims, getUnlinkedIncomingTransactions } from "@/actions/reclaims
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { getBunqLinks } from "@/actions/bunq";
 import { isBunqConfigured } from "@/lib/bunq/client";
+import { getBunqPaymentLinksEnabled } from "@/lib/settings";
 import { ItemCard, type OpenItem } from "../item-card";
 import { TxDetails } from "../tx-details";
 
@@ -15,7 +16,7 @@ export default async function PersonPage({
   params: Promise<{ personId: string }>;
 }) {
   const { personId } = await params;
-  const bunqEnabled = isBunqConfigured();
+  const bunqEnabled = isBunqConfigured() && (await getBunqPaymentLinksEnabled());
   const [reclaims, paymentRequests, incoming, bunqLinks] = await Promise.all([
     getReclaims(),
     getPaymentRequests(),
@@ -135,6 +136,7 @@ export default async function PersonPage({
         method: "bank",
         referenceCode: pr.reference_code,
         bunqLink: bunqFor("request", pr.id),
+        note: pr.note,
         lines,
       });
     } else {

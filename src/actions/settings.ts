@@ -42,6 +42,23 @@ export async function setInvestReminderDay(day: number | null) {
   if (error) throw error;
 }
 
+export async function setBunqPaymentLinksEnabled(enabled: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      { user_id: user.id, use_bunq_payment_links: enabled, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+  if (error) throw error;
+  revalidatePath("/", "layout");
+}
+
 export async function setDashboardModuleVisible(key: string, visible: boolean) {
   if (!DASHBOARD_MODULES.some((m) => m.key === key)) throw new Error("Onbekend onderdeel.");
   const supabase = await createClient();

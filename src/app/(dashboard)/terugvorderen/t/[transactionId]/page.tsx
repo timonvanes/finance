@@ -3,6 +3,7 @@ import { getReclaims, getUnlinkedIncomingTransactions } from "@/actions/reclaims
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { getBunqLinks } from "@/actions/bunq";
 import { isBunqConfigured } from "@/lib/bunq/client";
+import { getBunqPaymentLinksEnabled } from "@/lib/settings";
 import { ItemCard, type OpenItem } from "../../item-card";
 import { TxDetails } from "../../tx-details";
 import { DoneActions } from "../../done-actions";
@@ -16,7 +17,7 @@ export default async function TransactionReclaimsPage({
   params: Promise<{ transactionId: string }>;
 }) {
   const { transactionId } = await params;
-  const bunqEnabled = isBunqConfigured();
+  const bunqEnabled = isBunqConfigured() && (await getBunqPaymentLinksEnabled());
   const [reclaims, paymentRequests, incoming, bunqLinks] = await Promise.all([
     getReclaims(),
     getPaymentRequests(),

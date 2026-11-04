@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getMonthStartDay, getInvestReminderDay } from "@/lib/settings";
+import { getMonthStartDay, getInvestReminderDay, getBunqPaymentLinksEnabled } from "@/lib/settings";
 
 const GROUPS: {
   title: string;
@@ -7,7 +7,7 @@ const GROUPS: {
     href: string;
     label: string;
     description: string;
-    value?: (ctx: { startDay: number; investDay: number | null }) => string;
+    value?: (ctx: { startDay: number; investDay: number | null; bunqLinks: boolean }) => string;
   }[];
 }[] = [
   {
@@ -85,12 +85,22 @@ const GROUPS: {
         label: "Personen en groepen",
         description: "Voor terugvorderingen en leningen",
       },
+      {
+        href: "/settings/betaalverzoeken",
+        label: "Betaalverzoeken",
+        description: "Tikkie of bunq-betaallink bij een terugvordering",
+        value: ({ bunqLinks }) => (bunqLinks ? "Tikkie + bunq" : "Tikkie"),
+      },
     ],
   },
 ];
 
 export default async function SettingsPage() {
-  const [startDay, investDay] = await Promise.all([getMonthStartDay(), getInvestReminderDay()]);
+  const [startDay, investDay, bunqLinks] = await Promise.all([
+    getMonthStartDay(),
+    getInvestReminderDay(),
+    getBunqPaymentLinksEnabled(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -121,7 +131,7 @@ export default async function SettingsPage() {
                     <span className="block text-sm text-gray-500">{item.description}</span>
                   </span>
                   {item.value && (
-                    <span className="shrink-0 text-base text-gray-500">{item.value({ startDay, investDay })}</span>
+                    <span className="shrink-0 text-base text-gray-500">{item.value({ startDay, investDay, bunqLinks })}</span>
                   )}
                   <span className="text-2xl text-gray-300">›</span>
                 </Link>
