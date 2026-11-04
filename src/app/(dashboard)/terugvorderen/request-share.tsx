@@ -129,6 +129,24 @@ export function RequestShare({
           Overzicht / bewijs
         </Link>
       </div>
+      {referenceCode && (
+        <button
+          type="button"
+          onClick={async () => {
+            const text = `${(desc.trim() || description).trim()} ${referenceCode}`.trim();
+            try {
+              await navigator.clipboard.writeText(text);
+              setNotice(`Gekopieerd: "${text}". Vul in Tikkie ${euro(amount)} in en plak de omschrijving.`);
+            } catch {
+              setNotice(`Vul in Tikkie ${euro(amount)} in met omschrijving: ${text}`);
+            }
+            window.location.href = "tikkie://";
+          }}
+          className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-900 active:bg-gray-50"
+        >
+          Open Tikkie (omschrijving kopiëren)
+        </button>
+      )}
       {bunqUrl && (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-teal-50 px-4 py-3 text-sm text-teal-900">
           <span>
