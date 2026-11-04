@@ -24,9 +24,12 @@ export default function WbwTestPage() {
     { url: `splitser://lists/${id}`, needsId: true },
     { url: `https://app.wiebetaaltwat.nl/lists/${id}/insights`, needsId: true },
     { url: `splitser://lists/${id}/insights`, needsId: true },
-    { url: `https://app.wiebetaaltwat.nl/lists/${id}/payments/new`, needsId: true },
-    { url: `https://app.wiebetaaltwat.nl/lists/${id}/payments/create`, needsId: true },
-    { url: `https://app.wiebetaaltwat.nl/lists/${id}/payments/new?amount=12.50&description=Testcode%20ABCD`, needsId: true },
+    // The website's own pages (found in its code): the list's transactions and "add expense".
+    { url: `https://app.wiebetaaltwat.nl/lists/${id}/transactions`, needsId: true },
+    { url: `https://app.wiebetaaltwat.nl/lists/${id}/transactions/create`, needsId: true },
+    { url: `https://app.wiebetaaltwat.nl/lists/${id}/transactions/create?amount=12.50&description=Testcode%20ABCD`, needsId: true },
+    { url: `splitser://lists/${id}/transactions/create`, needsId: true },
+    { url: `https://app.wiebetaaltwat.nl/lists/${id}/balance`, needsId: true },
   ];
 
   return (
