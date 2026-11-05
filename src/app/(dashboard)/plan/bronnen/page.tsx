@@ -20,6 +20,58 @@ const GROUPS: Group[] = [
 
 const nl = (n: number, d = 2) => n.toLocaleString("nl-NL", { maximumFractionDigits: d });
 
+const dateNl = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+
+// Where this assumption comes from, when it was checked and when it is due again.
+function MetaLine({ id }: { id: string }) {
+  const { doc, today, setMeta, markChecked } = usePlan();
+  const m = doc.meta[id];
+  const field = "min-h-[40px] w-full rounded-lg border border-gray-300 bg-white px-2 text-sm";
+  const cur = m ?? { source: "", checkedOn: today, nextCheck: today };
+  return (
+    <div className="space-y-1">
+      {m ? (
+        <p className="text-xs text-gray-500">
+          Bron: {m.url ? <a href={m.url} target="_blank" rel="noreferrer" className="text-teal-700 underline">{m.source}</a> : m.source}. Gecontroleerd {dateNl(m.checkedOn)}, volgende controle {dateNl(m.nextCheck)}.
+          {m.nextCheck < today && <span className="font-medium text-amber-700"> Controle is aan de beurt.</span>}
+        </p>
+      ) : (
+        <p className="text-xs text-gray-400">Nog geen bron of controledatum vastgelegd.</p>
+      )}
+      {m?.note && <p className="text-xs text-gray-500">{m.note}</p>}
+      <details className="text-xs">
+        <summary className="min-h-[36px] cursor-pointer py-2 text-teal-700">Bron en controle aanpassen</summary>
+        <div className="space-y-2 rounded-lg bg-gray-50 p-3">
+          <input className={field} value={cur.source} onChange={(e) => setMeta(id, { source: e.target.value })} placeholder="Bron, of: eigen aanname" />
+          <input className={field} value={cur.url ?? ""} onChange={(e) => setMeta(id, { url: e.target.value || undefined })} placeholder="Link naar de bron" />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-gray-500">Gecontroleerd op</span>
+              <input type="date" className={field} value={cur.checkedOn} onChange={(e) => setMeta(id, { checkedOn: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-gray-500">Volgende controle</span>
+              <input type="date" className={field} value={cur.nextCheck} onChange={(e) => setMeta(id, { nextCheck: e.target.value })} />
+            </label>
+          </div>
+          <input className={field} value={cur.note ?? ""} onChange={(e) => setMeta(id, { note: e.target.value || undefined })} placeholder="Opmerking" />
+          <button
+            type="button"
+            onClick={() => {
+              const d = new Date(`${today}T12:00:00`);
+              d.setMonth(d.getMonth() + 6);
+              markChecked(id, d.toISOString().slice(0, 10));
+            }}
+            className="min-h-[40px] font-medium text-teal-700 underline"
+          >
+            Vandaag gecontroleerd, volgende over 6 maanden
+          </button>
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export default function SourcesPage() {
   const { b, x, app } = usePlan();
 
@@ -79,6 +131,7 @@ export default function SourcesPage() {
                 </div>
                 <SrcBadge src={f.src} />
                 <p className="text-xs leading-relaxed text-gray-600">{whyText(f, app)}</p>
+                <MetaLine id={f.id} />
               </li>
             ))}
           </ul>

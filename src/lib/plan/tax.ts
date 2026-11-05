@@ -250,12 +250,12 @@ export interface TransferTaxInput {
   newBuild: boolean;
   ages: number[]; // age of each buyer on the day of delivery
   shares: number[]; // each buyer's share of the home (adds up to 1)
-  limitGrowthPct: number;
+  limit: number; // the starter's limit for that year
 }
 
 export function transferTax(i: TransferTaxInput) {
-  if (i.newBuild) return { tax: 0, rate: 0, exemptShare: 1, limit: starterLimit(i.year, i.limitGrowthPct), note: "Nieuwbouw: geen overdrachtsbelasting (btw zit in de prijs)." };
-  const limit = starterLimit(i.year, i.limitGrowthPct);
+  const limit = i.limit;
+  if (i.newBuild) return { tax: 0, rate: 0, exemptShare: 1, limit, note: "Nieuwbouw: geen overdrachtsbelasting (btw zit in de prijs)." };
   let tax = 0;
   let exempt = 0;
   i.ages.forEach((age, n) => {
@@ -282,10 +282,14 @@ export function mortgageInterestRelief(args: {
   woz: number;
   ewfPct: number;
   bracketRate: number;
+  maxRate?: number; // the maximum rate of the relief in that year
+  factorPct?: number; // how much of today's relief is left (policy may change)
 }) {
   const forfait = (args.woz * args.ewfPct) / 100;
   const net = args.interestYear - forfait;
-  const rate = net >= 0 ? Math.min(args.bracketRate, R2) : args.bracketRate;
+  const cap = args.maxRate ?? R2;
+  const factor = (args.factorPct ?? 100) / 100;
+  const rate = net >= 0 ? Math.min(args.bracketRate, cap) * factor : args.bracketRate;
   return { forfait, deductible: net, benefit: net * rate, rate };
 }
 

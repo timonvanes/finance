@@ -1,9 +1,9 @@
 import { loanFromMonthly, monthlyForLoan, type HouseInputs } from "@/lib/house/calc";
+import { lawFor, type LawResolved } from "./law";
 import {
   box3Tax,
   mortgageInterestRelief,
   netYear,
-  nhgLimit,
   transferTax,
   type NetResult,
 } from "./tax";
@@ -35,6 +35,11 @@ export function dateAtMonth(startIso: string, m: number) {
 }
 
 const yearAtMonth = (startIso: string, m: number) => dateAtMonth(startIso, m).getFullYear();
+
+// The rules of a year (limits, box 3, relief), from the table the plan keeps.
+export function lawAt(x: Extra, year: number): LawResolved {
+  return lawFor(x.law, year, x.limitGrowthPct, x.box3ExemptStress > 0 ? x.box3ExemptStress : null);
+}
 const growth = (pct: number, months: number) => Math.pow(1 + pct / 100, months / 12);
 const mRate = (annualPct: number) => Math.pow(1 + annualPct / 100, 1 / 12) - 1;
 
@@ -56,6 +61,10 @@ export interface PayRow {
   marginalRate: number;
   bracketRate: number;
   fromInput: { you: boolean; partner: boolean };
+  // what a bank counts: salary plus fixed extra pay, without bonus
+  countedYou: number;
+  countedPartner: number;
+  bonus: number;
 }
 
 function salaryPath(base: number, growthPct: number, explicit: Record<string, number>, fromYear: number, toYear: number) {
@@ -74,15 +83,25 @@ function salaryPath(base: number, growthPct: number, explicit: Record<string, nu
 export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[] {
   const { b, x } = p;
   const you = salaryPath(b.incomeGrossYear, x.salaryGrowthPct, x.salaryYou, fromYear, toYear);
-  const partner = salaryPath(b.partnerIncomeGrossYear, x.partnerGrowthPct, x.salaryPartner, fromYear, toYear);
+  // The partner starts to earn in her own first year; the salary entered is that of the first year.
+  const pStart = x.partnerStartYear > 0 ? Math.max(fromYear, x.partnerStartYear) : fromYear;
+  const partner = salaryPath(b.partnerIncomeGrossYear, x.partnerGrowthPct, x.salaryPartner, pStart, Math.max(toYear, pStart));
   const opt = { indexPct: x.taxIndexPct };
+  const extraShare = 1 + x.fixedExtraPct / 100 + x.bonusPct / 100;
+  // Lease car: the addition is taxed as income, but it is not cash.
+  const taxedYear = (salary: number, pensionPct: number, y: number) => {
+    const withExtra = salary * extraShare;
+    const lease = salary > 0 ? x.leaseTaxableYear : 0;
+    const r = netYear(withExtra + lease, pensionPct, y, opt);
+    return lease > 0 ? { ...r, gross: withExtra, net: r.net - lease, avgRate: withExtra > 0 ? r.tax / withExtra : 0 } : r;
+  };
   const rows: PayRow[] = [];
   for (let y = fromYear; y <= toYear; y++) {
     const yv = you.get(y)!;
-    const pv = partner.get(y)!;
-    const netYou = netYear(yv.v, x.pensionPct, y, opt);
+    const pv = y >= pStart ? partner.get(y)! : { v: 0, fromInput: false };
+    const netYou = taxedYear(yv.v, x.pensionPct, y);
     const withPartner = x.buyingTogether && pv.v > 0;
-    const netPartner = withPartner ? netYear(pv.v, x.partnerPensionPct, y, opt) : null;
+    const netPartner = withPartner ? taxedYear(pv.v, x.partnerPensionPct, y) : null;
     const gross = netYou.gross + (netPartner?.gross ?? 0);
     const net = netYou.net + (netPartner?.net ?? 0);
     const tax = netYou.tax + (netPartner?.tax ?? 0);
@@ -100,6 +119,9 @@ export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[
       marginalRate: netYou.marginalRate,
       bracketRate: Math.max(netYou.bracketRate, netPartner?.bracketRate ?? 0),
       fromInput: { you: yv.fromInput, partner: pv.fromInput },
+      countedYou: yv.v * (1 + x.fixedExtraPct / 100),
+      countedPartner: withPartner ? pv.v * (1 + x.fixedExtraPct / 100) : 0,
+      bonus: (yv.v + (withPartner ? pv.v : 0)) * (x.bonusPct / 100),
     });
   }
   return rows;
@@ -179,8 +201,8 @@ export function capacityAt(p: PlanInput, m: number, study: StudyPoint[], priceNo
   const rows = payroll(p, yearAtMonth(x.startDate, 0), year);
   const row = rows[rows.length - 1];
   const counted =
-    row.grossYou * CONTRACT_FACTOR[x.contractYou] +
-    (row.netPartner ? row.grossPartner * CONTRACT_FACTOR[x.contractPartner] : 0);
+    row.countedYou * CONTRACT_FACTOR[x.contractYou] +
+    (row.netPartner ? row.countedPartner * CONTRACT_FACTOR[x.contractPartner] : 0);
   const pct = financingPct(counted, x.finPctOverride);
   const maxMonthly = (counted * pct) / 100 / 12;
   const sp = study[Math.min(m, study.length - 1)];
@@ -193,7 +215,7 @@ export function capacityAt(p: PlanInput, m: number, study: StudyPoint[], priceNo
   const credit = x.creditLimit * 0.02;
   const total = studyMonthly + loans + credit + x.leaseMonth + x.alimonyMonth;
   const available = Math.max(0, maxMonthly - total);
-  const nhgOn = x.nhgMode === "yes" || (x.nhgMode === "auto" && priceNominal <= nhgLimit(year, x.limitGrowthPct));
+  const nhgOn = x.nhgMode === "yes" || (x.nhgMode === "auto" && priceNominal <= lawAt(x, year).nhgLimit);
   const rate = Math.max(0, b.rate - (nhgOn ? x.nhgRateDiscount : 0) + rateShock);
   const testRate = x.testRate > 0 ? x.testRate + rateShock : rate;
   const loan = loanFromMonthly(available, testRate, b.termYears);
@@ -223,9 +245,16 @@ export function mortgageCosts(p: PlanInput, loan: number, rate: number, year: nu
   }
   const principal = loan - bal;
   const woz = (priceNominal * x.wozPct) / 100;
-  const relief = mortgageInterestRelief({ interestYear: interest, woz, ewfPct: x.ewfPct, bracketRate });
+  const law = lawAt(x, year);
+  const relief = mortgageInterestRelief({
+    interestYear: interest,
+    woz,
+    ewfPct: x.ewfPct,
+    bracketRate,
+    maxRate: law.reliefMaxRate,
+    factorPct: x.reliefFactorPct,
+  });
   const netMonthly = monthly - relief.benefit / 12;
-  void year;
   return { monthly, interestYear: interest, principalYear: principal, woz, relief, netMonthly };
 }
 
@@ -261,7 +290,9 @@ export interface Purchase {
   m: number;
   year: number;
   date: string;
-  price: number;
+  price: number; // the asking price in that year
+  paid: number; // what you really pay: asking price plus overbidding
+  bid: number;
   cap: Capacity;
   loan: number;
   loanMode: string;
@@ -304,6 +335,9 @@ export function purchaseAt(p: PlanInput, m: number, study: StudyPoint[]): Purcha
   const year = yearAtMonth(x.startDate, m);
   const infl = growth(x.inflationPct, m);
   const price = b.targetPrice * growth(x.priceGrowthPct, m);
+  // The bank lends on the valuation (about the asking price); overbidding comes from own money.
+  const bid = price * (x.bidPct / 100);
+  const paid = price + bid;
   const renovation = x.renovation * infl;
   const cap = capacityAt(p, m, study, price);
   const rows = payroll(p, yearAtMonth(x.startDate, 0), year);
@@ -311,7 +345,7 @@ export function purchaseAt(p: PlanInput, m: number, study: StudyPoint[]): Purcha
   const maxLtv = price + renovation + x.energyLoan;
   const ages = x.buyingTogether && row.netPartner ? [year - x.birthYear, year - x.partnerBirthYear] : [year - x.birthYear];
   const shares = ages.length === 2 ? [x.sharePctYou / 100, 1 - x.sharePctYou / 100] : [1];
-  const transfer = transferTax({ price, year, newBuild: x.newBuild, ages, shares, limitGrowthPct: x.limitGrowthPct });
+  const transfer = transferTax({ price: paid, year, newBuild: x.newBuild, ages, shares, limit: lawAt(x, year).starterLimit });
 
   const netMonthlyIncome = row.netMonthly;
   const costItems = (Object.keys(COST_LABELS) as (keyof typeof x.costs)[]).map((k) => ({
@@ -353,12 +387,14 @@ export function purchaseAt(p: PlanInput, m: number, study: StudyPoint[]): Purcha
   const housingFixed = mortgage.netMonthly + fixedRunning;
   const housingVsRent = mortgage.netMonthly + running.total - running.energy;
   const buffer = x.bufferMonths * (otherSpending + mortgage.monthly + running.total);
-  const ownFunds = Math.max(0, price + renovation + costsTotal - loan);
+  const ownFunds = Math.max(0, paid + renovation + costsTotal - loan);
   return {
     m,
     year,
     date: iso(dateAtMonth(x.startDate, m)),
     price,
+    paid,
+    bid,
     cap,
     loan,
     loanMode,
@@ -411,8 +447,27 @@ export function contributionFor(p: PlanInput, year: number): Contribution {
   const x = p.x;
   const explicit = x.contrib[String(year)];
   if (explicit) return explicit;
-  const f = Math.pow(1 + x.contribGrowthPct / 100, year - Number(x.startDate.slice(0, 4)));
-  return { save: p.b.monthlySave * f, bonds: x.monthlyBonds * f, invest: p.b.monthlyInvest * f };
+  // Nothing goes in before the first salary; growth counts from that year.
+  const from = x.contribStartYear || Number(x.startDate.slice(0, 4));
+  if (year < from) return { save: 0, bonds: 0, invest: 0 };
+  const f = Math.pow(1 + x.contribGrowthPct / 100, year - from);
+  const pf = x.buyingTogether && (x.partnerStartYear === 0 || year >= x.partnerStartYear) ? f : 0;
+  return {
+    save: (p.b.monthlySave + x.partnerMonthlySave * (pf > 0 ? 1 : 0)) * f,
+    bonds: x.monthlyBonds * f,
+    invest: (p.b.monthlyInvest + x.partnerMonthlyInvest * (pf > 0 ? 1 : 0)) * f,
+  };
+}
+
+// What is in the accounts at the start, with the partner's part when buying together.
+export function startBalances(p: PlanInput) {
+  const { b, x } = p;
+  const together = x.buyingTogether;
+  return {
+    save: b.startSavings + (together ? x.partnerStartSavings : 0),
+    bonds: x.startBonds,
+    stocks: b.startInvest + (together ? x.partnerStartInvest : 0),
+  };
 }
 
 // Random numbers shared by all strategies, so they are compared on equal terms.
@@ -459,15 +514,17 @@ interface SimArgs {
   months: number; // simulated months
   target: number; // purchase month index (for the glide path)
   paths: number;
+  fast?: boolean; // only the random paths: skips the three fixed scenarios
 }
 
 export function simulate(p: PlanInput, study: StudyPoint[], a: SimArgs): SimResult {
   const { b, x } = p;
   const M = a.months;
-  const startTotal = b.startSavings + x.startBonds + b.startInvest;
+  const sb = startBalances(p);
+  const startTotal = sb.save + sb.bonds + sb.stocks;
   const start: Alloc = a.alloc
     ? { save: startTotal * a.alloc.save, bonds: startTotal * a.alloc.bonds, stocks: startTotal * a.alloc.stocks }
-    : { save: b.startSavings, bonds: x.startBonds, stocks: b.startInvest };
+    : { save: sb.save, bonds: sb.bonds, stocks: sb.stocks };
   const startYear = Number(x.startDate.slice(0, 4));
   const repayMonth = Math.max(0, monthsBetween(x.startDate, `${x.studyRepayYear}-01-01`));
   const glideM = Math.max(1, x.glideYears * 12);
@@ -576,7 +633,7 @@ export function simulate(p: PlanInput, study: StudyPoint[], a: SimArgs): SimResu
       // box 3, once a year (in the first month of the year)
       if (dateAtMonth(x.startDate, m).getMonth() === 0) {
         const debts = study[Math.min(m, study.length - 1)].balance;
-        const t = box3Tax(S, B + A, debts, x.box3Persons, x.box3);
+        const t = box3Tax(S, B + A, debts, x.box3Persons, lawAt(x, dateAtMonth(x.startDate, m).getFullYear()).box3);
         if (t.tax > 0) {
           let need = t.tax;
           const fromS = Math.min(S, need);
@@ -604,11 +661,14 @@ export function simulate(p: PlanInput, study: StudyPoint[], a: SimArgs): SimResu
       const i = idxOf.get(m);
       if (i !== undefined) arr[i] = t;
     });
-  det(low, { bonds: x.bondsLow, stocks: b.returnLow });
-  box3Paid = 0;
-  det(mid, { bonds: x.bondsMid, stocks: b.returnMid });
-  const box3Mid = box3Paid;
-  det(high, { bonds: x.bondsHigh, stocks: b.returnHigh });
+  let box3Mid = 0;
+  if (!a.fast) {
+    det(low, { bonds: x.bondsLow, stocks: b.returnLow });
+    box3Paid = 0;
+    det(mid, { bonds: x.bondsMid, stocks: b.returnMid });
+    box3Mid = box3Paid;
+    det(high, { bonds: x.bondsHigh, stocks: b.returnHigh });
+  }
 
   const z = normals(a.paths, M);
   const values: Float32Array[] = checkpoints.map(() => new Float32Array(a.paths));
@@ -878,6 +938,28 @@ function buildInsights(p: PlanInput, r: PlanResult, wealthT: number): Insight[] 
     if (saveNow > free + 50) {
       add("warn", "De geplande inleg past niet in wat je overhoudt", `Gemiddeld bleef er de laatste maanden ${eur(free)} per maand over vóór sparen, en je plant ${eur(saveNow)} in.`);
     }
+  }
+
+  // 9. the extra variables
+  if (x.buyingTogether && pu.ages.length === 1) {
+    add("warn", "Je koopt samen, maar je partner heeft in dat jaar nog geen inkomen", `Het inkomen van je partner telt pas mee als je een bruto inkomen invult bij Inkomen. Het plan rekent nu met alleen jouw inkomen. Haar startjaar staat op ${x.partnerStartYear || "nu"}.`);
+  }
+  if (x.bidPct > 0) {
+    add("info", `Overbieden kost je ${eur(pu.bid)}`, `Bij ${x.bidPct.toString().replace(".", ",")}% boven de vraagprijs betaal je ${eur(pu.paid)} in plaats van ${eur(pu.price)}. De bank leent op de taxatiewaarde, dus dit bedrag komt uit je eigen geld. Het is niet af te trekken van je hypotheek.`);
+  }
+  if (x.reliefFactorPct < 100) {
+    add("info", `Hypotheekrenteaftrek staat op ${x.reliefFactorPct}%`, `Je rekent met ${x.reliefFactorPct}% van de huidige aftrek. Dat scheelt je ${eur(pu.mortgage.relief.benefit / Math.max(0.0001, x.reliefFactorPct / 100) - pu.mortgage.relief.benefit)} per jaar vergeleken met de regels van vandaag.`);
+  }
+  if (x.emergencyMonths > 0 && x.fixedCostsMonth > 0) {
+    const target = x.emergencyMonths * x.fixedCostsMonth;
+    const first = contributionFor(p, Math.max(r.startYear, x.contribStartYear || r.startYear));
+    const perMonth = first.save + first.bonds + first.invest;
+    const monthsToFill = perMonth > 0 ? Math.ceil(target / perMonth) : null;
+    add("info", `Noodbuffer: ${eur(target)}`, monthsToFill === null ? `${x.emergencyMonths} maanden aan vaste lasten van ${eur(x.fixedCostsMonth)}. Er gaat nog niets in, dus de buffer vult zich niet.` : `${x.emergencyMonths} maanden aan vaste lasten van ${eur(x.fixedCostsMonth)}. Bij ${eur(perMonth)} inleg per maand duurt het ${monthsToFill} maanden (${(monthsToFill / 12).toFixed(1).replace(".", ",")} jaar) voor die vol is. Tot dan telt wat je overhoudt niet als geld voor de woning. Na de aankoop is dit hetzelfde geld als de buffer in het plan.`);
+  }
+  const ruleOfThumb = (pu.cap.counted * 4.25);
+  if (pu.cap.counted > 0 && Math.abs(ruleOfThumb - pu.cap.loan) / Math.max(1, ruleOfThumb) > 0.15) {
+    add("info", "Vuistregel en rekenmodel verschillen", `De vuistregel 4,25 keer bruto inkomen geeft ${eur(ruleOfThumb)}. Het plan rekent met het Nibud-percentage, je verplichtingen en de rente en komt op ${eur(pu.cap.loan)}. Het verschil komt door je studielening, de rente en de looptijd.`);
   }
 
   // 8. waiting

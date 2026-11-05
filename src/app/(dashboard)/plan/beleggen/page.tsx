@@ -42,7 +42,7 @@ export default function InvestPage() {
           <Row label="Totaal" value={euro(total0)} strong />
           <Row label="Inleg per maand" value={euro(monthly0)} sub={`${euro(b.monthlySave)} sparen · ${euro(x.monthlyBonds)} obligaties · ${euro(b.monthlyInvest)} beleggen`} />
         </List>
-        <Grid ids={["startSavings", "startBonds", "startInvest", "monthlySave", "monthlyBonds", "monthlyInvest", "contribGrowthPct"]} />
+        <Grid ids={["startSavings", "startBonds", "startInvest", "monthlySave", "monthlyBonds", "monthlyInvest", "contribStartYear", "contribGrowthPct", "emergencyMonths", "fixedCostsMonth"]} />
       </Block>
 
       <Block title={`Welke verdeling haalt ${euro(need)} in ${pu.year}?`} sub="Zelfde totaalbedrag en inleg, verschillende verdeling. De kans is het aandeel van de simulaties waarin je het haalt.">

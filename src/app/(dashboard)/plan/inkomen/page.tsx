@@ -4,15 +4,9 @@ import { Banner, Block, Grid, Legend, LineChart, Note, NumberBox, SrcBadge, euro
 import { usePlan } from "../plan-provider";
 
 export default function IncomePage() {
-  const { result: r, x, patchX } = usePlan();
+  const { result: r, x, setSalary, clearSalaries } = usePlan();
   const rows = r.pay.filter((p) => p.year <= r.purchase.year + 3);
-  const setYear = (who: "salaryYou" | "salaryPartner", year: number, n: number) =>
-    patchX((cur) => {
-      const next = { ...cur[who] };
-      if (n > 0) next[String(year)] = n;
-      else delete next[String(year)];
-      return { ...cur, [who]: next };
-    });
+  const setYear = setSalary;
   const edited = Object.keys(x.salaryYou).length + Object.keys(x.salaryPartner).length;
 
   return (
@@ -31,6 +25,9 @@ export default function IncomePage() {
             "pensionPct",
             "partnerPensionPct",
             "taxIndexPct",
+            "fixedExtraPct",
+            "bonusPct",
+            "leaseTaxableYear",
           ]}
         />
         <Note>
@@ -80,7 +77,7 @@ export default function IncomePage() {
         {edited > 0 && (
           <button
             type="button"
-            onClick={() => patchX((cur) => ({ ...cur, salaryYou: {}, salaryPartner: {} }))}
+            onClick={clearSalaries}
             className="min-h-[44px] text-sm text-red-600 underline"
           >
             Alle aangepaste jaren wissen ({edited})

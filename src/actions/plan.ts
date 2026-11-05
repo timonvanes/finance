@@ -13,8 +13,14 @@ import { getMonthStartDay } from "@/lib/settings";
 import { periodRange } from "@/lib/month";
 import { summarize } from "@/lib/debts/calc";
 import { todayAmsterdam } from "@/lib/wbw/record";
-import type { HouseInputs } from "@/lib/house/calc";
-import { defaultExtra, mergeExtra, type AppData, type Extra, type StudyLoanData } from "@/lib/plan/types";
+import { defaultExtra, mergeExtra, type AppData, type PlanDoc, type StudyLoanData, type VariantOverride } from "@/lib/plan/types";
+import { seedDoc } from "@/lib/plan/scenarios";
+
+const normVariant = (v: Partial<VariantOverride> | undefined): VariantOverride => ({
+  fields: v?.fields ?? {},
+  salaryYou: v?.salaryYou ?? {},
+  salaryPartner: v?.salaryPartner ?? {},
+});
 
 const MONTH_NAMES = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 
@@ -27,7 +33,7 @@ export async function getPlanData() {
     getHousePlanData(),
     getPots(),
     getDebts(),
-    supabase.from("house_plans").select("extra").maybeSingle(),
+    supabase.from("house_plans").select("extra, doc").maybeSingle(),
   ]);
 
   // pots: savings and investing apart
@@ -112,18 +118,39 @@ export async function getPlanData() {
     today,
   };
 
-  // extra settings: stored ones win; otherwise start from what the app knows
-  const stored = (planRow.data as { extra?: unknown } | null)?.extra ?? null;
-  const fresh = defaultExtra(today);
-  fresh.buyingTogether = house.inputs.partnerIncomeGrossYear > 0;
-  fresh.otherSpendingMonth = Math.round(app.avgSpentExSaving);
-  fresh.studyRepayYear = Number(today.slice(0, 4));
-  const extra = stored ? mergeExtra(stored, today) : fresh;
-
-  return { b: house.inputs, x: extra, app, saved: house.saved, hasExtra: Boolean(stored) };
+  // The plan document: stored scenarios win. On the first visit it is built from the
+  // starting scenarios A and B, and what was filled in before is kept as a scenario.
+  const row = planRow.data as { extra?: unknown; doc?: unknown } | null;
+  const storedDoc = row?.doc as PlanDoc | null | undefined;
+  let doc: PlanDoc;
+  if (storedDoc && Array.isArray(storedDoc.scenarios) && storedDoc.scenarios.length > 0) {
+    doc = {
+      ...storedDoc,
+      scenarios: storedDoc.scenarios.map((sc) => ({
+        ...sc,
+        x: mergeExtra(sc.x, today),
+        variants: {
+          stress: normVariant(sc.variants?.stress),
+          gunstig: normVariant(sc.variants?.gunstig),
+        },
+      })),
+      meta: storedDoc.meta ?? {},
+      history: storedDoc.history ?? [],
+      snapshots: storedDoc.snapshots ?? [],
+    };
+  } else {
+    const hadPlan = house.saved;
+    const oldX = row?.extra ? mergeExtra(row.extra, today) : defaultExtra(today);
+    doc = seedDoc(app, hadPlan ? { b: house.inputs, x: oldX } : null);
+  }
+  return { doc, app, hasDoc: Boolean(storedDoc) };
 }
 
-export async function savePlan(b: HouseInputs, x: Extra) {
+export async function savePlan(doc: PlanDoc) {
+  const active = doc.scenarios.find((s) => s.id === doc.activeId) ?? doc.scenarios[0];
+  if (!active) return { error: "Er is geen scenario om op te slaan." };
+  const b = active.b;
+  const x = active.x;
   if (!b.targetDate) return { error: "Kies een streefdatum." };
   if (!(b.targetPrice > 0)) return { error: "Vul een prijs in." };
   const supabase = await createClient();
@@ -153,6 +180,7 @@ export async function savePlan(b: HouseInputs, x: Extra) {
       return_mid: b.returnMid,
       return_high: b.returnHigh,
       extra: x,
+      doc,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" }

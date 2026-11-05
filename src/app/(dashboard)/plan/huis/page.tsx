@@ -64,6 +64,7 @@ export default function HousePage() {
             "targetDate",
             "targetPrice",
             "priceGrowthPct",
+            "bidPct",
             "inflationPct",
             "newBuild",
             "renovation",
@@ -81,7 +82,8 @@ export default function HousePage() {
 
       <Block title="Wat het kost bij de aankoop" sub={`In ${pu.year}, in euro's van dat jaar. Tik op een regel voor de berekening.`}>
         <List>
-          <Row label="Koopprijs" value={euro(pu.price)} />
+          <Row label="Vraagprijs" value={euro(pu.price)} />
+          {pu.bid > 0 && <Row label="Overbod" value={euro(pu.bid)} how={`${x.bidPct}% boven de vraagprijs. De bank leent op de taxatiewaarde (ongeveer de vraagprijs), dus dit komt uit je eigen geld.`} />}
           {pu.renovation > 0 && <Row label="Verbouwing" value={euro(pu.renovation)} />}
           {pu.costItems.map((c) => (
             <Row
@@ -164,7 +166,7 @@ export default function HousePage() {
       </Block>
 
       <Section title="Personen en contract" hint="Voor de startersvrijstelling en hoe banken je inkomen tellen">
-        <Grid ids={["birthYear", "buyingTogether", "partnerBirthYear", "sharePctYou", "contractYou", "contractPartner"]} />
+        <Grid ids={["birthYear", "buyingTogether", "partnerBirthYear", "sharePctYou", "contractYou", "contractPartner", "partnerStartYear", "partnerStartSavings", "partnerStartInvest", "partnerMonthlySave", "partnerMonthlyInvest"]} />
       </Section>
     </div>
   );

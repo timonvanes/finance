@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { FIELD_BY_ID, whyText } from "@/lib/plan/fields";
-import { SOURCE_LABEL, type Source } from "@/lib/plan/types";
-import { usePlan } from "./plan-provider";
+import { FIELD_BY_ID, VARIANT_FIELDS, whyText } from "@/lib/plan/fields";
+import { SOURCE_LABEL, VARIANTS, type Source } from "@/lib/plan/types";
+import { fieldValue, usePlan } from "./plan-provider";
 
 export const euro = (n: number, digits = 0) =>
   n.toLocaleString("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: digits, minimumFractionDigits: digits });
@@ -71,7 +71,7 @@ export function NumberBox({
 
 // A field of the plan, drawn from the registry: name, source and the why.
 export function F({ id }: { id: string }) {
-  const { b, x, app, setField } = usePlan();
+  const { b, x, app, setField, scenario, variant, doc } = usePlan();
   const f = FIELD_BY_ID.get(id);
   const [open, setOpen] = useState(false);
   if (!f) return null;
@@ -122,6 +122,26 @@ export function F({ id }: { id: string }) {
       </div>
       {control}
       {open && <p className="mt-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">{whyText(f, app)}</p>}
+      {VARIANT_FIELDS.has(id) && (
+        <p className="mt-1 text-[11px] text-gray-500">
+          {VARIANTS.map((vv, i) => {
+            const val = fieldValue(scenario, vv.key, id);
+            const txt = typeof val === "number" ? `${String(Math.round(val * 100) / 100).replace(".", ",")}${f.unit === "%" ? "%" : f.unit === "€" ? " euro" : ""}` : String(val ?? "");
+            return (
+              <span key={vv.key} className={vv.key === variant ? "font-semibold text-gray-800" : ""}>
+                {i > 0 && " · "}
+                {vv.label} {txt}
+              </span>
+            );
+          })}
+        </p>
+      )}
+      {doc.meta[id] && (
+        <p className="mt-1 text-[11px] text-gray-400">
+          Gecontroleerd {new Date(doc.meta[id].checkedOn).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+          {doc.meta[id].nextCheck < app.today && <span className="font-medium text-amber-700"> · controle is aan de beurt</span>}
+        </p>
+      )}
       {differs && (
         <button type="button" onClick={() => setField(id, Math.round(appVal))} className="mt-1 text-xs text-sky-700 underline">
           Je app zegt {euro(appVal)}, gebruik dat

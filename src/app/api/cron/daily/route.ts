@@ -108,6 +108,37 @@ export async function GET(request: NextRequest) {
     report.investReminders = e instanceof Error ? e.message : "failed";
   }
 
+  // The financial plan: assumptions whose check date has passed. Once a month, on
+  // the 5th, and only when something is due.
+  try {
+    const todayIso = todayAmsterdam();
+    let planReminders = 0;
+    if (todayIso.slice(8, 10) === "05") {
+      const { data: plans } = await admin.from("house_plans").select("user_id, doc");
+      for (const row of plans ?? []) {
+        const meta = ((row.doc as { meta?: Record<string, { nextCheck?: string }> } | null)?.meta ?? {}) as Record<string, { nextCheck?: string }>;
+        const due = Object.values(meta).filter((m) => m.nextCheck && m.nextCheck <= todayIso).length;
+        const month = Number(todayIso.slice(5, 7));
+        const seasonal = month === 10 || month === 1;
+        if (due === 0 && !seasonal) continue;
+        await sendPush(row.user_id, "plan_update", {
+          title: "Financieel plan bijwerken",
+          body:
+            due > 0
+              ? `${due} ${due === 1 ? "aanname moet" : "aannames moeten"} gecontroleerd worden.${seasonal ? (month === 10 ? " Na Prinsjesdag: werk ook de wetsparameters bij." : " Nieuw jaar: leg je saldi en salaris vast.") : ""}`
+              : month === 10
+                ? "Na Prinsjesdag: werk de wetsparameters van het volgende jaar bij."
+                : "Nieuw jaar: leg je saldi, salaris en studieschuld vast.",
+          url: "/plan/update",
+        });
+        planReminders++;
+      }
+    }
+    report.planReminders = planReminders;
+  } catch (e) {
+    report.planReminders = e instanceof Error ? e.message : "failed";
+  }
+
   try {
     const { data: parts } = await admin
       .from("debt_parts")

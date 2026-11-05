@@ -6,7 +6,7 @@ import { usePlan } from "./plan-provider";
 import { extraPerMonth } from "@/lib/plan/model";
 
 export default function PlanOverview() {
-  const { result: r, b, x, calculating, hasExtra } = usePlan();
+  const { result: r, b, x, calculating, hasDoc } = usePlan();
   const pu = r.purchase;
   const T = r.targetMonth;
   const ti = r.sim.checkpoints.indexOf(T);
@@ -17,7 +17,7 @@ export default function PlanOverview() {
 
   return (
     <div className={`space-y-4 ${calculating ? "opacity-70" : ""}`}>
-      {!hasExtra && (
+      {!hasDoc && (
         <Banner level="info" title="Dit is je startpunt">
           Het plan is vooringevuld met wat de app weet: je potjes, je studielening en je inkomsten en uitgaven van de laatste maanden. Loop de tabbladen langs en pas aan wat niet klopt. Bij elk getal staat waar het vandaan komt. Tik op het label om het te lezen.
         </Banner>
@@ -72,6 +72,17 @@ export default function PlanOverview() {
           </p>
         )}
       </section>
+
+      <Link
+        href="/plan/scenarios"
+        className="flex min-h-[64px] items-center gap-3 rounded-2xl bg-white px-5 py-3 ring-1 ring-gray-200 active:bg-gray-50"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-medium text-gray-900">Hoeveel moet ik per maand sparen?</span>
+          <span className="block text-sm text-gray-500">Reken het uit per scenario en variant, en zie wat je in welk jaar kunt kopen.</span>
+        </span>
+        <span className="text-2xl text-gray-300">›</span>
+      </Link>
 
       <Block title="Hoe je vermogen zich ontwikkelt" sub={`Het groene vlak loopt van de slechtste 10% tot de beste 10% van ${600} gesimuleerde verlopen. Rood is wat je nodig hebt.`}>
         <LineChart

@@ -1,13 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { getPlanData } from "@/actions/plan";
+import { PlanHeader } from "./plan-header";
 import { PlanProvider } from "./plan-provider";
 import { SubNav } from "./sub-nav";
 
 export default async function PlanLayout({ children }: { children: ReactNode }) {
   const data = await getPlanData();
   return (
-    <PlanProvider initialB={data.b} initialX={data.x} app={data.app} hasExtra={data.hasExtra}>
+    <PlanProvider initialDoc={data.doc} app={data.app} hasDoc={data.hasDoc}>
       <div className="space-y-4 pb-16">
         <div className="flex items-center gap-2">
           <Link
@@ -22,6 +23,7 @@ export default async function PlanLayout({ children }: { children: ReactNode }) 
             <p className="text-xs text-gray-500">Huis, inkomen, belasting, studielening, sparen en beleggen</p>
           </div>
         </div>
+        <PlanHeader />
         <SubNav />
         {children}
       </div>

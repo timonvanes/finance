@@ -5,6 +5,8 @@ import { Banner, Block, Grid, List, Note, Row, Section, euro, pct } from "../ui"
 import { usePlan } from "../plan-provider";
 import { LAW_YEAR, box3Tax } from "@/lib/plan/tax";
 import type { NetResult } from "@/lib/plan/tax";
+import { lawFor, type LawYear } from "@/lib/plan/law";
+import { NumberBox } from "../ui";
 
 function Person({ title, n }: { title: string; n: NetResult }) {
   return (
@@ -26,6 +28,62 @@ function Person({ title, n }: { title: string; n: NetResult }) {
   );
 }
 
+function LawEditor() {
+  const { x, patchX, app } = usePlan();
+  const rows = [...x.law].sort((a, c) => a.year - c.year);
+  const set = (year: number, fn: (r: LawYear) => LawYear) =>
+    patchX((cur) => ({ ...cur, law: cur.law.map((r) => (r.year === year ? fn(r) : r)) }));
+  const pctField = (label: string, year: number, get: (r: LawYear) => number, put: (r: LawYear, n: number) => LawYear, unit = "%") => (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-xs text-gray-600">{label}</span>
+      <NumberBox value={get(rows.find((r) => r.year === year)!)} onChange={(n) => set(year, (r) => put(r, n))} unit={unit} />
+    </label>
+  );
+  return (
+    <Block title="Wetsparameters per jaar" sub="Na Prinsjesdag vul je hier het volgende jaar in. Voor jaren zonder rij geldt de laatste rij.">
+      {rows.map((r) => (
+        <Section key={r.year} title={String(r.year)} hint={`Gecontroleerd ${new Date(r.checkedOn).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}${r.checkedOn < app.today && r.year >= Number(app.today.slice(0, 4)) ? "" : ""}`} open={r.year === Number(app.today.slice(0, 4))}>
+          <div className="grid grid-cols-2 gap-3">
+            {pctField("NHG-kostengrens", r.year, (q) => q.nhgLimit, (q, n) => ({ ...q, nhgLimit: n }), "€")}
+            {pctField("Grens startersvrijstelling", r.year, (q) => q.starterLimit, (q, n) => ({ ...q, starterLimit: n }), "€")}
+            {pctField("Max. aftrektarief hypotheekrente", r.year, (q) => q.reliefMaxRate * 100, (q, n) => ({ ...q, reliefMaxRate: n / 100 }))}
+            {pctField("Heffingsvrij vermogen p.p.", r.year, (q) => q.box3.exemptPerPerson, (q, n) => ({ ...q, box3: { ...q.box3, exemptPerPerson: n } }), "€")}
+            {pctField("Fictief rendement sparen", r.year, (q) => q.box3.savingsReturnPct, (q, n) => ({ ...q, box3: { ...q.box3, savingsReturnPct: n } }))}
+            {pctField("Fictief rendement beleggen", r.year, (q) => q.box3.otherReturnPct, (q, n) => ({ ...q, box3: { ...q.box3, otherReturnPct: n } }))}
+            {pctField("Fictieve rente schulden", r.year, (q) => q.box3.debtReturnPct, (q, n) => ({ ...q, box3: { ...q.box3, debtReturnPct: n } }))}
+            {pctField("Tarief box 3", r.year, (q) => q.box3.ratePct, (q, n) => ({ ...q, box3: { ...q.box3, ratePct: n } }))}
+            {pctField("Schuldendrempel p.p.", r.year, (q) => q.box3.debtThresholdPerPerson, (q, n) => ({ ...q, box3: { ...q.box3, debtThresholdPerPerson: n } }), "€")}
+          </div>
+          <p className="text-xs text-gray-500">
+            Bron: {r.url ? <a href={r.url} target="_blank" rel="noreferrer" className="text-teal-700 underline">{r.source}</a> : r.source}
+          </p>
+          {r.note && <p className="text-xs text-gray-500">{r.note}</p>}
+          <button
+            type="button"
+            onClick={() => set(r.year, (q) => ({ ...q, checkedOn: app.today }))}
+            className="min-h-[44px] text-sm text-teal-700 underline"
+          >
+            Markeer als gecontroleerd vandaag
+          </button>
+        </Section>
+      ))}
+      <button
+        type="button"
+        onClick={() =>
+          patchX((cur) => {
+            const last = [...cur.law].sort((a, c) => a.year - c.year).pop()!;
+            return { ...cur, law: [...cur.law, { ...last, year: last.year + 1, box3: { ...last.box3 }, checkedOn: app.today, note: "Overgenomen van het jaar ervoor: controleer na Prinsjesdag." }] };
+          })
+        }
+        className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-900 active:bg-gray-50"
+      >
+        + Volgend jaar toevoegen
+      </button>
+      <Note>De belastingschijven en heffingskortingen staan vast in het plan op de regels van 2026 en stijgen daarna mee met de indexatie die je instelt.</Note>
+    </Block>
+  );
+}
+
 export default function TaxPage() {
   const { result: r, x, b, app } = usePlan();
   const [year, setYear] = useState(r.purchase.year);
@@ -35,7 +93,7 @@ export default function TaxPage() {
   const totalTax = r.pay.filter((p) => p.year >= r.startYear && p.year <= pu.year).reduce((s, p) => s + p.tax, 0);
   const totalGross = r.pay.filter((p) => p.year >= r.startYear && p.year <= pu.year).reduce((s, p) => s + p.gross, 0);
   const studyDebtNow = app.study.hasLoan ? app.study.balanceNow : 0;
-  const b3 = box3Tax(b.startSavings, b.startInvest + x.startBonds, studyDebtNow, x.box3Persons, x.box3);
+  const b3 = box3Tax(b.startSavings, b.startInvest + x.startBonds, studyDebtNow, x.box3Persons, lawFor(x.law, r.startYear, x.limitGrowthPct, null).box3);
 
   return (
     <div className="space-y-4">
@@ -126,8 +184,8 @@ export default function TaxPage() {
         <List>
           <Row label="Sparen" value={euro(b.startSavings)} />
           <Row label="Obligaties en beleggingen" value={euro(b.startInvest + x.startBonds)} />
-          {studyDebtNow > 0 && <Row label="Studielening (schuld)" value={`− ${euro(studyDebtNow)}`} sub={`telt pas mee boven ${euro(x.box3.debtThresholdPerPerson * x.box3Persons)}`} />}
-          <Row label="Heffingsvrij" value={`− ${euro(x.box3.exemptPerPerson * x.box3Persons)}`} />
+          {studyDebtNow > 0 && <Row label="Studielening (schuld)" value={`− ${euro(studyDebtNow)}`} sub={`telt pas mee boven ${euro(lawFor(x.law, r.startYear, x.limitGrowthPct, null).box3.debtThresholdPerPerson * x.box3Persons)}`} />}
+          <Row label="Heffingsvrij" value={`− ${euro(lawFor(x.law, r.startYear, x.limitGrowthPct, null).box3.exemptPerPerson * x.box3Persons)}`} />
           <Row label="Fictief rendement" value={pct(b3.effectivePct, 2)} how="Gewogen gemiddelde van de percentages voor sparen, beleggen en schulden." />
           <Row label="Box 3 belasting per jaar" value={euro(b3.tax)} strong />
         </List>
@@ -135,22 +193,10 @@ export default function TaxPage() {
       </Block>
 
       <Section title="Belastingaannames aanpassen">
-        <Grid
-          ids={[
-            "taxIndexPct",
-            "pensionPct",
-            "partnerPensionPct",
-            "ewfPct",
-            "box3.savingsReturnPct",
-            "box3.otherReturnPct",
-            "box3.debtReturnPct",
-            "box3.exemptPerPerson",
-            "box3.debtThresholdPerPerson",
-            "box3.ratePct",
-            "box3Persons",
-          ]}
-        />
+        <Grid ids={["taxIndexPct", "pensionPct", "partnerPensionPct", "ewfPct", "box3Persons", "box3ExemptStress", "reliefFactorPct"]} />
       </Section>
+
+      <LawEditor />
     </div>
   );
 }

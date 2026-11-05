@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Banner, Block, LineChart, Legend, List, Note, NumberBox, Row, euro } from "../ui";
+import { Banner, Block, LineChart, Legend, List, Note, NumberBox, Row, Section, euro } from "../ui";
 import { usePlan } from "../plan-provider";
 import { monthsBetween } from "@/lib/plan/model";
+import { FIELD_BY_ID } from "@/lib/plan/fields";
 import type { CheckIn } from "@/lib/plan/types";
 
 // "1.234,56" or "1,234.56" or "1234.56" to a number.
@@ -54,6 +55,150 @@ function parsePortfolio(text: string) {
     }
   }
   return count > 0 ? { total, count, column: splitLine(lines[0], delim)[col] } : null;
+}
+
+
+const addMonths = (iso: string, n: number) => {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().slice(0, 10);
+};
+const dateNl = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+
+const TRIGGERS = [
+  "Een salarisaanbod, promotie of baanwissel.",
+  "Een besluit over samen kopen, of een vaste startdatum van je partner.",
+  "De hypotheekrente wijkt meer dan 0,5 procentpunt af van de aanname.",
+  "De woningprijzen in je zoekregio wijken ongeveer 10% af van het gekozen pad.",
+  "Een wijziging in NHG, startersvrijstelling, hypotheekrenteaftrek of box 3.",
+  "Een grote gebeurtenis: schenking, erfenis, bonus of een auto.",
+];
+
+// What is due now: assumptions whose check date has passed, and the moments of the year.
+function DuePanel() {
+  const { doc, today, markChecked, scenario } = usePlan();
+  const [every, setEvery] = useState(6);
+  const month = Number(today.slice(5, 7));
+  const due = Object.entries(doc.meta)
+    .filter(([, m]) => m.nextCheck <= addMonths(today, 1))
+    .sort((u, v) => u[1].nextCheck.localeCompare(v[1].nextCheck));
+  const seasonal: string[] = [];
+  if (month >= 10) seasonal.push("Na Prinsjesdag: werk de wetsparameters van het volgende jaar bij (tabblad Belasting, Wetsparameters per jaar): NHG-grens, startersgrens, aftrektarief en box 3.");
+  if (month <= 2) seasonal.push("Nieuw jaar: leg je saldi, je salaris uit de jaaropgave en je studieschuld vast met een nieuwe meting hieronder.");
+  const checks = scenario.id ? TRIGGERS : [];
+
+  return (
+    <Block title="Wat moet nu bijgewerkt worden?" sub="Aannames met een controledatum die voorbij is of binnen een maand komt.">
+      {seasonal.map((t) => (
+        <p key={t} className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{t}</p>
+      ))}
+      {due.length === 0 ? (
+        <p className="text-sm text-gray-600">Alle aannames zijn recent gecontroleerd.</p>
+      ) : (
+        <>
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            Volgende controle over
+            <select value={every} onChange={(e) => setEvery(Number(e.target.value))} className="min-h-[40px] rounded-lg border border-gray-300 bg-white px-2 text-sm">
+              <option value={3}>3 maanden</option>
+              <option value={6}>6 maanden</option>
+              <option value={12}>12 maanden</option>
+            </select>
+          </label>
+          <ul className="divide-y divide-gray-100">
+            {due.map(([id, m]) => (
+              <li key={id} className="space-y-1 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-medium text-gray-900">{FIELD_BY_ID.get(id)?.label ?? id}</span>
+                  <span className={`shrink-0 text-xs ${m.nextCheck < today ? "font-medium text-amber-700" : "text-gray-500"}`}>
+                    {m.nextCheck < today ? "te laat sinds " : "uiterlijk "}
+                    {dateNl(m.nextCheck)}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Bron: {m.url ? <a href={m.url} target="_blank" rel="noreferrer" className="text-teal-700 underline">{m.source}</a> : m.source}. Laatst gecontroleerd {dateNl(m.checkedOn)}.
+                </p>
+                {m.note && <p className="text-xs text-gray-500">{m.note}</p>}
+                <button type="button" onClick={() => markChecked(id, addMonths(today, every))} className="min-h-[40px] text-sm font-medium text-teal-700 underline">
+                  Gecontroleerd, nog goed
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="space-y-1.5 border-t border-gray-100 pt-3">
+        <p className="text-sm font-medium text-gray-900">Doe ook een tussentijdse update bij</p>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
+          {checks.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      </div>
+    </Block>
+  );
+}
+
+// How the plan looks now compared with the previous time it was saved.
+function DriftPanel() {
+  const { doc, scenario, variant, result } = usePlan();
+  const snaps = doc.snapshots.filter((q) => q.scenarioId === scenario.id && q.variant === variant);
+  const last = snaps[snaps.length - 1];
+  const prev = snaps[snaps.length - 2];
+  const ti = result.sim.checkpoints.indexOf(result.targetMonth);
+  const now = { need: result.purchase.needTotal, wealth: result.sim.p10[ti] ?? 0, prob: result.probEnough, loan: result.purchase.loan, shortfall: result.shortfall };
+  const base = last ?? null;
+  const delta = (a: number, b: number) => a - b;
+  const row = (label: string, cur: number, old: number | undefined, fmt: (n: number) => string, goodWhenUp: boolean) => {
+    const d = old === undefined ? null : delta(cur, old);
+    return (
+      <Row
+        key={label}
+        label={label}
+        value={fmt(cur)}
+        sub={d === null ? "nog niet eerder opgeslagen" : d === 0 ? "ongewijzigd" : `${d > 0 ? "+" : "−"}${fmt(Math.abs(d))} sinds ${dateNl(base!.date)}`}
+        tone={d === null || d === 0 ? undefined : (d > 0) === goodWhenUp ? "good" : "bad"}
+      />
+    );
+  };
+  void prev;
+  return (
+    <Block title="Wat is er verschoven?" sub={`${scenario.name}, variant ${variant}, tegenover de laatste keer opslaan`}>
+      <List>
+        {row("Wat je nodig hebt", now.need, base?.need, euro, false)}
+        {row("Wat je hebt (tegenvallend)", now.wealth, base?.wealth, euro, true)}
+        {row("Kans dat het lukt", now.prob * 100, base ? base.prob * 100 : undefined, (n) => `${Math.round(n)}%`, true)}
+        {row("Hypotheek", now.loan, base?.loan, euro, true)}
+        {row("Tekort (negatief = overschot)", now.shortfall, base?.shortfall, euro, false)}
+      </List>
+      <Note>Elke keer dat je opslaat bewaart het plan een momentopname per scenario en variant. Zo zie je hoe je situatie verschuift met de jaren.</Note>
+    </Block>
+  );
+}
+
+function HistoryPanel() {
+  const { doc, scenario } = usePlan();
+  const rows = doc.history.filter((h) => h.scenario === scenario.id).slice(-30).reverse();
+  return (
+    <Section title="Geschiedenis van je aannames" hint={`${rows.length} wijzigingen bewaard voor dit scenario`}>
+      {rows.length === 0 ? (
+        <Note>Nog geen wijzigingen bewaard. Zodra je een aanname verandert en opslaat, staat de oude waarde hier met de datum.</Note>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {rows.map((h, i) => (
+            <li key={i} className="py-2 text-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-gray-900">{h.label}</span>
+                <span className="shrink-0 text-xs text-gray-400">{dateNl(h.date)}</span>
+              </div>
+              <p className="text-xs text-gray-600">
+                {h.from} → <strong>{h.to}</strong>
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
 }
 
 export default function UpdatePage() {
@@ -127,6 +272,9 @@ export default function UpdatePage() {
       <Banner level="info" title="Eens per jaar bijwerken">
         Leg hier vast hoe het er echt voor staat: je salaris, je saldi en je schuld. Het plan vergelijkt dat met wat het verwachtte en rekent daarna vanaf je echte stand verder. Zo blijft het plan kloppen, ook als je situatie verandert.
       </Banner>
+
+      <DuePanel />
+      <DriftPanel />
 
       <Block title="Nieuwe meting" sub="Vul in wat er nu is. Wat de app al weet staat er vast in.">
         <div className="grid grid-cols-2 gap-3">
@@ -220,6 +368,8 @@ export default function UpdatePage() {
         </button>
         <Note>Daarna kun je rechtsonder op Opslaan tikken. Pas dan wordt de meting bewaard.</Note>
       </Block>
+
+      <HistoryPanel />
 
       <Block title="Eerdere metingen" sub="Wat je vastlegde, tegenover wat het plan verwachtte.">
         {hist.length === 0 ? (

@@ -8,6 +8,7 @@ export const PUSH_TYPES = [
   { key: "debt_rate", label: "Rente van een lening wordt opnieuw vastgezet" },
   { key: "wbw_reminder", label: "Maandelijkse herinnering: WieBetaaltWat invullen" },
   { key: "invest_reminder", label: "Maandelijkse herinnering: aandelen/beleggen kopen" },
+  { key: "plan_update", label: "Financieel plan: aannames die gecontroleerd moeten worden" },
 ] as const;
 
 export type PushType = (typeof PUSH_TYPES)[number]["key"];

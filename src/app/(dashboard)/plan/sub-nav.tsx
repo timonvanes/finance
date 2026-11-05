@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/plan", label: "Overzicht" },
+  { href: "/plan/scenarios", label: "Scenario's" },
   { href: "/plan/huis", label: "Huis en kosten" },
   { href: "/plan/inkomen", label: "Inkomen" },
   { href: "/plan/belasting", label: "Belasting" },
   { href: "/plan/studielening", label: "Studielening" },
   { href: "/plan/hypotheek", label: "Hypotheek" },
   { href: "/plan/beleggen", label: "Sparen en beleggen" },
-  { href: "/plan/update", label: "Jaarlijkse update" },
+  { href: "/plan/update", label: "Bijwerken" },
   { href: "/plan/bronnen", label: "Bronnen" },
 ];
 

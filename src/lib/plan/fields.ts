@@ -168,14 +168,36 @@ export const FIELDS: FieldDef[] = [
   { id: "confidencePct", group: "Sparen en beleggen", label: "Zekerheid waarmee het moet lukken", kind: "num", unit: "%", step: 5, src: "user", why: "Met 80% rekent het plan met het resultaat dat in 80% van de gesimuleerde verlopen gehaald wordt. Hoger is voorzichtiger.", ...E("confidencePct") },
 
   // ------------------------------------------------------------------- box 3
-  { id: "box3.savingsReturnPct", group: "Box 3", label: "Fictief rendement spaargeld", kind: "num", unit: "%", step: 0.01, src: "law", why: "Voorlopig percentage voor 2026. Controleer het op belastingdienst.nl, het wordt definitief vastgesteld.", ...EN("box3", "savingsReturnPct") },
-  { id: "box3.otherReturnPct", group: "Box 3", label: "Fictief rendement beleggingen", kind: "num", unit: "%", step: 0.01, src: "law", why: "Voorlopig percentage voor 2026 over overige bezittingen.", ...EN("box3", "otherReturnPct") },
-  { id: "box3.debtReturnPct", group: "Box 3", label: "Fictieve rente op schulden", kind: "num", unit: "%", step: 0.01, src: "law", why: "Voorlopig percentage voor 2026. Een studielening telt hier als schuld, boven de drempel.", ...EN("box3", "debtReturnPct") },
-  { id: "box3.exemptPerPerson", group: "Box 3", label: "Heffingsvrij vermogen per persoon", kind: "num", unit: "€", src: "law", why: "€59.357 in 2026 (SRA).", ...EN("box3", "exemptPerPerson") },
-  { id: "box3.debtThresholdPerPerson", group: "Box 3", label: "Drempel schulden per persoon", kind: "num", unit: "€", src: "law", why: "€3.800 in 2026 (SRA).", ...EN("box3", "debtThresholdPerPerson") },
-  { id: "box3.ratePct", group: "Box 3", label: "Tarief box 3", kind: "num", unit: "%", step: 0.5, src: "law", why: "36% in 2026.", ...EN("box3", "ratePct") },
   { id: "box3Persons", group: "Box 3", label: "Aantal personen voor box 3", kind: "num", unit: "", step: 1, src: "user", why: "1 als alleen jouw vermogen in dit plan zit, 2 als jullie het samen opbouwen en samen aangifte doen (dan verdubbelt het heffingsvrije bedrag).", ...E("box3Persons") },
+  // ---------------------------------------------------------- extra variables
+  { id: "bidPct", group: "Doel en woning", label: "Overbieden (% boven de vraagprijs)", kind: "num", unit: "%", step: 0.5, src: "assume", why: "In Amsterdam en Utrecht bieden kopers vaak 6% tot 10% boven de vraagprijs. De bank leent op de taxatiewaarde, dus het overbod komt uit eigen geld. Een lager bod is een gunstiger scenario.", ...E("bidPct") },
+  { id: "reliefFactorPct", group: "Hypotheek", label: "Hypotheekrenteaftrek: deel van de huidige regels dat blijft", kind: "num", unit: "%", step: 5, src: "assume", why: "Het beleid kan veranderen: partijen praten over afbouwen of afschaffen. 100% is de regel van vandaag, 0% betekent geen aftrek. Het plan moet ook bij 0% nog werken.", ...E("reliefFactorPct") },
+  { id: "partnerStartYear", group: "Personen", label: "Partner: eerste jaar met salaris (0 = werkt al)", kind: "num", unit: "", step: 1, src: "user", why: "Vanaf dit jaar telt het salaris van je partner mee voor inkomen en hypotheek, en begint haar inleg.", ...E("partnerStartYear") },
+  { id: "partnerStartSavings", group: "Personen", label: "Partner: nu gespaard", kind: "num", unit: "€", src: "user", why: "Haar spaargeld op de startdatum. Telt alleen mee als je samen koopt.", ...E("partnerStartSavings") },
+  { id: "partnerStartInvest", group: "Personen", label: "Partner: nu belegd", kind: "num", unit: "€", src: "user", why: "Haar beleggingen op de startdatum.", ...E("partnerStartInvest") },
+  { id: "partnerMonthlySave", group: "Personen", label: "Partner: sparen per maand", kind: "num", unit: "€", src: "user", why: "Wat zij per maand spaart vanaf haar eerste salaris.", ...E("partnerMonthlySave") },
+  { id: "partnerMonthlyInvest", group: "Personen", label: "Partner: beleggen per maand", kind: "num", unit: "€", src: "user", why: "Wat zij per maand belegt vanaf haar eerste salaris.", ...E("partnerMonthlyInvest") },
+  { id: "fixedExtraPct", group: "Inkomen", label: "Vaste extra beloning (13e maand, % van bruto)", kind: "num", unit: "%", step: 0.5, src: "user", why: "Een 13e maand of andere vaste uitkering, als percentage van je bruto jaarsalaris. De bank telt dit mee. Vul in zodra er een aanbod is.", ...E("fixedExtraPct") },
+  { id: "bonusPct", group: "Inkomen", label: "Bonus (% van bruto)", kind: "num", unit: "%", step: 0.5, src: "user", why: "Een variabele bonus. Het plan telt die mee voor je netto inkomen, maar de bank telt hem niet mee voor je hypotheek. Vul in zodra er een aanbod is.", ...E("bonusPct") },
+  { id: "leaseTaxableYear", group: "Inkomen", label: "Bijtelling leaseauto per jaar", kind: "num", unit: "€", src: "user", why: "Het bedrag dat bij je inkomen wordt opgeteld voor privégebruik van een leaseauto. Het verhoogt je belasting maar is geen geld op je rekening. Vul in zodra er een aanbod is.", ...E("leaseTaxableYear") },
+  { id: "emergencyMonths", group: "Sparen en beleggen", label: "Noodbuffer (maanden vaste lasten)", kind: "num", unit: "mnd", step: 1, src: "user", why: "Een eigen buffer voor tegenvallers tijdens het sparen. Het is hetzelfde geld als de buffer die je na de aankoop wilt houden. 4 tot 6 maanden is gebruikelijk.", ...E("emergencyMonths") },
+  { id: "fixedCostsMonth", group: "Sparen en beleggen", label: "Vaste lasten per maand voor de noodbuffer", kind: "num", unit: "€", src: "assume", why: "Wat je per maand minimaal nodig hebt om rond te komen. De noodbuffer is dit bedrag keer het aantal maanden.", ...E("fixedCostsMonth") },
+  { id: "contribStartYear", group: "Sparen en beleggen", label: "Eerste jaar van inleg", kind: "num", unit: "", step: 1, src: "user", why: "Het jaar van je eerste salaris. Vóór dit jaar gaat er niets in, en de groei van je inleg telt vanaf dit jaar.", ...E("contribStartYear") },
+  { id: "box3ExemptStress", group: "Box 3", label: "Heffingsvrij vermogen in een stressvariant (0 = uit de tabel)", kind: "num", unit: "€", src: "assume", why: "Het kabinet stelde voor het heffingsvrije bedrag te verlagen naar € 30.846. Dat is nog geen wet. Hiermee test je wat dat doet. Geldt vanaf 2027.", ...E("box3ExemptStress") },
 ];
+
+// The fields that can differ per variant (stress, basis, gunstig).
+export const VARIANT_FIELDS = new Set([
+  "priceGrowthPct",
+  "bidPct",
+  "salaryGrowthPct",
+  "contribGrowthPct",
+  "limitGrowthPct",
+  "run.vveMonth",
+  "cost.buyerAgent",
+  "reliefFactorPct",
+  "box3ExemptStress",
+]);
 
 export const FIELD_BY_ID = new Map(FIELDS.map((f) => [f.id, f]));
 

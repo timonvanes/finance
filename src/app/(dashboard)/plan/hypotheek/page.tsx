@@ -57,6 +57,7 @@ export default function MortgagePage() {
           {c.obligations.alimony > 0 && <Row label="Min: alimentatie" value={`− ${euro(c.obligations.alimony)}`} />}
           <Row label="Ruimte voor hypotheek per maand" value={euro(c.available)} strong />
           <Row label="Rente waarmee gerekend wordt" value={pct(c.rate, 2)} how={`Hypotheekrente ${pct(b.rate, 2)}${c.nhg ? `, min ${pct(x.nhgRateDiscount, 2)} NHG-korting` : ""}${x.testRate > 0 ? `. Toetsrente ${pct(x.testRate, 2)}` : ""}.`} />
+          <Row label="Ter vergelijking: vuistregel 4,25 × bruto" value={euro(c.counted * 4.25)} how="Een snelle schatting die vaak wordt gebruikt. Het rekenmodel hierboven houdt rekening met de rente, de looptijd en je verplichtingen." />
           <Row label="Hypotheek die de bank geeft" value={euro(c.loan)} strong tone="good" how={`Wat ${euro(c.available)} per maand over ${b.termYears} jaar tegen ${pct(c.rate, 2)} aan lening kan dragen.`} />
         </List>
         <Note>NHG: {c.nhg ? `ja, de koopsom ligt onder de grens van ${euro(nhgMax)}` : `nee, de koopsom ligt boven de grens van ${euro(nhgMax)} of NHG staat uit`}.</Note>
@@ -149,7 +150,7 @@ export default function MortgagePage() {
       </Block>
 
       <Section title="Aannames voor de hypotheek" hint="Rente, looptijd, verplichtingen en NHG">
-        <Grid ids={["rate", "termYears", "nhgMode", "nhgRateDiscount", "finPctOverride", "testRate", "rateShock", "otherLoanMonth", "creditLimit", "leaseMonth", "alimonyMonth"]} />
+        <Grid ids={["rate", "termYears", "nhgMode", "nhgRateDiscount", "reliefFactorPct", "finPctOverride", "testRate", "rateShock", "otherLoanMonth", "creditLimit", "leaseMonth", "alimonyMonth"]} />
       </Section>
 
       <Stat label="Totaal eigen geld in beeld" value={euro(pu.ownFunds)} sub={`plus buffer ${euro(pu.buffer)}`} />

@@ -1,3 +1,5 @@
+import type { HouseInputs } from "@/lib/house/calc";
+import { LAW_TABLE_DEFAULT, type LawYear } from "./law";
 import { BOX3_DEFAULTS, type Box3Params } from "./tax";
 
 // ------------------------------------------------------------------ sources
@@ -100,9 +102,27 @@ export interface Extra {
   bufferMonths: number;
   limitGrowthPct: number;
 
+  // buying: what the market asks on top of the asking price
+  bidPct: number; // overbidding, % of the asking price. The bank lends on the valuation, so this comes from own money
+  reliefFactorPct: number; // how much of today's mortgage interest relief is left (policy may change)
+
+  // partner
+  partnerStartYear: number; // first year with a salary (0 = already working)
+  partnerStartSavings: number;
+  partnerStartInvest: number;
+  partnerMonthlySave: number;
+  partnerMonthlyInvest: number;
+
+  // pay on top of the salary
+  fixedExtraPct: number; // 13th month and other fixed pay, % of the gross salary (the bank counts it)
+  bonusPct: number; // variable bonus, % of the gross salary (the bank does not count it)
+  leaseTaxableYear: number; // addition for a lease car, taxed as income
+
   // living
   rentNow: number;
   otherSpendingMonth: number;
+  emergencyMonths: number; // emergency fund while saving, kept apart from the house money
+  fixedCostsMonth: number; // monthly fixed costs the emergency fund is based on
 
   // mortgage
   borrowMode: "max" | "comfort" | "fixed";
@@ -136,10 +156,13 @@ export interface Extra {
   glide: boolean;
   glideYears: number;
   contribGrowthPct: number;
+  contribStartYear: number; // the first year money goes in; growth counts from here
   contrib: Record<string, Contribution>;
   confidencePct: number;
   box3: Box3Params;
   box3Persons: number;
+  box3ExemptStress: number; // 0 = use the table; otherwise the exempt amount from 2027 on (the cabinet proposed 30.846)
+  law: LawYear[];
 
   events: PlanEvent[];
   checkins: CheckIn[];
@@ -196,8 +219,20 @@ export function defaultExtra(today: string): Extra {
     running: { ...DEFAULT_RUNNING },
     bufferMonths: 3,
     limitGrowthPct: 3,
+    bidPct: 0,
+    reliefFactorPct: 100,
+    partnerStartYear: 0,
+    partnerStartSavings: 0,
+    partnerStartInvest: 0,
+    partnerMonthlySave: 0,
+    partnerMonthlyInvest: 0,
+    fixedExtraPct: 0,
+    bonusPct: 0,
+    leaseTaxableYear: 0,
     rentNow: 0,
     otherSpendingMonth: 0,
+    emergencyMonths: 0,
+    fixedCostsMonth: 0,
     borrowMode: "max",
     borrowFixed: 0,
     comfortPct: 30,
@@ -225,10 +260,13 @@ export function defaultExtra(today: string): Extra {
     glide: false,
     glideYears: 3,
     contribGrowthPct: 0,
+    contribStartYear: year,
     contrib: {},
     confidencePct: 80,
     box3: { ...BOX3_DEFAULTS },
     box3Persons: 1,
+    box3ExemptStress: 0,
+    law: LAW_TABLE_DEFAULT.map((r) => ({ ...r, box3: { ...r.box3 } })),
     events: [],
     checkins: [],
   };
@@ -245,6 +283,7 @@ export function mergeExtra(stored: unknown, today: string): Extra {
     costs: { ...base.costs, ...(s.costs ?? {}) },
     running: { ...base.running, ...(s.running ?? {}) },
     box3: { ...base.box3, ...(s.box3 ?? {}) },
+    law: Array.isArray(s.law) && s.law.length > 0 ? s.law : base.law,
     salaryYou: s.salaryYou ?? {},
     salaryPartner: s.salaryPartner ?? {},
     contrib: s.contrib ?? {},
@@ -282,4 +321,70 @@ export interface AppData {
   avgSaved: number;
   study: StudyLoanData;
   today: string;
+}
+
+// --------------------------------------------------- scenarios and variants
+
+export type Variant = "stress" | "basis" | "gunstig";
+
+export const VARIANTS: { key: Variant; label: string; hint: string }[] = [
+  { key: "stress", label: "Stress", hint: "tegenvallers: dure markt, lage groei" },
+  { key: "basis", label: "Basis", hint: "waar je op rekent" },
+  { key: "gunstig", label: "Gunstig", hint: "meevallers: snelle groei, rustige markt" },
+];
+
+// What a variant changes compared with the basis: some fields, and its own salary path.
+export interface VariantOverride {
+  fields: Record<string, number | string | boolean>;
+  salaryYou: Record<string, number>;
+  salaryPartner: Record<string, number>;
+}
+
+export interface Scenario {
+  id: string;
+  name: string;
+  description: string;
+  b: HouseInputs;
+  x: Extra;
+  variants: Record<"stress" | "gunstig", VariantOverride>;
+}
+
+// Where an assumption comes from, when it was last checked and when it is due again.
+export interface AssumptionMeta {
+  source: string;
+  url?: string;
+  checkedOn: string;
+  nextCheck: string;
+  note?: string;
+}
+
+export interface HistoryEntry {
+  date: string;
+  scenario: string;
+  field: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+export interface Snapshot {
+  date: string;
+  scenarioId: string;
+  variant: Variant;
+  need: number;
+  wealth: number;
+  prob: number;
+  earliestYear: number | null;
+  loan: number;
+  shortfall: number;
+}
+
+export interface PlanDoc {
+  version: 1;
+  activeId: string;
+  variant: Variant;
+  scenarios: Scenario[];
+  meta: Record<string, AssumptionMeta>;
+  history: HistoryEntry[];
+  snapshots: Snapshot[];
 }
