@@ -12,6 +12,8 @@ export interface PotForInsights {
   plan_start_date?: string | null;
   // Day of the month the monthly deposit is due; null = start of the user's month.
   schedule_day?: number | null;
+  // The day the plan begins; null = the day the pot was created.
+  schedule_start?: string | null;
   pot_period_decisions?: { period_start: string; decision: string }[];
   pot_entries: PotEntryForInsights[];
 }
@@ -102,6 +104,45 @@ function installmentDates(createdAt: Date, end: Date, day: number): Date[] {
   return dates;
 }
 
+// Deposit days from `from` on (that day included when it is one).
+function installmentDatesFrom(from: Date, end: Date, day: number): Date[] {
+  const dates: Date[] = [];
+  let s = periodStartFor(from, day);
+  if (s < from) s = new Date(s.getFullYear(), s.getMonth() + 1, day);
+  for (let i = 0; i < 240; i++) {
+    if (s > end) break;
+    dates.push(s);
+    s = new Date(s.getFullYear(), s.getMonth() + 1, day);
+  }
+  return dates;
+}
+
+// Where the plan begins and what the pot held then. The start date you chose
+// counts from that day (what was in before it is the starting amount); without
+// one the plan starts when the pot was created, from whatever it held then.
+// (The opening-balance date can lie far in the past, e.g. pulled back to the
+// first matching transaction, and must not make a brand-new pot look months
+// behind.)
+function planBasis(pot: PotForInsights, fallback: Date, day: number | null) {
+  const entries = counted(pot);
+  if (pot.schedule_start) {
+    const chosen = pot.schedule_start.slice(0, 10);
+    const from = new Date(`${chosen}T00:00:00`);
+    return {
+      from,
+      startBalance: pot.opening_balance + entries.filter((e) => e.entry_date < chosen).reduce((sum, e) => sum + e.amount, 0),
+      installments: (end: Date) => (day == null ? [] : installmentDatesFrom(from, end, day)),
+    };
+  }
+  const createdAt = pot.created_at ? new Date(pot.created_at) : fallback;
+  const createdDay = createdAt.toISOString().slice(0, 10);
+  return {
+    from: createdAt,
+    startBalance: pot.opening_balance + entries.filter((e) => e.entry_date <= createdDay).reduce((sum, e) => sum + e.amount, 0),
+    installments: (end: Date) => (day == null ? [] : installmentDates(createdAt, end, day)),
+  };
+}
+
 // Compares where the pot is today with where the plan says it should be.
 export function computeSchedule(
   pot: PotForInsights,
@@ -113,17 +154,10 @@ export function computeSchedule(
   if (!pot.target_amount || !pot.target_date) return { status: "none", difference: 0, expectedNow: balance };
   if (balance >= pot.target_amount) return { status: "done", difference: balance - pot.target_amount, expectedNow: pot.target_amount };
 
-  // The plan starts when the pot was created, from whatever it held then.
-  // (The opening-balance date can lie far in the past — e.g. pulled back to
-  // the first matching transaction — and must not make a brand-new pot look
-  // months behind.)
-  const createdAt = pot.created_at ? new Date(pot.created_at) : now;
-  const createdDay = createdAt.toISOString().slice(0, 10);
-  const startBalance =
-    pot.opening_balance +
-    counted(pot)
-      .filter((e) => e.entry_date <= createdDay)
-      .reduce((sum, e) => sum + e.amount, 0);
+  const depositDay = pot.schedule_day ?? startDay ?? null;
+  const basis = planBasis(pot, now, depositDay);
+  const createdAt = basis.from;
+  const startBalance = basis.startBalance;
   const end = new Date(pot.target_date);
 
   // Money spent on the goal lowered the target; undo that on both sides so it
@@ -132,8 +166,7 @@ export function computeSchedule(
   const target = pot.target_amount + goalSpent;
   const adjBalance = balance + goalSpent;
 
-  const depositDay = pot.schedule_day ?? startDay;
-  const installments = depositDay != null ? installmentDates(createdAt, end, depositDay) : [];
+  const installments = basis.installments(end);
   let expectedNow: number;
   if (installments.length > 0) {
     const perInstallment = (target - startBalance) / installments.length;
@@ -188,13 +221,11 @@ function scheduleNeed(
   startDay: number
 ): { needed: number; regular: number } | undefined {
   if (!pot.target_amount || !pot.target_date) return undefined;
-  const createdAt = pot.created_at ? new Date(pot.created_at) : periodStart;
-  const createdDay = createdAt.toISOString().slice(0, 10);
   const entries = counted(pot);
-  const startBalance =
-    pot.opening_balance + entries.filter((e) => e.entry_date <= createdDay).reduce((sum, e) => sum + e.amount, 0);
+  const basis = planBasis(pot, periodStart, pot.schedule_day ?? startDay);
+  const startBalance = basis.startBalance;
 
-  const installments = installmentDates(createdAt, new Date(pot.target_date), pot.schedule_day ?? startDay);
+  const installments = basis.installments(new Date(pot.target_date));
   const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, startDay);
   const dueByPeriodEnd = installments.filter((d) => d < periodEnd).length;
   if (installments.length === 0 || dueByPeriodEnd === 0) return undefined;
@@ -243,22 +274,14 @@ export function monthlyPace(
   graceDays = DEFAULT_GRACE_DAYS,
   now = new Date()
 ): number {
-  if (pot.created_at) {
-    const createdAt = new Date(pot.created_at);
-    const createdDay = createdAt.toISOString().slice(0, 10);
+  if (pot.created_at || pot.schedule_start) {
+    const basis = planBasis(pot, now, pot.schedule_day ?? startDay);
     // A deposit day counts once its slack has passed, so the pace does not dip on
     // the day itself while the transfer is still on its way.
-    const passed = installmentDates(createdAt, now, pot.schedule_day ?? startDay).filter(
-      (d) => d.getTime() + (Math.max(0, graceDays) + 1) * DAY_MS <= now.getTime()
-    ).length;
-    if (passed >= 1) {
-      const startBalance =
-        pot.opening_balance +
-        counted(pot)
-          .filter((e) => e.entry_date <= createdDay)
-          .reduce((sum, e) => sum + e.amount, 0);
-      return (balance - startBalance) / passed;
-    }
+    const passed = basis
+      .installments(now)
+      .filter((d) => d.getTime() + (Math.max(0, graceDays) + 1) * DAY_MS <= now.getTime()).length;
+    if (passed >= 1) return (balance - basis.startBalance) / passed;
   }
   return averageMonthlyNet(pot, startDay);
 }

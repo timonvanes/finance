@@ -8,6 +8,7 @@ import {
   deletePotEntry,
   setPotMonthlyPlan,
   setPotScheduleDay,
+  setPotScheduleStart,
   updatePotMatchText,
   updatePotOpeningBalance,
   updatePotTarget,
@@ -291,6 +292,58 @@ export function ScheduleDayForm({
         className={primary}
       >
         Stortingsdag opslaan
+      </button>
+      <Message message={save$.message} />
+    </div>
+  );
+}
+
+// When the plan of this pot begins: the day it was created (default), the start
+// of one of your months, or a day of your own.
+export function ScheduleStartForm({
+  potId,
+  start,
+  createdOn,
+  months,
+}: {
+  potId: string;
+  start: string | null;
+  createdOn: string;
+  // Starts of your recent months, newest first: { date: "2026-09-23", label: "september 2026" }.
+  months: { date: string; label: string }[];
+}) {
+  const known = start != null && months.some((m) => m.date === start);
+  const [mode, setMode] = useState<string>(start == null ? "created" : known ? start : "custom");
+  const [custom, setCustom] = useState(start ?? "");
+  const save$ = useRun();
+  const value = mode === "created" ? null : mode === "custom" ? custom || null : mode;
+  const unchanged = value === start;
+
+  return (
+    <div className="space-y-3">
+      <select value={mode} onChange={(e) => setMode(e.target.value)} className={input}>
+        <option value="created">Aanmaakdatum ({new Date(`${createdOn}T00:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })})</option>
+        {months.map((m) => (
+          <option key={m.date} value={m.date}>
+            Begin van {m.label}
+          </option>
+        ))}
+        <option value="custom">Een andere dag…</option>
+      </select>
+      {mode === "custom" && (
+        <input type="date" value={custom} onChange={(e) => setCustom(e.target.value)} className={input} />
+      )}
+      <button
+        type="button"
+        disabled={save$.isPending || unchanged || (mode === "custom" && !custom)}
+        onClick={() => save$.run(async () => {
+          const r = await setPotScheduleStart(potId, value);
+          if (r.error) throw new Error(r.error);
+          return "Opgeslagen.";
+        })}
+        className={primary}
+      >
+        Begindatum opslaan
       </button>
       <Message message={save$.message} />
     </div>

@@ -15,7 +15,7 @@ import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { periodRange } from "@/lib/month";
 import { InfoButton } from "../../info-button";
 import { GoalSpendCard } from "../goal-spend-card";
-import { EntryForm, EntryList, MonthlyPlanForm, ScheduleDayForm, SettingsForms } from "../pot-detail-forms";
+import { EntryList, MonthlyPlanForm, ScheduleDayForm, ScheduleStartForm, SettingsForms } from "../pot-detail-forms";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -43,6 +43,14 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
         .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= pot.opening_balance_date)
         .map((e) => ({ id: e.id, potName: pot.name, amount: Math.abs(e.amount), date: e.entry_date, note: e.note }))
     : [];
+  // The starts of your last 14 months, to pick the beginning of the plan from.
+  const startMonths = Array.from({ length: 14 }, (_, i) => {
+    const r = periodRange(i, startDay);
+    return {
+      date: r.start,
+      label: `${r.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" })} (${r.startDate.getDate()}e)`,
+    };
+  });
   const entries = [...pot.pot_entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
 
   return (
@@ -152,11 +160,17 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
             <ScheduleDayForm potId={pot.id} day={pot.schedule_day ?? null} startDay={startDay} />
           </div>
           <div className="space-y-3 border-t border-gray-100 pt-6">
-            <h3 className="text-lg font-semibold text-gray-900">Saldo handmatig aanpassen</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Begin van het plan</h3>
             <p className="text-sm text-gray-500">
-              Alleen nodig als een overboeking niet automatisch werd herkend, of voor geld dat niet via je bank liep.
+              Vanaf wanneer het schema, het tempo en het bedrag per maand rekenen. Standaard de dag dat het potje is
+              aangemaakt. Wat er vóór die dag in zat, telt als startbedrag.
             </p>
-            <EntryForm potId={pot.id} hasTarget={!!pot.target_amount} />
+            <ScheduleStartForm
+              potId={pot.id}
+              start={pot.schedule_start ?? null}
+              createdOn={(pot.created_at ?? new Date().toISOString()).slice(0, 10)}
+              months={startMonths}
+            />
           </div>
           <div className="border-t border-gray-100 pt-6">
           <SettingsForms
