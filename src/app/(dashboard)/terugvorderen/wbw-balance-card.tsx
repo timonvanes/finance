@@ -14,6 +14,7 @@ const toNumber = (s: string) => Number(s.replace(",", "."));
 export interface WbwStatus {
   periodLabel: string;
   configured: boolean;
+  manual: boolean;
   lists: { id: string; name: string; currency: string; amount: number; included: boolean }[];
   latestBalance: number | null;
   latestDate: string | null;
@@ -121,6 +122,10 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
       .finally(() => setPending(false));
   }
 
+  // Filling in by hand is only needed without the link with WieBetaaltWat, or when
+  // it is switched on (Instellingen > Bankkoppelingen) because the link stopped working.
+  const showManual = !status.configured || status.manual;
+
   const candidates = status.candidates.filter((c) => (dir === "in" ? c.amount > 0 : c.amount < 0));
 
   return (
@@ -203,6 +208,8 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
           </p>
         )}
 
+        {showManual ? (
+          <>
         <section className="space-y-3 border-t border-gray-100 pt-5">
           <h3 className="text-base font-medium text-gray-900">
             {status.configured ? "Of zelf invullen" : "Saldo invullen"}
@@ -362,7 +369,20 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
           </section>
         )}
 
+          </>
+        ) : (
+          <p className="border-t border-gray-100 pt-4 text-sm text-gray-500">
+            Je saldo wordt automatisch opgehaald. Zelf invullen kun je weer aanzetten bij Instellingen &gt; Bankkoppelingen
+            als WieBetaaltWat het ophalen blokkeert.
+          </p>
+        )}
+
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && status.configured && !status.manual && (
+          <p className="text-sm text-gray-500">
+            Lukt het ophalen niet meer? Zet zelf invullen aan bij Instellingen &gt; Bankkoppelingen.
+          </p>
+        )}
       </div>
     </details>
   );

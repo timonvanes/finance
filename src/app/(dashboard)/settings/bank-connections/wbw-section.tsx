@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { setWbwImportFrom, setWbwListIncluded, syncWbwBalance } from "@/actions/wbw";
+import { setWbwImportFrom, setWbwListIncluded, setWbwManual, syncWbwBalance } from "@/actions/wbw";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const longDate = (iso: string) =>
@@ -10,6 +10,7 @@ const longDate = (iso: string) =>
 
 export interface WbwSettings {
   configured: boolean;
+  manual: boolean;
   importFrom: string | null;
   importedCount: number;
   latestDate: string | null;
@@ -176,6 +177,31 @@ export function WbwSection({ settings }: { settings: WbwSettings }) {
                   </button>
                 </>
               )}
+            </div>
+
+            <div className="space-y-2 border-t border-gray-100 pt-4">
+              <label className="flex min-h-[44px] items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block text-base text-gray-900">Zelf invullen (terugval)</span>
+                  <span className="block text-sm text-gray-500">
+                    Brengt het handmatig invullen van je saldo en het rechttrekken terug op Terugvorderen. Voor als
+                    WieBetaaltWat het ophalen blokkeert.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={settings.manual}
+                  disabled={busy}
+                  onChange={(e) =>
+                    void work(async () => {
+                      const r = await setWbwManual(e.target.checked);
+                      if (r.error) setError(r.error);
+                      return null;
+                    })
+                  }
+                  className="h-6 w-6 shrink-0 accent-teal-700"
+                />
+              </label>
             </div>
 
             {settings.lists.length > 0 && (

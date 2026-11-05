@@ -61,18 +61,20 @@ export async function GET(request: NextRequest) {
   try {
     const todayOfMonth = new Date().getDate();
     const { data: balanceUsers } = await admin.from("wbw_entries").select("user_id").eq("kind", "balance");
-    // With the WieBetaaltWat link on the saldo fills itself in, so no reminder.
-    const withBalances = isWbwConfigured() ? [] : [...new Set((balanceUsers ?? []).map((b) => b.user_id))];
+    // With the WieBetaaltWat link on the saldo fills itself in, so no reminder,
+    // unless entering by hand is switched on (the link stopped working).
+    const withBalances = [...new Set((balanceUsers ?? []).map((b) => b.user_id))];
     let sentWbw = 0;
     for (const userId of withBalances) {
       // Each user's "1st of the month" is their own period start day (e.g. salary day).
       const { data: settings } = await admin
         .from("user_settings")
-        .select("month_start_day")
+        .select("month_start_day, wbw_manual")
         .eq("user_id", userId)
         .maybeSingle();
       const startDay = clampStartDay(settings?.month_start_day ?? 1);
       if (todayOfMonth !== startDay) continue;
+      if (isWbwConfigured() && !settings?.wbw_manual) continue;
       await sendPush(userId, "wbw_reminder", {
         title: "WieBetaaltWat invullen",
         body: "Vul het saldo van deze maand in bij Terugvorderen, dan klopt je overzicht weer.",

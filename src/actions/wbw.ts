@@ -47,6 +47,9 @@ export async function getWbwStatus() {
     .map((l) => ({ ...l, included: !excludedIds.has(l.id) }))
     .sort((a, b) => a.name.localeCompare(b.name, "nl"));
 
+  const { data: manualRow } = await supabase.from("user_settings").select("wbw_manual").maybeSingle();
+  const manualMode = manualRow?.wbw_manual === true;
+
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const [rows, { data: recent }] = await Promise.all([
     getWbwFrontedRows(),
@@ -83,6 +86,7 @@ export async function getWbwStatus() {
   return {
     periodLabel: period.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" }),
     configured: isWbwConfigured(),
+    manual: manualMode,
     lists: wbwLists,
     latestBalance: latest ? latest.amount : null,
     latestDate: latest ? latest.date : null,
@@ -296,7 +300,7 @@ export async function setWbwImportFrom(date: string | null): Promise<{ error?: s
 export async function getWbwSettings() {
   const supabase = await createClient();
   const [{ data: st }, { data: latest }, { count }] = await Promise.all([
-    supabase.from("user_settings").select("wbw_import_from, wbw_excluded_lists, wbw_lists").maybeSingle(),
+    supabase.from("user_settings").select("wbw_import_from, wbw_excluded_lists, wbw_lists, wbw_manual").maybeSingle(),
     supabase
       .from("wbw_entries")
       .select("entry_date, amount, created_at")
@@ -310,6 +314,7 @@ export async function getWbwSettings() {
   const excluded = new Set<string>((st?.wbw_excluded_lists ?? []) as string[]);
   return {
     configured: isWbwConfigured(),
+    manual: st?.wbw_manual === true,
     importFrom: (st?.wbw_import_from as string | null | undefined) ?? null,
     importedCount: count ?? 0,
     latestDate: (latest?.entry_date as string | undefined) ?? null,
@@ -319,4 +324,21 @@ export async function getWbwSettings() {
       .map((l) => ({ ...l, included: !excluded.has(l.id) }))
       .sort((a, b) => a.name.localeCompare(b.name, "nl")),
   };
+}
+
+
+// Brings the manual WieBetaaltWat entry (saldo, squaring up) back, or hides it
+// again. For when WieBetaaltWat blocks the link; the entry works as it always did.
+export async function setWbwManual(enabled: boolean): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Niet ingelogd." };
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, wbw_manual: enabled, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+  revalidatePath("/", "layout");
+  return {};
 }
