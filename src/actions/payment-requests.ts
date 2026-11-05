@@ -9,7 +9,7 @@ export async function getPaymentRequests() {
   const { data, error } = await supabase
     .from("payment_requests")
     .select(
-      `id, person_id, reference_code, tikkie_link, tikkie_url, tikkie_reminded_at, note, status, paid_at, created_at, settled_transaction_id,
+      `id, person_id, reference_code, tikkie_link, note, status, paid_at, created_at, settled_transaction_id,
       people(name, person_groups(name)),
       reclaims(id, computed_amount, source_total_amount, note, receipt_path, transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, counterparty_iban, raw_description, amount)),
       settled_transaction:transactions!payment_requests_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`

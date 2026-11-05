@@ -44,9 +44,6 @@ export interface OpenItem {
   bunqLink?: { url: string; amount: number; status: string } | null;
   description?: string;
   note?: string | null;
-  // The Tikkie link made for this (pasted back from the Tikkie app) and the last reminder sent.
-  tikkieUrl?: string | null;
-  remindedAt?: string | null;
   // WieBetaaltWat: the list and member chosen when the reclaim was made, and the
   // combination it belongs to (reclaims with the same group go in as one expense).
   wbwListId?: string | null;
@@ -222,8 +219,6 @@ export function ItemCard({
           id={item.id}
           bunqEnabled={bunqEnabled}
           bunqLink={item.bunqLink ?? null}
-          tikkieUrl={item.tikkieUrl ?? null}
-          remindedAt={item.remindedAt ?? null}
         />
       )}
 

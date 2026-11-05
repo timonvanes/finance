@@ -74,8 +74,6 @@ export default async function PersonPage({
         method: r.settlement_method === "external_app" ? "external_app" : "bank",
         referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
         bunqLink: bunqFor("reclaim", r.id),
-        tikkieUrl: r.tikkie_url,
-        remindedAt: r.tikkie_reminded_at,
         note: r.note ?? r.tikkie_link,
         wbwListId: r.wbw_list_id,
         wbwMemberId: r.wbw_member_id,
@@ -146,8 +144,6 @@ export default async function PersonPage({
         method: "bank",
         referenceCode: pr.reference_code,
         bunqLink: bunqFor("request", pr.id),
-        tikkieUrl: pr.tikkie_url,
-        remindedAt: pr.tikkie_reminded_at,
         note: pr.note,
         lines,
       });
