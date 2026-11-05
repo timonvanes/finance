@@ -123,7 +123,7 @@ export async function getReclaims() {
   const { data, error } = await supabase
     .from("reclaims")
     .select(
-      `id, person_id, transaction_id, amount_type, amount_value, computed_amount, source_total_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path, paid_at,
+      `id, person_id, transaction_id, amount_type, amount_value, computed_amount, source_total_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path, paid_at, wbw_list_id, wbw_member_id, wbw_group_id,
       people(name, person_groups(name)),
       transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, counterparty_iban, raw_description, amount),
       settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -141,9 +141,9 @@ export async function getReclaims() {
 // transactions so category-spend netting still applies per transaction.
 // When a person's share spans more than one transaction, those reclaims
 // are auto-bundled into a single combined betaalverzoek.
-export async function createSplitReclaim(formData: FormData) {
+export async function createSplitReclaim(formData: FormData): Promise<{ reclaimIds: string[] }> {
   const transactionIds = formData.getAll("transactionId") as string[];
-  if (transactionIds.length === 0) return;
+  if (transactionIds.length === 0) return { reclaimIds: [] };
 
   const settlementMethod =
     (formData.get("settlementMethod") as string) === "external_app"
@@ -151,7 +151,14 @@ export async function createSplitReclaim(formData: FormData) {
       : "bank";
   const tikkieLink = (formData.get("tikkieLink") as string) || null;
   const personIds = formData.getAll("personId") as string[];
-  if (personIds.length === 0) return;
+  if (personIds.length === 0) return { reclaimIds: [] };
+
+  // WieBetaaltWat: the list and the member each person is in it, chosen up front.
+  // Reclaims in the same group are put into WieBetaaltWat together as one expense.
+  const wbwListId = settlementMethod === "external_app" ? ((formData.get("wbwListId") as string) || null) : null;
+  const wbwGroupId =
+    settlementMethod === "external_app" && formData.get("wbwGroup") === "on" ? globalThis.crypto.randomUUID() : null;
+  const allCreatedIds: string[] = [];
 
   // One shared betaalverzoek to the whole group only needs one code — the
   // matcher disambiguates by amount/name if several reclaims share it.
@@ -165,10 +172,10 @@ export async function createSplitReclaim(formData: FormData) {
     .select("id, amount")
     .in("id", transactionIds);
   if (txError) throw txError;
-  if (!selectedTransactions || selectedTransactions.length === 0) return;
+  if (!selectedTransactions || selectedTransactions.length === 0) return { reclaimIds: [] };
 
   const totalAmount = selectedTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  if (totalAmount <= 0) return;
+  if (totalAmount <= 0) return { reclaimIds: [] };
 
   const { data: selfPerson } = await supabase
     .from("people")
@@ -202,14 +209,18 @@ export async function createSplitReclaim(formData: FormData) {
           note: tikkieLink,
           settlement_method: settlementMethod,
           reference_code: code,
+          wbw_list_id: wbwListId,
+          wbw_member_id: wbwListId ? ((formData.get(`wbwMember_${personId}`) as string) || null) : null,
+          wbw_group_id: wbwGroupId,
         }));
       if (rows.length === 0) return;
 
       const { data, error } = await supabase.from("reclaims").insert(rows).select("id");
       if (error) throw error;
       const createdIds = (data ?? []).map((r) => r.id);
+      allCreatedIds.push(...createdIds);
 
-      if (createdIds.length > 1) {
+      if (createdIds.length > 1 && settlementMethod === "bank") {
         // combineReclaims also re-checks for an already-arrived payment.
         await combineReclaims(createdIds);
       } else if (createdIds.length === 1 && settlementMethod === "bank") {
@@ -225,6 +236,47 @@ export async function createSplitReclaim(formData: FormData) {
     .in("id", transactionIds);
 
   revalidatePath("/", "layout");
+  return { reclaimIds: allCreatedIds };
+}
+
+// Combines open WieBetaaltWat reclaims so they are put into WieBetaaltWat
+// together as one expense. They must be open, go to the same list and have a
+// member chosen. A group that already exists is extended.
+export async function combineWbwReclaims(reclaimIds: string[]): Promise<{ error?: string }> {
+  if (reclaimIds.length < 2) return { error: "Kies minstens twee terugvorderingen." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("reclaims")
+    .select("id, status, settlement_method, payment_request_id, wbw_list_id, wbw_member_id, wbw_group_id")
+    .in("id", reclaimIds);
+  if (error || !data || data.length !== reclaimIds.length) return { error: "Terugvorderingen niet gevonden." };
+  if (data.some((r) => r.status !== "requested" || r.settlement_method !== "external_app" || r.payment_request_id)) {
+    return { error: "Alleen open WieBetaaltWat-terugvorderingen kunnen gecombineerd worden." };
+  }
+  if (data.some((r) => !r.wbw_list_id || !r.wbw_member_id) || new Set(data.map((r) => r.wbw_list_id)).size !== 1) {
+    return { error: "Combineren kan alleen als ze naar dezelfde WieBetaaltWat-lijst gaan en een deelnemer hebben." };
+  }
+
+  const groupId = data.find((r) => r.wbw_group_id)?.wbw_group_id ?? globalThis.crypto.randomUUID();
+  // Everything already in one of the groups moves along with it.
+  const existing = [...new Set(data.map((r) => r.wbw_group_id).filter(Boolean))] as string[];
+  const { error: updateError } = await supabase
+    .from("reclaims")
+    .update({ wbw_group_id: groupId })
+    .or([`id.in.(${reclaimIds.join(",")})`, ...(existing.length > 0 ? [`wbw_group_id.in.(${existing.join(",")})`] : [])].join(","))
+    .eq("status", "requested");
+  if (updateError) return { error: "Combineren mislukt. Probeer het opnieuw." };
+  revalidatePath("/", "layout");
+  return {};
+}
+
+// Takes one reclaim out of its WieBetaaltWat combination again.
+export async function ungroupWbwReclaim(reclaimId: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("reclaims").update({ wbw_group_id: null }).eq("id", reclaimId);
+  if (error) return { error: "Losmaken mislukt. Probeer het opnieuw." };
+  revalidatePath("/", "layout");
+  return {};
 }
 
 // Marks several reclaims paid at once (everything of one payment entered in WieBetaaltWat).

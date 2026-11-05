@@ -201,11 +201,30 @@ export default async function DashboardPage({
         </Link>
       )}
 
-      {show("accounts") && balances.accounts.length > 0 && (
+      {show("accounts") && (balances.accounts.length > 0 || balances.wbw) && (
         <section className={`${card} p-5`}>
-          <p className="text-sm text-gray-500">Totaal op je betaalrekeningen</p>
+          <p className="text-sm text-gray-500">
+            {balances.wbw ? "Totaal op je rekeningen en WieBetaaltWat" : "Totaal op je betaalrekeningen"}
+          </p>
           <p className="mt-1 text-4xl font-semibold text-gray-900">{euro(balances.total)}</p>
           <ul className="mt-4 divide-y divide-gray-100 border-t border-gray-100">
+            {balances.wbw && (
+              <li>
+                <Link
+                  href="/terugvorderen"
+                  className="flex min-h-[48px] items-center justify-between gap-3 text-base active:bg-gray-50"
+                >
+                  <span className="min-w-0 text-gray-600">
+                    <span className="block truncate">WieBetaaltWat</span>
+                    <span className="block text-xs text-gray-400">
+                      {balances.wbw.balance >= 0 ? "je krijgt nog" : "je moet nog"} · saldo van{" "}
+                      {new Date(`${balances.wbw.date}T00:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-medium text-gray-900">{euro(balances.wbw.balance)}</span>
+                </Link>
+              </li>
+            )}
             {balances.accounts.map((a) => (
               <li key={a.id} className="flex min-h-[48px] items-center justify-between gap-3 text-base">
                 <span className="min-w-0 truncate text-gray-600">

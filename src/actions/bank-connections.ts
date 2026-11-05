@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listAspsps, startAuthorization } from "@/lib/enablebanking/auth";
 import { syncBankConnection } from "@/lib/enablebanking/sync";
+import { isWbwConfigured } from "@/lib/wbw/client";
+import { syncWbwBalance } from "@/actions/wbw";
 import type { PsuContext } from "@/lib/enablebanking/client";
 
 const CONSENT_DAYS = 90;
@@ -153,21 +155,40 @@ export async function syncAllNow() {
     .eq("consent_status", "linked");
   const psu = await getPsuContext();
 
-  return Promise.all(
-    (connections ?? []).map(async (c) => {
+  // Your WieBetaaltWat saldo is refreshed alongside the banks, at the same time.
+  const wbw: Promise<SyncResult> | null = isWbwConfigured()
+    ? syncWbwBalance().then((r) => ({
+        name: "WieBetaaltWat",
+        count: 0,
+        error: "error" in r ? r.error : null,
+        wbw: true,
+      }))
+    : null;
+
+  const banks = await Promise.all(
+    (connections ?? []).map(async (c): Promise<SyncResult> => {
       try {
         const count = await syncBankConnection(supabase, c.id, psu);
-        return { name: c.institution_name as string, count, error: null as string | null };
+        return { name: c.institution_name as string, count, error: null, wbw: false };
       } catch (err) {
         console.error("syncAllNow failed for connection", c.id, err);
         return {
           name: c.institution_name as string,
           count: 0,
           error: friendlySyncError(err),
+          wbw: false,
         };
       }
     })
   );
+  return wbw ? [...banks, await wbw] : banks;
+}
+
+interface SyncResult {
+  name: string;
+  count: number;
+  error: string | null;
+  wbw: boolean;
 }
 
 // null clears the override, falling back to the default 90-day lookback.

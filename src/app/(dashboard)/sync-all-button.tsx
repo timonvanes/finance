@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { syncAllNow } from "@/actions/bank-connections";
 
 export function SyncAllButton() {
-  const [isPending, startTransition] = useTransition();
+  // Plain state, not a transition: a transition stays pending until the whole
+  // page has reloaded, so the button kept saying "Bezig…" long after the work.
+  const [isPending, setPending] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
   const router = useRouter();
 
@@ -16,22 +18,30 @@ export function SyncAllButton() {
         disabled={isPending}
         onClick={() => {
           setMessage(null);
-          startTransition(async () => {
-            const results = await syncAllNow();
-            const failed = results.filter((r) => r.error);
-            const total = results.reduce((sum, r) => sum + r.count, 0);
-            if (results.length === 0) {
-              setMessage({ text: "Geen gekoppelde banken.", isError: true });
-            } else if (failed.length > 0) {
-              setMessage({
-                text: `${failed.map((f) => f.name).join(", ")}: mislukt`,
-                isError: true,
-              });
-            } else {
-              setMessage({ text: `${total} transacties bijgewerkt`, isError: false });
-            }
-            router.refresh();
-          });
+          setPending(true);
+          syncAllNow()
+            .then((results) => {
+              const failed = results.filter((r) => r.error);
+              const banks = results.filter((r) => !r.wbw);
+              const total = banks.reduce((sum, r) => sum + r.count, 0);
+              const wbwDone = results.some((r) => r.wbw && !r.error);
+              if (results.length === 0) {
+                setMessage({ text: "Geen gekoppelde banken.", isError: true });
+              } else if (failed.length > 0) {
+                setMessage({
+                  text: `${failed.map((f) => f.name).join(", ")}: mislukt`,
+                  isError: true,
+                });
+              } else {
+                setMessage({
+                  text: `${total} transacties bijgewerkt${wbwDone ? " en WieBetaaltWat-saldo" : ""}`,
+                  isError: false,
+                });
+              }
+              router.refresh();
+            })
+            .catch(() => setMessage({ text: "Verversen mislukt. Probeer het opnieuw.", isError: true }))
+            .finally(() => setPending(false));
         }}
         className="flex min-h-[44px] items-center gap-2 rounded-full bg-teal-700 px-4 text-base font-medium text-white active:bg-teal-800 disabled:opacity-60"
       >

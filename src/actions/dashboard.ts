@@ -251,7 +251,19 @@ export async function getAccountBalances() {
     };
   });
 
-  return { accounts, total: accounts.reduce((sum, a) => sum + a.balance, 0) };
+  // Your WieBetaaltWat saldo (the lists that count) is money owed to you or by
+  // you, so it counts in the total next to the banks.
+  const { data: wbwRow } = await supabase
+    .from("wbw_entries")
+    .select("amount, entry_date")
+    .eq("kind", "balance")
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const wbw = wbwRow ? { balance: Number(wbwRow.amount), date: wbwRow.entry_date as string } : null;
+
+  return { accounts, wbw, total: accounts.reduce((sum, a) => sum + a.balance, 0) + (wbw?.balance ?? 0) };
 }
 
 const FREE_TO_SPEND_LOOKBACK_MONTHS = 3;
