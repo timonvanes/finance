@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { addWbwSettlement, deleteWbwEntry, saveWbwBalance, setWbwListIncluded, syncWbwBalance } from "@/actions/wbw";
 import type { WbwCandidate, WbwEntryRow } from "@/actions/wbw";
@@ -36,7 +36,10 @@ const toggle = (active: boolean, dark = false) =>
 // What housemates fronted for you is worked out from those.
 export function WbwBalanceCard({ status }: { status: WbwStatus }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  // Plain state, not a transition: a transition stays "pending" until the whole
+  // page has reloaded, which kept the buttons on "Bezig…" long after the work
+  // itself was done. The page refreshes in the background instead.
+  const [isPending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [sign, setSign] = useState<1 | -1>(status.latestBalance != null && status.latestBalance < 0 ? -1 : 1);
@@ -50,15 +53,18 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
 
   function run(fn: () => Promise<{ error?: string }>, after?: () => void) {
     setError(null);
-    startTransition(async () => {
-      const r = await fn();
-      if (r.error) {
-        setError(r.error);
-        return;
-      }
-      after?.();
-      router.refresh();
-    });
+    setPending(true);
+    fn()
+      .then((r) => {
+        if (r.error) {
+          setError(r.error);
+          return;
+        }
+        after?.();
+        router.refresh();
+      })
+      .catch(() => setError("Er ging iets mis. Probeer het opnieuw."))
+      .finally(() => setPending(false));
   }
 
   function saveBalance() {
@@ -93,19 +99,22 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
     setError(null);
     setSyncNote(null);
     const startedAt = Date.now();
-    startTransition(async () => {
-      const r = await syncWbwBalance();
-      if ("error" in r) {
-        setError(r.error);
-        return;
-      }
-      setSyncNote(
-        `Saldo opgehaald: ${euro(r.balance)} over ${r.lists} lijsten.` +
-          (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "") +
-          ` (${r.timings}, hele knop ${((Date.now() - startedAt) / 1000).toFixed(1)}s)`
-      );
-      router.refresh();
-    });
+    setPending(true);
+    syncWbwBalance()
+      .then((r) => {
+        if ("error" in r) {
+          setError(r.error);
+          return;
+        }
+        setSyncNote(
+          `Saldo opgehaald: ${euro(r.balance)} over ${r.lists} lijsten.` +
+            (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "") +
+            ` (${r.timings}, tot het antwoord er was ${((Date.now() - startedAt) / 1000).toFixed(1)}s)`
+        );
+        router.refresh();
+      })
+      .catch(() => setError("Saldo ophalen mislukt. Probeer het opnieuw."))
+      .finally(() => setPending(false));
   }
 
   const candidates = status.candidates.filter((c) => (dir === "in" ? c.amount > 0 : c.amount < 0));
