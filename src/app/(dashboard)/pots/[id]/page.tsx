@@ -28,8 +28,9 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   const balance = computePotBalance(pot);
   const schedule = computeSchedule(pot, balance, new Date(), startDay, graceDays);
   const required = computeRequiredMonthlyDeposit(balance, pot.target_amount, pot.target_date);
-  const pace = Math.round(monthlyPace(pot, balance, startDay, graceDays));
-  const finish = projectedFinish(balance, pot.target_amount, pace);
+  const paceRaw = monthlyPace(pot, balance, startDay, graceDays);
+  const pace = paceRaw == null ? null : Math.round(paceRaw);
+  const finish = pace == null ? null : projectedFinish(balance, pot.target_amount, pace);
   const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
   const deposited = depositedInPeriod(pot, 0, startDay);
   const baseBalance = balance - netInPeriod(pot, 0, startDay);
@@ -118,11 +119,13 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
               // Whole euros, rounded up: the same amount the monthly plan puts in.
               <li className="text-gray-700">Nodig: {euro(Math.ceil(required - 0.005))} per maand om op tijd te zijn</li>
             )}
-            <li className="text-gray-500">
-              Tempo: {euro(pace)} per maand
-              {finish && ` · doel rond ${finish.toLocaleDateString("nl-NL", { month: "long", year: "numeric" })}`}
-              {!finish && schedule.status !== "done" && pace <= 0 && " · geen inleg de laatste maanden"}
-            </li>
+            {pace != null && (
+              <li className="text-gray-500">
+                Tempo: {euro(pace)} per maand
+                {finish && ` · doel rond ${finish.toLocaleDateString("nl-NL", { month: "long", year: "numeric" })}`}
+                {!finish && schedule.status !== "done" && pace <= 0 && " · geen inleg de laatste maanden"}
+              </li>
+            )}
           </ul>
         )}
       </div>

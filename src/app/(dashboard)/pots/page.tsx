@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getPots, getSavingsInbox } from "@/actions/pots";
 import { getDashboardSummary } from "@/actions/dashboard";
 import { computePotBalance } from "@/lib/pots/balance";
-import { computeSchedule, depositedInPeriod, netInPeriod, periodMonthly, planCatchUp } from "@/lib/pots/insights";
+import { computeSchedule, depositedInPeriod, nextPeriodMonthly, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./catch-up-card";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
@@ -34,7 +34,9 @@ export default async function PotsPage() {
   const catchUps = new Map(pots.map((p) => [p.id, planCatchUp(p, startDay)]));
   const carryOf = (id: string) => Math.ceil(catchUps.get(id)?.shortfall ?? 0);
   const planned = pots.filter((p) => plans.get(p.id));
-  const plannedBaseTotal = planned.reduce((s, p) => s + (plans.get(p.id) ?? 0), 0);
+  // "Per maand gepland": the usual monthly amount (the NEXT period), not this
+  // period's, which can include money put back that is already in.
+  const plannedBaseTotal = pots.reduce((s, p) => s + (nextPeriodMonthly(p, balances.get(p.id) ?? 0, startDay) ?? 0), 0);
   const plannedTotal = planned.reduce((s, p) => s + (plans.get(p.id) ?? 0) + carryOf(p.id), 0);
   const catchUpItems = pots.flatMap((p) =>
     (catchUps.get(p.id)?.pending ?? []).map((x) => ({

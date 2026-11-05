@@ -279,7 +279,7 @@ export function monthlyPace(
   startDay: number,
   graceDays = DEFAULT_GRACE_DAYS,
   now = new Date()
-): number {
+): number | null {
   if (pot.created_at || pot.schedule_start) {
     const basis = planBasis(pot, now, pot.schedule_day ?? startDay);
     // A deposit day counts once its slack has passed, so the pace does not dip on
@@ -289,7 +289,9 @@ export function monthlyPace(
       .filter((d) => d.getTime() + (Math.max(0, graceDays) + 1) * DAY_MS <= now.getTime()).length;
     if (passed >= 1) return (balance - basis.startBalance) / passed;
   }
-  return averageMonthlyNet(pot, startDay);
+  // Nothing to measure yet: no deposit day has passed since the plan began and
+  // there is nothing counted either.
+  return counted(pot).length === 0 ? null : averageMonthlyNet(pot, startDay);
 }
 
 // The monthly amount to save: either the fixed plan, or — when the plan is
@@ -329,7 +331,13 @@ export function planCatchUp(pot: PotForInsights, startDay: number, now = new Dat
   const monthly = pot.monthly_amount && !pot.monthly_auto ? Number(pot.monthly_amount) : 0;
   if (!monthly || !pot.plan_start_date) return { shortfall: 0, pending: [] as PendingPeriod[] };
 
-  const first = periodStartFor(new Date(`${pot.plan_start_date}T00:00:00`), startDay);
+  // Only periods that can be judged count: not those before the starting amount was
+  // set (their deposits are not counted any more) or before the plan begins.
+  const judgeFrom = [pot.plan_start_date, pot.opening_balance_date, pot.schedule_start]
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .pop()!;
+  const first = periodStartFor(new Date(`${judgeFrom.slice(0, 10)}T00:00:00`), startDay);
   const current = periodStartFor(now, startDay);
   const decisions = new Map((pot.pot_period_decisions ?? []).map((d) => [d.period_start, d.decision]));
   const entries = counted(pot).filter((e) => e.amount > 0);
