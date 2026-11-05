@@ -103,7 +103,8 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
                   : `${euro(Math.abs(schedule.difference))} ${schedule.status === "ahead" ? "voor" : "achter"} op schema`}
             </li>
             {required != null && required > 0 && (
-              <li className="text-gray-700">Nodig: {euro(required)} per maand om op tijd te zijn</li>
+              // Whole euros, rounded up: the same amount the monthly plan puts in.
+              <li className="text-gray-700">Nodig: {euro(Math.ceil(required - 0.005))} per maand om op tijd te zijn</li>
             )}
             <li className="text-gray-500">
               Tempo: {euro(pace)} per maand

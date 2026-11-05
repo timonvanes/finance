@@ -44,13 +44,25 @@ export function depositedInPeriod(pot: PotForInsights, monthsAgo: number, startD
 }
 
 // Average net deposit per period over the last few completed periods (a
-// younger pot only averages over the periods it has existed).
+// younger pot only averages over the periods it has existed). The running
+// period counts too as soon as something happened in it (a deposit or a
+// withdrawal): without it a young pot is judged on a single old period and the
+// pace looks far too low, while an empty period that has only just begun would
+// pull it down for no reason, so that one is left out.
 export function averageMonthlyNet(pot: PotForInsights, startDay: number, lookback = 3): number {
   const entries = counted(pot);
   if (entries.length === 0) return 0;
   const first = entries.map((e) => e.entry_date).sort()[0];
   let periods = 0;
   let total = 0;
+  const running = periodRange(0, startDay);
+  const runningNet = entries
+    .filter((e) => e.entry_date >= running.start && e.entry_date < running.end)
+    .reduce((sum, e) => sum + e.amount, 0);
+  if (runningNet !== 0) {
+    periods++;
+    total += runningNet;
+  }
   for (let m = 1; m <= lookback; m++) {
     const { start, end } = periodRange(m, startDay);
     if (end <= first) break; // this period ended before the pot had any activity
