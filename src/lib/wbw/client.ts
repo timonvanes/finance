@@ -15,6 +15,8 @@ export interface WbwListBalance {
   name: string;
   currency: string;
   amount: number;
+  // You, as a member of that list (needed to add an expense to it).
+  memberId?: string;
 }
 
 // The API returns { data: [{ balance: { list: {id, name}, member, amount: { currency, fractional } } }] }
@@ -27,14 +29,24 @@ export function parseWbwBalances(json: unknown): WbwListBalance[] {
   for (const item of data) {
     const b = (
       item as {
-        balance?: { list?: { id?: unknown; name?: unknown }; amount?: { currency?: unknown; fractional?: unknown } };
+        balance?: {
+          list?: { id?: unknown; name?: unknown };
+          member?: { id?: unknown };
+          amount?: { currency?: unknown; fractional?: unknown };
+        };
       }
     )?.balance;
     const cents = Number(b?.amount?.fractional);
     const currency = typeof b?.amount?.currency === "string" ? b.amount.currency : null;
     const id = typeof b?.list?.id === "string" ? b.list.id : null;
     if (!id || !currency || !Number.isFinite(cents)) continue;
-    lists.push({ id, name: typeof b?.list?.name === "string" ? b.list.name.trim() : "Lijst", currency, amount: cents / 100 });
+    lists.push({
+      id,
+      name: typeof b?.list?.name === "string" ? b.list.name.trim() : "Lijst",
+      currency,
+      amount: cents / 100,
+      memberId: typeof b?.member?.id === "string" ? b.member.id : undefined,
+    });
   }
   return lists;
 }
@@ -75,18 +87,20 @@ export interface WbwTimings {
   balancesMs: number;
 }
 
-export async function fetchWbwBalances(): Promise<WbwListBalance[]> {
-  return (await fetchWbwBalancesTimed()).lists;
+export interface WbwSession {
+  headers: Record<string, string>;
+  loginMs: number;
 }
 
-// Same, plus how long each step took (the sync button shows it to find what is slow).
-export async function fetchWbwBalancesTimed(): Promise<{ lists: WbwListBalance[]; timings: WbwTimings }> {
+// Logs in like the website does and returns the headers (with the session
+// cookie) for the calls that follow.
+export async function wbwLogin(): Promise<WbwSession> {
   const t0 = Date.now();
   const email = process.env.WBW_EMAIL;
   const password = process.env.WBW_PASSWORD;
   if (!email || !password) throw new Error("WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel.");
 
-  const headers = { ...HEADERS, "X-Device-Id": DEVICE_ID };
+  const headers: Record<string, string> = { ...HEADERS, "X-Device-Id": DEVICE_ID };
   const login = await fetch(`${BASE}/users/sign_in`, {
     method: "POST",
     headers,
@@ -104,11 +118,107 @@ export async function fetchWbwBalancesTimed(): Promise<{ lists: WbwListBalance[]
 
   const cookie = cookiesFrom(login);
   if (!cookie) throw new Error("Inloggen bij WieBetaaltWat gaf geen sessie terug.");
-  const loginMs = Date.now() - t0;
+  return { headers: { ...headers, Cookie: cookie }, loginMs: Date.now() - t0 };
+}
 
+export async function fetchWbwBalances(): Promise<WbwListBalance[]> {
+  return (await fetchWbwBalancesTimed()).lists;
+}
+
+// Same, plus how long each step took (the sync button shows it to find what is slow).
+export async function fetchWbwBalancesTimed(
+  session?: WbwSession
+): Promise<{ lists: WbwListBalance[]; timings: WbwTimings }> {
+  const s = session ?? (await wbwLogin());
   const t1 = Date.now();
-  const res = await fetch(`${BASE}/balances`, { headers: { ...headers, Cookie: cookie }, cache: "no-store" });
+  const res = await fetch(`${BASE}/balances`, { headers: s.headers, cache: "no-store" });
   if (!res.ok) throw new Error(`Saldo's ophalen bij WieBetaaltWat mislukt (status ${res.status}).`);
   const lists = parseWbwBalances(await res.json());
-  return { lists, timings: { loginMs, balancesMs: Date.now() - t1 } };
+  return { lists, timings: { loginMs: s.loginMs, balancesMs: Date.now() - t1 } };
+}
+
+// A person in a WieBetaaltWat list. The e-mail address is deliberately not kept.
+export interface WbwMember {
+  id: string;
+  nickname: string;
+  fullName: string;
+  archived: boolean;
+}
+
+export function parseWbwMembers(json: unknown): WbwMember[] {
+  const data = (json as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) throw new Error("WieBetaaltWat gaf een onverwacht antwoord (geen deelnemers).");
+  const members: WbwMember[] = [];
+  for (const item of data) {
+    const m = (item as { member?: Record<string, unknown> })?.member;
+    if (!m || typeof m.id !== "string") continue;
+    members.push({
+      id: m.id,
+      nickname: typeof m.nickname === "string" ? m.nickname.trim() : "",
+      fullName: typeof m.full_name === "string" ? m.full_name.trim() : "",
+      archived: m.archived === true,
+    });
+  }
+  return members;
+}
+
+export async function fetchWbwListMembers(session: WbwSession, listId: string): Promise<WbwMember[]> {
+  const res = await fetch(`${BASE}/lists/${encodeURIComponent(listId)}/members?page=0&per_page=50`, {
+    headers: session.headers,
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Deelnemers ophalen bij WieBetaaltWat mislukt (status ${res.status}).`);
+  return parseWbwMembers(await res.json());
+}
+
+export interface NewWbwExpense {
+  listId: string;
+  name: string;
+  payedById: string; // member who paid (you)
+  date: string; // YYYY-MM-DD
+  shares: { memberId: string; cents: number }[]; // exact amounts; must add up to the total
+}
+
+// Builds the body of "add expense": the paid total with one exact share per
+// member. The shares must add up to the total to the cent.
+export function buildWbwExpenseBody(e: NewWbwExpense, newId: () => string) {
+  const totalCents = e.shares.reduce((sum, s) => sum + s.cents, 0);
+  const money = (cents: number) => ({ currency: "EUR", fractional: cents });
+  return {
+    expense: {
+      id: newId(),
+      name: e.name,
+      payed_by_id: e.payedById,
+      payed_on: e.date,
+      source_amount: money(totalCents),
+      amount: money(totalCents),
+      exchange_rate: 1,
+      shares_attributes: e.shares.map((s) => ({
+        id: newId(),
+        member_id: s.memberId,
+        meta: { type: "exact" },
+        amount: money(s.cents),
+        source_amount: money(s.cents),
+      })),
+    },
+  };
+}
+
+// Adds one expense to a list. This is the only write to WieBetaaltWat.
+export async function createWbwExpense(session: WbwSession, e: NewWbwExpense): Promise<{ id: string }> {
+  if (e.shares.length === 0 || e.shares.some((s) => !Number.isInteger(s.cents) || s.cents < 0)) {
+    throw new Error("De verdeling voor WieBetaaltWat klopt niet.");
+  }
+  const res = await fetch(`${BASE}/lists/${encodeURIComponent(e.listId)}/expenses`, {
+    method: "POST",
+    headers: { ...session.headers, "Content-Type": "application/json" },
+    body: JSON.stringify(buildWbwExpenseBody(e, () => crypto.randomUUID())),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const reason = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+    throw new Error(`Uitgave aanmaken bij WieBetaaltWat mislukt (status ${res.status})${reason ? `: ${reason}` : ""}.`);
+  }
+  const json = (await res.json().catch(() => null)) as { expense?: { id?: string } } | null;
+  return { id: json?.expense?.id ?? "" };
 }
