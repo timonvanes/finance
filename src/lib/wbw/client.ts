@@ -269,6 +269,9 @@ export interface WbwExpense {
   category: string | null; // WieBetaaltWat's main category, e.g. "Huishoudelijke uitgaven"
   // Your part in cents (euro), 0 when you have none.
   myShareCents: number;
+  // The whole expense and everyone's part in it, in cents (euro).
+  totalCents: number;
+  shares: { memberId: string; cents: number }[];
 }
 
 export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[] {
@@ -283,6 +286,13 @@ export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[
     const amount = mine?.amount as { currency?: unknown; fractional?: unknown } | undefined;
     const cents = amount && amount.currency === "EUR" ? Number(amount.fractional) : 0;
     const category = (e.category as { main_description?: unknown } | null)?.main_description;
+    const allShares = shares.flatMap((s) => {
+      const sh = s.share;
+      const a = sh?.amount as { currency?: unknown; fractional?: unknown } | undefined;
+      const c = a && a.currency === "EUR" ? Number(a.fractional) : NaN;
+      return typeof sh?.member_id === "string" && Number.isFinite(c) && c > 0 ? [{ memberId: sh.member_id, cents: c }] : [];
+    });
+    const total = (e.amount as { currency?: unknown; fractional?: unknown } | undefined)?.fractional;
     out.push({
       id: e.id,
       name: typeof e.name === "string" ? e.name.trim() : "",
@@ -291,6 +301,8 @@ export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[
       payerId: typeof e.payed_by_id === "string" ? e.payed_by_id : "",
       category: typeof category === "string" ? category : null,
       myShareCents: Number.isFinite(cents) && cents > 0 ? cents : 0,
+      totalCents: Number.isFinite(Number(total)) ? Number(total) : allShares.reduce((sum, x) => sum + x.cents, 0),
+      shares: allShares,
     });
   }
   return out;

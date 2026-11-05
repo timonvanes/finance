@@ -13,6 +13,41 @@ import { IncomeSplit } from "./income-split";
 
 export const maxDuration = 60;
 
+interface WbwDetails {
+  list: string;
+  payer: string;
+  total: number;
+  shares: { name: string; amount: number; you: boolean }[];
+}
+
+const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+
+// Who paid a WieBetaaltWat expense and who was charged for how much of it.
+function WbwSplit({ details }: { details: WbwDetails }) {
+  return (
+    <details className="group rounded-xl bg-gray-50 px-4 py-2 text-sm">
+      <summary className="flex min-h-[40px] cursor-pointer list-none items-center justify-between gap-2 text-gray-700 [&::-webkit-details-marker]:hidden">
+        <span>Verdeling in WieBetaaltWat</span>
+        <span className="text-xl text-gray-300 transition-transform group-open:rotate-90">›</span>
+      </summary>
+      <div className="space-y-2 pb-2 text-gray-700">
+        <p className="text-gray-500">
+          Lijst {details.list} · betaald door <span className="font-medium text-gray-800">{details.payer}</span> · totaal{" "}
+          {euro(details.total)}
+        </p>
+        <ul className="divide-y divide-gray-200">
+          {details.shares.map((s, i) => (
+            <li key={`${s.name}-${i}`} className="flex items-center justify-between gap-3 py-1.5">
+              <span className={s.you ? "font-medium text-gray-900" : ""}>{s.you ? "Jij" : s.name}</span>
+              <span className={s.you ? "font-semibold text-gray-900" : ""}>{euro(s.amount)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  );
+}
+
 const FILTERS = [
   { value: "unreviewed", label: "Te doen" },
   { value: "all", label: "Alles" },
@@ -53,7 +88,7 @@ export default async function TransactionsPage({
     // "Historie vanaf" date without deleting them.
     .from("visible_transactions")
     .select(
-      `id, booking_date, amount, currency, counterparty_name, raw_description, note, category_id, category_source, flagged_for_reclaim, reviewed, is_transfer, source,
+      `id, booking_date, amount, currency, counterparty_name, raw_description, note, category_id, category_source, flagged_for_reclaim, reviewed, is_transfer, source, wbw_details,
       bank_accounts(bank_connections(institution_name))`
     )
     .order("booking_date", { ascending: activeSort === "asc" })
@@ -232,6 +267,7 @@ export default async function TransactionsPage({
                     {Math.abs(tx.amount).toFixed(2)}
                   </span>
                 </div>
+                {tx.source === "wbw" && tx.wbw_details && <WbwSplit details={tx.wbw_details as WbwDetails} />}
                 <div className="[&_select]:w-full">
                   <CategorySelect
                     transactionId={tx.id}

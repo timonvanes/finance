@@ -33,7 +33,14 @@ export async function importWbwExpenses(
   const skip = new Set(excludedListIds);
   const wanted = new Map<
     string,
-    { name: string; date: string; cents: number; category: string | null; description: string }
+    {
+      name: string;
+      date: string;
+      cents: number;
+      category: string | null;
+      description: string;
+      details: { list: string; payer: string; total: number; shares: { name: string; amount: number; you: boolean }[] };
+    }
   >();
   const seen = new Set<string>();
 
@@ -49,12 +56,22 @@ export async function importWbwExpenses(
         const members = await fetchWbwListMembers(session, list.id);
         nameOf = new Map(members.map((m) => [m.id, m.fullName || m.nickname]));
       }
+      const memberName = (id: string) => nameOf?.get(id) ?? "Oud-deelnemer";
       wanted.set(e.id, {
         name: e.name || "WieBetaaltWat",
         date: e.date,
         cents: e.myShareCents,
         category: e.category,
-        description: `WieBetaaltWat · ${list.name} · betaald door ${nameOf?.get(e.payerId) ?? "een deelnemer"}`,
+        description: `WieBetaaltWat · ${list.name} · betaald door ${memberName(e.payerId)}`,
+        // Who was charged and for how much, kept to show when the transaction is opened.
+        details: {
+          list: list.name,
+          payer: memberName(e.payerId),
+          total: e.totalCents / 100,
+          shares: e.shares
+            .map((s) => ({ name: memberName(s.memberId), amount: s.cents / 100, you: s.memberId === list.memberId }))
+            .sort((a, b) => Number(b.you) - Number(a.you) || b.amount - a.amount),
+        },
       });
     }
   }
@@ -79,6 +96,7 @@ export async function importWbwExpenses(
       counterparty_name: w.name,
       raw_description: w.description,
       wbw_category: w.category,
+      wbw_details: w.details,
     };
     const row = local.get(id);
     if (!row) {
