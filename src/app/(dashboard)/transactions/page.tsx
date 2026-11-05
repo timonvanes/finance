@@ -212,24 +212,33 @@ export default async function TransactionsPage({
         ))}
       </div>
 
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        {[{ value: "", label: "Alle bronnen" }, ...sources].map((s) => {
-          const active = (activeSource?.value ?? "") === s.value;
-          return (
-            <Link
-              key={s.value || "all"}
-              href={buildHref({ bron: s.value }, current)}
-              className={
-                active
-                  ? "flex min-h-[40px] shrink-0 items-center rounded-full bg-gray-900 px-4 text-sm font-medium text-white"
-                  : "flex min-h-[40px] shrink-0 items-center rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
-              }
-            >
-              {s.label}
-            </Link>
-          );
-        })}
-      </div>
+      <details className="group">
+        <summary className="flex min-h-[44px] w-fit cursor-pointer list-none items-center gap-2 rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100 [&::-webkit-details-marker]:hidden">
+          <span>Filter{activeSource ? `: ${activeSource.label}` : ""}</span>
+          <span className="text-gray-400 transition-transform group-open:rotate-90">›</span>
+        </summary>
+        <div className="mt-2 space-y-1">
+          <p className="px-1 text-xs text-gray-500">Bron</p>
+          <div className="flex flex-wrap gap-2">
+            {[{ value: "", label: "Alle bronnen" }, ...sources].map((s) => {
+              const active = (activeSource?.value ?? "") === s.value;
+              return (
+                <Link
+                  key={s.value || "all"}
+                  href={buildHref({ bron: s.value }, current)}
+                  className={
+                    active
+                      ? "flex min-h-[40px] items-center rounded-full bg-gray-900 px-4 text-sm font-medium text-white"
+                      : "flex min-h-[40px] items-center rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
+                  }
+                >
+                  {s.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </details>
 
       <form method="get" className="flex items-center gap-2">
         {activeFilter !== "unreviewed" && <input type="hidden" name="type" value={activeFilter} />}
