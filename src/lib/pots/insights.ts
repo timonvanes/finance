@@ -389,5 +389,7 @@ export function nextPeriodMonthly(pot: PotForInsights, balance: number, startDay
 
 export function periodMonthly(pot: PotForInsights, balance: number, startDay: number): number | null {
   const range = periodRange(0, startDay);
+  // A plan that only begins in a later period asks nothing of this one.
+  if (pot.schedule_start && pot.schedule_start.slice(0, 10) >= range.end) return null;
   return effectiveMonthly(pot, balance - netInPeriod(pot, 0, startDay), range.startDate, startDay);
 }

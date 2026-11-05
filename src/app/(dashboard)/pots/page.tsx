@@ -1,15 +1,12 @@
 import Link from "next/link";
 import { getPots, getSavingsInbox } from "@/actions/pots";
-import { getDashboardSummary } from "@/actions/dashboard";
 import { computePotBalance } from "@/lib/pots/balance";
 import { computeSchedule, depositedInPeriod, nextPeriodMonthly, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./catch-up-card";
-import { periodRange } from "@/lib/month";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { InfoButton } from "../info-button";
 import { PlanRow } from "./plan-row";
 import { SavingsInbox } from "./inbox";
-import { LeftoverCard } from "./leftover-card";
 import { AutoDetect } from "./auto-detect";
 import { GoalSpendCard } from "./goal-spend-card";
 
@@ -22,7 +19,6 @@ export default async function PotsPage() {
     getMonthStartDay(),
     getPotGraceDays(),
   ]);
-  const summary = pots.length > 0 ? await getDashboardSummary(0) : null;
 
   const balances = new Map(pots.map((p) => [p.id, computePotBalance(p)]));
   const totalBalance = [...balances.values()].reduce((s, b) => s + b, 0);
@@ -47,7 +43,6 @@ export default async function PotsPage() {
       missing: x.missing,
     }))
   );
-  const depositedTotal = pots.reduce((s, p) => s + depositedInPeriod(p, 0, startDay), 0);
   const plannedDeposited = planned.reduce(
     (s, p) => s + Math.min(depositedInPeriod(p, 0, startDay), (plans.get(p.id) ?? 0) + carryOf(p.id)),
     0
@@ -61,11 +56,6 @@ export default async function PotsPage() {
       : []
   );
 
-  const period = periodRange(0, startDay);
-  const periodLabel = period.labelDate.toLocaleDateString("nl-NL", { month: "long" });
-  const leftover = summary
-    ? summary.monthIncome - summary.monthExpense - Math.max(plannedTotal, depositedTotal)
-    : 0;
 
   return (
     <div className="space-y-5">
@@ -132,14 +122,6 @@ export default async function PotsPage() {
 
       {inbox.length > 0 && pots.length > 0 && (
         <SavingsInbox items={inbox} pots={pots.map((p) => ({ id: p.id, name: p.name }))} />
-      )}
-
-      {pots.length > 0 && leftover >= 10 && (
-        <LeftoverCard
-          suggested={Math.floor(leftover)}
-          pots={pots.map((p) => ({ id: p.id, name: p.name }))}
-          periodLabel={periodLabel}
-        />
       )}
 
       <section className="space-y-2">
