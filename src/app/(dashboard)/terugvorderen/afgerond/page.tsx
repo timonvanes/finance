@@ -32,6 +32,7 @@ export default async function AfgerondPage() {
     paidAt: string | null;
     sortDate: string;
     settledText: string | null;
+    wbwExpenseId: string | null;
     lines: Line[];
   }[] = [];
 
@@ -48,6 +49,7 @@ export default async function AfgerondPage() {
       status: r.status,
       paidAt: r.paid_at,
       sortDate: r.paid_at ?? r.created_at,
+      wbwExpenseId: r.wbw_expense_id ?? null,
       settledText: settled
         ? `${settled.counterparty_name ?? "onbekend"} · ${fmt(settled.booking_date)} · ${euro(settled.amount)}`
         : null,
@@ -84,6 +86,7 @@ export default async function AfgerondPage() {
     });
     items.push({
       kind: "request",
+      wbwExpenseId: null,
       id: pr.id,
       person: one(pr.people)?.name ?? "Onbekend",
       title: `Gecombineerd · ${lines.length} afschrijvingen`,
@@ -173,7 +176,7 @@ export default async function AfgerondPage() {
                   {d.settledText && (
                     <p className="text-sm text-gray-500">Gekoppelde betaling: {d.settledText}</p>
                   )}
-                  <DoneActions kind={d.kind} id={d.id} status={d.status} />
+                  <DoneActions kind={d.kind} id={d.id} status={d.status} inWieBetaaltWat={Boolean(d.wbwExpenseId)} />
                 </div>
               </details>
             </li>

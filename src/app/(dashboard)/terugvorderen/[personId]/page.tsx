@@ -6,6 +6,7 @@ import { isBunqConfigured } from "@/lib/bunq/client";
 import { getBunqPaymentLinksEnabled } from "@/lib/settings";
 import { ItemCard, type OpenItem } from "../item-card";
 import { TxDetails } from "../tx-details";
+import { DoneActions } from "../done-actions";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
@@ -41,6 +42,8 @@ export default async function PersonPage({
     note?: string | null;
   };
   const done: {
+    kind: "reclaim" | "request";
+    wbwExpenseId: string | null;
     id: string;
     title: string;
     amount: number;
@@ -86,6 +89,8 @@ export default async function PersonPage({
     } else {
       const settled = one(r.settled_transaction);
       done.push({
+        kind: "reclaim",
+        wbwExpenseId: r.wbw_expense_id ?? null,
         id: r.id,
         title,
         amount: r.computed_amount,
@@ -145,6 +150,8 @@ export default async function PersonPage({
     } else {
       const settled = one(pr.settled_transaction);
       done.push({
+        kind: "request",
+        wbwExpenseId: null,
         id: pr.id,
         title: `Gecombineerd · ${lines.length} afschrijvingen`,
         amount: total,
@@ -267,6 +274,7 @@ export default async function PersonPage({
                     {d.settledText && (
                       <p className="text-sm text-gray-500">Gekoppelde betaling: {d.settledText}</p>
                     )}
+                    <DoneActions kind={d.kind} id={d.id} status={d.status} inWieBetaaltWat={Boolean(d.wbwExpenseId)} />
                   </div>
                 </details>
               </li>
