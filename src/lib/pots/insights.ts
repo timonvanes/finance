@@ -119,7 +119,8 @@ function installmentDatesFrom(from: Date, end: Date, day: number): Date[] {
 
 // Where the plan begins and what the pot held then. The start date you chose
 // counts from that day (what was in before it is the starting amount); without
-// one the plan starts when the pot was created, from whatever it held then.
+// one the plan starts on the day the pot was created, from whatever it held
+// before that day.
 // (The opening-balance date can lie far in the past, e.g. pulled back to the
 // first matching transaction, and must not make a brand-new pot look months
 // behind.)
@@ -138,7 +139,10 @@ function planBasis(pot: PotForInsights, fallback: Date, day: number | null) {
   const createdDay = createdAt.toISOString().slice(0, 10);
   return {
     from: createdAt,
-    startBalance: pot.opening_balance + entries.filter((e) => e.entry_date <= createdDay).reduce((sum, e) => sum + e.amount, 0),
+    // Only what was in before the day the pot was created is the starting amount:
+    // a pot is usually made by its first transfer, and that is a deposit, not a
+    // starting balance (a first euro would otherwise shift the whole plan by a euro).
+    startBalance: pot.opening_balance + entries.filter((e) => e.entry_date < createdDay).reduce((sum, e) => sum + e.amount, 0),
     installments: (end: Date) => (day == null ? [] : installmentDates(createdAt, end, day)),
   };
 }
