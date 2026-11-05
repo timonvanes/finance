@@ -215,13 +215,7 @@ export default async function DashboardPage({
                   href="/terugvorderen"
                   className="flex min-h-[48px] items-center justify-between gap-3 text-base active:bg-gray-50"
                 >
-                  <span className="min-w-0 text-gray-600">
-                    <span className="block truncate">WieBetaaltWat</span>
-                    <span className="block text-xs text-gray-400">
-                      {balances.wbw.balance >= 0 ? "je krijgt nog" : "je moet nog"} · saldo van{" "}
-                      {new Date(`${balances.wbw.date}T00:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
-                    </span>
-                  </span>
+                  <span className="min-w-0 truncate text-gray-600">WieBetaaltWat</span>
                   <span className="shrink-0 font-medium text-gray-900">{euro(balances.wbw.balance)}</span>
                 </Link>
               </li>
