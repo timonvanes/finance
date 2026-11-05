@@ -13,6 +13,7 @@ import {
   type WbwSession,
 } from "@/lib/wbw/client";
 import { buildShares, matchMember } from "@/lib/wbw/match";
+import { todayAmsterdam } from "@/lib/wbw/record";
 
 const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
 const toCents = (euro: number) => Math.round(Number(euro) * 100);
@@ -168,7 +169,9 @@ async function pushGroup(
     name?.trim() ||
     group.map((r) => r.note?.trim()).find(Boolean) ||
     (merchants.length > 0 ? merchants.slice(0, 3).join(" + ") : "Uitgave");
-  const date = [...txs.values()].map((t) => t.date).sort().pop() ?? new Date().toISOString();
+  // Dated the day it is entered, not the day of the payment: no backdating, so the
+  // WieBetaaltWat saldo moves on the day you put it in.
+  const date = todayAmsterdam();
 
   const created = await createWbwExpense(session, {
     listId: list.id,
