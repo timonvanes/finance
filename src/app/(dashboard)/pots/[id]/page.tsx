@@ -48,7 +48,9 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
     const r = periodRange(i, startDay);
     return {
       date: r.start,
-      label: `${r.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" })} (${r.startDate.getDate()}e)`,
+      // A month is named after the month it ends in: the one that starts on 23
+      // September is "oktober", as what is put in on the 23rd is for that month.
+      label: `${r.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" })} (vanaf ${r.startDate.toLocaleDateString("nl-NL", { day: "numeric", month: "long" })})`,
     };
   });
   const entries = [...pot.pot_entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
@@ -164,6 +166,8 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
             <p className="text-sm text-gray-500">
               Vanaf wanneer het schema, het tempo en het bedrag per maand rekenen. Standaard de dag dat het potje is
               aangemaakt. Wat er vóór die dag in zat, telt als startbedrag.
+              {startDay > 1 &&
+                ` Je maand loopt van de ${startDay}e tot de ${startDay - 1}e en heet naar de maand waarin hij eindigt: wat je op de ${startDay}e van september inlegt, is voor oktober.`}
             </p>
             <ScheduleStartForm
               potId={pot.id}

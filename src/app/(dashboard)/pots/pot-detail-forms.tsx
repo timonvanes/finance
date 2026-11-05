@@ -325,7 +325,7 @@ export function ScheduleStartForm({
         <option value="created">Aanmaakdatum ({new Date(`${createdOn}T00:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })})</option>
         {months.map((m) => (
           <option key={m.date} value={m.date}>
-            Begin van {m.label}
+            {m.label}
           </option>
         ))}
         <option value="custom">Een andere dag…</option>
