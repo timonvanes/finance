@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getWbwFrontedRows } from "@/lib/wbw-fronted";
-import { fetchWbwBalancesTimed, isWbwConfigured } from "@/lib/wbw/client";
+import { fetchWbwBalancesTimed, isWbwConfigured, wbwLogin } from "@/lib/wbw/client";
+import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
 import { applyWbwLists, recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
 import { euroSaldo, type WbwListBalance } from "@/lib/wbw/client";
 
@@ -109,7 +110,7 @@ export async function saveWbwBalance(balance: number, date?: string): Promise<{ 
 // Reads the saldo of all lists from WieBetaaltWat itself (read-only) and stores
 // it as today's saldo, so it no longer has to be typed in.
 export async function syncWbwBalance(): Promise<
-  { error: string } | { balance: number; lists: number; other: string[]; timings: string }
+  { error: string } | { balance: number; lists: number; other: string[]; timings: string; removed: number }
 > {
   try {
     if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
@@ -120,14 +121,23 @@ export async function syncWbwBalance(): Promise<
     } = await supabase.auth.getUser();
     if (!user) return { error: "Niet ingelogd." };
 
-    const { lists, timings } = await fetchWbwBalancesTimed();
+    const session = await wbwLogin();
+    const { lists, timings } = await fetchWbwBalancesTimed(session);
     const savedAt = Date.now();
     const result = await applyWbwLists(supabase, user.id, lists, todayAmsterdam());
     if (result.error) return { error: result.error };
     const saveMs = Date.now() - savedAt;
+    // Expenses deleted in WieBetaaltWat are removed here too (never blocks the sync).
+    let removed = 0;
+    try {
+      removed = (await removeReclaimsOfDeletedWbwExpenses(supabase, session)).removed;
+    } catch (e) {
+      console.error("following WBW deletions failed", e);
+    }
     revalidatePath("/", "layout");
     const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
     return {
+      removed,
       timings: `inloggen ${sec(timings.loginMs)}, saldo's ${sec(timings.balancesMs)}, opslaan ${sec(saveMs)}, totaal op de server ${sec(Date.now() - started)}`,
       balance: result.balance,
       lists: lists.length,

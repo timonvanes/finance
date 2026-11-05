@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getQueuedTransactions, getRecentExpenseTransactions } from "@/actions/reclaims";
 import { getPeopleWithGroups } from "@/actions/people";
+import { getWbwListChoices } from "@/actions/wbw-push";
 import { Wizard } from "./wizard";
 
 export default async function NieuwPage({
@@ -9,10 +10,11 @@ export default async function NieuwPage({
   searchParams: Promise<{ transactionId?: string }>;
 }) {
   const { transactionId } = await searchParams;
-  const [recent, queued, peopleRaw] = await Promise.all([
+  const [recent, queued, peopleRaw, wbw] = await Promise.all([
     getRecentExpenseTransactions(),
     getQueuedTransactions(),
     getPeopleWithGroups(),
+    getWbwListChoices(),
   ]);
 
   const transactions = [
@@ -44,7 +46,13 @@ export default async function NieuwPage({
         </Link>
         <h1 className="text-2xl font-semibold text-gray-900">Nieuwe terugvordering</h1>
       </div>
-      <Wizard transactions={transactions} people={people} initialTransactionId={transactionId} />
+      <Wizard
+        transactions={transactions}
+        people={people}
+        initialTransactionId={transactionId}
+        wbwLists={wbw.lists}
+        wbwConfigured={wbw.configured}
+      />
     </div>
   );
 }

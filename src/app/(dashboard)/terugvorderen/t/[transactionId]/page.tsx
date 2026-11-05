@@ -61,6 +61,9 @@ export default async function TransactionReclaimsPage({
           referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
           description: tx?.counterparty_name ?? undefined,
           note: r.note ?? r.tikkie_link,
+          wbwListId: r.wbw_list_id,
+          wbwMemberId: r.wbw_member_id,
+          wbwGroupId: r.wbw_group_id,
           bunqLink: (() => {
             const l = bunqLinks.find((x) => x.reclaim_id === r.id);
             return l ? { url: l.share_url as string, amount: Number(l.amount), status: l.status as string } : null;
@@ -155,9 +158,15 @@ export default async function TransactionReclaimsPage({
       {wbwOpen.length > 0 && wbwChoices.configured && (
         <WbwPushCard
           reclaims={wbwOpen.map(({ item }) => ({ id: item.id, personName: item.title, amount: item.amount }))}
-          total={wbwOpen[0].item.sourceTotal ?? (tx ? Math.abs(tx.amount) : null)}
-          name={tx?.counterparty_name ?? "Uitgave"}
+          total={tx ? Math.abs(tx.amount) : null}
+          defaultName={wbwOpen.map(({ item }) => item.note?.trim()).find(Boolean) ?? tx?.counterparty_name ?? "Uitgave"}
           lists={wbwChoices.lists}
+          storedListId={
+            wbwOpen.every(({ item }) => item.wbwListId && item.wbwMemberId) &&
+            new Set(wbwOpen.map(({ item }) => item.wbwListId)).size === 1
+              ? (wbwOpen[0].item.wbwListId ?? null)
+              : null
+          }
         />
       )}
 

@@ -260,17 +260,23 @@ export async function pushStoredWbw(
     const { data: first, error } = await supabase.from("reclaims").select(RECLAIM_COLUMNS).in("id", reclaimIds);
     if (error || !first || first.length !== reclaimIds.length) return { error: "Terugvorderingen niet gevonden." };
 
-    // A combination goes in as a whole, also the parts that were not selected.
-    const groupIds = [...new Set((first as unknown as ReclaimRow[]).map((r) => r.wbw_group_id).filter(Boolean))] as string[];
+    // What belongs together goes in together: a combination as a whole, and every
+    // open WieBetaaltWat reclaim of the same payment (otherwise the payment would
+    // end up in WieBetaaltWat twice, once per person).
     let reclaims = first as unknown as ReclaimRow[];
-    if (groupIds.length > 0) {
-      const { data: all } = await supabase
+    for (let pass = 0; pass < 3; pass++) {
+      const groupIds = [...new Set(reclaims.map((r) => r.wbw_group_id).filter(Boolean))] as string[];
+      const txIds = [...new Set(reclaims.map((r) => r.transaction_id))];
+      const filters = [`transaction_id.in.(${txIds.join(",")})`, ...(groupIds.length > 0 ? [`wbw_group_id.in.(${groupIds.join(",")})`] : [])];
+      const { data: more } = await supabase
         .from("reclaims")
         .select(RECLAIM_COLUMNS)
-        .in("wbw_group_id", groupIds)
-        .eq("status", "requested");
+        .or(filters.join(","))
+        .eq("status", "requested")
+        .eq("settlement_method", "external_app");
       const byId = new Map(reclaims.map((r) => [r.id, r]));
-      for (const r of (all ?? []) as unknown as ReclaimRow[]) byId.set(r.id, r);
+      for (const r of (more ?? []) as unknown as ReclaimRow[]) byId.set(r.id, r);
+      if (byId.size === reclaims.length) break;
       reclaims = [...byId.values()];
     }
 

@@ -4,9 +4,11 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   changeReclaimMethod,
+  combineWbwReclaims,
   deleteReclaim,
   linkReclaimToTransaction,
   markReclaimPaid,
+  ungroupWbwReclaim,
   writeOffPartOfReclaim,
 } from "@/actions/reclaims";
 import {
@@ -42,6 +44,11 @@ export interface OpenItem {
   bunqLink?: { url: string; amount: number; status: string } | null;
   description?: string;
   note?: string | null;
+  // WieBetaaltWat: the list and member chosen when the reclaim was made, and the
+  // combination it belongs to (reclaims with the same group go in as one expense).
+  wbwListId?: string | null;
+  wbwMemberId?: string | null;
+  wbwGroupId?: string | null;
   lines?: {
     id?: string;
     note?: string | null;
@@ -64,8 +71,10 @@ export function ItemCard({
   openRequests = [],
   otherReclaims = [],
   bunqEnabled = false,
+  otherWbwReclaims = [],
 }: {
   bunqEnabled?: boolean;
+  otherWbwReclaims?: { id: string; label: string; amount: number }[];
   item: OpenItem;
   personName: string;
   incoming: IncomingTransaction[];
@@ -307,6 +316,54 @@ export function ItemCard({
                 </option>
               ))}
             </select>
+          )}
+        </div>
+      )}
+
+      {item.kind === "reclaim" && isWbw && item.wbwListId && item.wbwMemberId && (
+        <div className="space-y-2">
+          {item.wbwGroupId ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <span>Gecombineerd: gaat samen met andere vorderingen als één uitgave naar WieBetaaltWat.</span>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() =>
+                  run(async () => {
+                    const r = await ungroupWbwReclaim(item.id);
+                    if (r.error) throw new Error(r.error);
+                  })
+                }
+                className="min-h-[44px] shrink-0 font-medium text-teal-700 underline disabled:opacity-50"
+              >
+                Losmaken
+              </button>
+            </div>
+          ) : (
+            otherWbwReclaims.length > 0 && (
+              <select
+                disabled={isPending}
+                defaultValue=""
+                onChange={(e) => {
+                  const otherId = e.target.value;
+                  if (!otherId) return;
+                  run(async () => {
+                    const r = await combineWbwReclaims([item.id, otherId]);
+                    if (r.error) throw new Error(r.error);
+                  });
+                }}
+                className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 disabled:opacity-50"
+              >
+                <option value="" disabled>
+                  Combineren met andere WieBetaaltWat-vordering…
+                </option>
+                {otherWbwReclaims.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label} · {euro(r.amount)}
+                  </option>
+                ))}
+              </select>
+            )
           )}
         </div>
       )}

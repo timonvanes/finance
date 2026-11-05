@@ -222,3 +222,24 @@ export async function createWbwExpense(session: WbwSession, e: NewWbwExpense): P
   const json = (await res.json().catch(() => null)) as { expense?: { id?: string } } | null;
   return { id: json?.expense?.id ?? "" };
 }
+
+// Is an expense still in WieBetaaltWat? "deleted" only on a clear sign (not found,
+// or marked deleted); anything unclear is "unknown" and changes nothing.
+export async function wbwExpenseState(session: WbwSession, expenseId: string): Promise<"present" | "deleted" | "unknown"> {
+  const res = await fetch(`${BASE}/expenses/${encodeURIComponent(expenseId)}`, { headers: session.headers, cache: "no-store" });
+  if (res.status === 404 || res.status === 410) return "deleted";
+  if (!res.ok) return "unknown";
+  const json = (await res.json().catch(() => null)) as { expense?: { status?: unknown; deleted_at?: unknown } } | null;
+  const e = json?.expense;
+  if (!e) return "unknown";
+  if (e.deleted_at) return "deleted";
+  if (typeof e.status === "string" && ["deleted", "removed"].includes(e.status)) return "deleted";
+  return "present";
+}
+
+// Can you still open this list? Used before concluding an expense is gone: if the
+// list itself cannot be reached (left it, no access), nothing is concluded.
+export async function wbwListReachable(session: WbwSession, listId: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/lists/${encodeURIComponent(listId)}`, { headers: session.headers, cache: "no-store" });
+  return res.ok;
+}

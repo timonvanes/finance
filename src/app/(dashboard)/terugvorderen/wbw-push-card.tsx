@@ -2,24 +2,28 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadWbwListMembers, pushWbwExpense } from "@/actions/wbw-push";
+import { loadWbwListMembers, pushStoredWbw, pushWbwExpense } from "@/actions/wbw-push";
 import type { WbwAssignment, WbwMemberChoice } from "@/actions/wbw-push";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
 // Puts the open WieBetaaltWat reclaims of ONE payment into WieBetaaltWat as one
-// expense: pick the list, check who is who, and it is created there. You paid
-// the whole bill, each chosen person gets their share, the rest stays yours.
+// expense. When the list and the people were chosen while making the reclaim it
+// is one tap; otherwise pick the list and check who is who here. You paid the
+// whole bill, each chosen person gets their share, the rest stays yours.
 export function WbwPushCard({
   reclaims,
   total,
-  name,
+  defaultName,
   lists,
+  storedListId,
 }: {
   reclaims: { id: string; personName: string; amount: number }[];
   total: number | null;
-  name: string;
+  defaultName: string;
   lists: { id: string; name: string }[];
+  // Set when every reclaim already has its list and member.
+  storedListId: string | null;
 }) {
   const router = useRouter();
   const [listId, setListId] = useState("");
@@ -27,6 +31,7 @@ export function WbwPushCard({
   const [pushing, setPushing] = useState(false);
   const [members, setMembers] = useState<WbwMemberChoice[] | null>(null);
   const [rows, setRows] = useState<(WbwAssignment & { memberId: string })[]>([]);
+  const [desc, setDesc] = useState(defaultName);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
@@ -55,25 +60,33 @@ export function WbwPushCard({
     }
   }
 
-  const chosen = rows.filter((r) => r.memberId);
+  const stored = storedListId != null;
+  const effectiveListId = stored ? storedListId : listId;
+  const listName = lists.find((l) => l.id === effectiveListId)?.name ?? "";
+  const chosen = stored ? reclaims.map((r) => ({ reclaimId: r.id, personName: r.personName, cents: Math.round(r.amount * 100) })) : rows.filter((r) => r.memberId);
   const othersTotal = chosen.reduce((s, r) => s + r.cents, 0) / 100;
   const mine = total != null ? Math.max(0, total - othersTotal) : null;
-  const listName = lists.find((l) => l.id === listId)?.name ?? "";
 
   async function push() {
     if (chosen.length === 0) return;
     const text =
-      `Dit maakt in WieBetaaltWat (lijst "${listName}") één uitgave aan van ${total != null ? euro(total) : "het totaalbedrag"} ` +
-      `voor "${name}", door jou betaald, met ${chosen.map((r) => `${r.personName} ${euro(r.cents / 100)}`).join(", ")}. ` +
+      `Dit maakt in WieBetaaltWat (lijst "${listName}") een uitgave aan "${desc.trim() || defaultName}", door jou betaald, met ` +
+      `${chosen.map((r) => `${r.personName} ${euro(r.cents / 100)}`).join(", ")}. ` +
       `Je kunt dit niet vanaf hier ongedaan maken. Doorgaan?`;
     if (!confirm(text)) return;
     setPushing(true);
     setError(null);
     try {
-      const r = await pushWbwExpense(
-        listId,
-        chosen.map((c) => ({ reclaimId: c.reclaimId, memberId: c.memberId }))
-      );
+      const r = stored
+        ? await pushStoredWbw(
+            reclaims.map((x) => x.id),
+            desc.trim() || undefined
+          )
+        : await pushWbwExpense(
+            listId,
+            rows.filter((x) => x.memberId).map((c) => ({ reclaimId: c.reclaimId, memberId: c.memberId })),
+            desc.trim() || undefined
+          );
       if ("error" in r) {
         setError(r.error);
         return;
@@ -87,19 +100,55 @@ export function WbwPushCard({
     }
   }
 
-  if (lists.length === 0) return null;
+  if (lists.length === 0 && !stored) return null;
+
+  const descriptionField = (
+    <label className="block space-y-1">
+      <span className="text-sm text-gray-500">Omschrijving in WieBetaaltWat</span>
+      <input
+        type="text"
+        value={desc}
+        disabled={pushing}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder={defaultName || "Omschrijving"}
+        className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base disabled:opacity-50"
+      />
+    </label>
+  );
 
   return (
     <div className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
       <div>
         <p className="text-base font-medium text-gray-900">Zet in WieBetaaltWat</p>
         <p className="text-sm text-gray-500">
-          Maakt één uitgave aan in een lijst naar keuze en zet de verdeling erin.
+          {stored
+            ? `Staat klaar voor lijst ${listName || "…"}. De deelnemers zijn al gekozen.`
+            : "Maakt één uitgave aan in een lijst naar keuze en zet de verdeling erin."}
         </p>
       </div>
 
       {done ? (
         <p className="text-base text-teal-700">{done}</p>
+      ) : stored ? (
+        <div className="space-y-3">
+          <ul className="space-y-1">
+            {chosen.map((r) => (
+              <li key={r.reclaimId} className="flex items-center justify-between gap-3 text-base text-gray-900">
+                <span className="min-w-0 truncate">{r.personName}</span>
+                <span className="shrink-0 font-medium">{euro(r.cents / 100)}</span>
+              </li>
+            ))}
+          </ul>
+          {descriptionField}
+          <button
+            type="button"
+            disabled={pushing}
+            onClick={() => void push()}
+            className="min-h-[52px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
+          >
+            {pushing ? "Bezig…" : "Zet in WieBetaaltWat"}
+          </button>
+        </div>
       ) : (
         <>
           <select
@@ -146,6 +195,8 @@ export function WbwPushCard({
                   )}
                 </div>
               ))}
+
+              {descriptionField}
 
               <p className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
                 {total != null && <>Totaal {euro(total)} · </>}

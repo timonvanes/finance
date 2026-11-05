@@ -109,6 +109,7 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
         setSyncNote(
           `Saldo opgehaald: ${euro(r.balance)} over ${r.lists} lijsten.` +
             (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "") +
+            (r.removed > 0 ? ` ${r.removed} terugvordering(en) verwijderd omdat de uitgave in WieBetaaltWat is verwijderd.` : "") +
             ` (${r.timings}, tot het antwoord er was ${((Date.now() - startedAt) / 1000).toFixed(1)}s)`
         );
         router.refresh();

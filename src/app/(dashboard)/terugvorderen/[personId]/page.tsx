@@ -72,6 +72,9 @@ export default async function PersonPage({
         referenceCode: r.settlement_method === "bank" ? r.reference_code : null,
         bunqLink: bunqFor("reclaim", r.id),
         note: r.note ?? r.tikkie_link,
+        wbwListId: r.wbw_list_id,
+        wbwMemberId: r.wbw_member_id,
+        wbwGroupId: r.wbw_group_id,
         tx: {
           name: tx?.counterparty_name ?? null,
           date: tx?.booking_date ?? null,
@@ -190,6 +193,17 @@ export default async function PersonPage({
               incoming={incoming}
               bunqEnabled={bunqEnabled}
               openRequests={openRequests}
+              otherWbwReclaims={open
+                .filter(
+                  (o) =>
+                    o.kind === "reclaim" &&
+                    o.method === "external_app" &&
+                    o.id !== item.id &&
+                    o.wbwListId &&
+                    o.wbwMemberId &&
+                    o.wbwListId === item.wbwListId
+                )
+                .map((o) => ({ id: o.id, label: o.title, amount: o.amount }))}
               otherReclaims={looseBankReclaims
                 .filter((r) => r.id !== item.id)
                 .map((r) => ({ id: r.id, label: r.title, amount: r.amount }))}

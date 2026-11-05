@@ -5,7 +5,8 @@ import { ensureBunqCallback, isBunqConfigured } from "@/lib/bunq/client";
 import { processBunqForUser } from "@/lib/bunq/process";
 import { sendPush } from "@/lib/push/send";
 import { clampStartDay } from "@/lib/month";
-import { fetchWbwBalances, isWbwConfigured } from "@/lib/wbw/client";
+import { fetchWbwBalancesTimed, isWbwConfigured, wbwLogin } from "@/lib/wbw/client";
+import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
 import { applyWbwLists, todayAmsterdam } from "@/lib/wbw/record";
 
 export const maxDuration = 60;
@@ -147,9 +148,11 @@ export async function GET(request: NextRequest) {
     try {
       const userId = await resolveUserId();
       if (userId) {
-        const lists = await fetchWbwBalances();
+        const session = await wbwLogin();
+        const { lists } = await fetchWbwBalancesTimed(session);
         const r = await applyWbwLists(admin, userId, lists, todayAmsterdam());
-        report.wbw = r.error ? r.error : { saldo: r.balance, lists: lists.length };
+        const gone = await removeReclaimsOfDeletedWbwExpenses(admin, session, userId);
+        report.wbw = r.error ? r.error : { saldo: r.balance, lists: lists.length, removedAfterWbwDelete: gone.removed };
       }
     } catch (e) {
       report.wbw = e instanceof Error ? e.message : "failed";
