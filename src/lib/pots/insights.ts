@@ -243,13 +243,16 @@ function scheduleNeed(
   return { needed: expectedAfter - base, regular: perInstallment };
 }
 
-function amountToGetOnSchedule(
-  pot: PotForInsights,
-  baseBalance: number,
-  periodStart: Date,
-  startDay: number
-): number | undefined {
-  return scheduleNeed(pot, baseBalance, periodStart, startDay)?.needed;
+// What the automatic plan asks for a period, from what the schedule needs: the
+// regular monthly amount, or more when something has to be put back. Being a bit
+// ahead of the line never lowers the regular amount (the usual 137 does not turn
+// into 135 because of two euros); only a whole installment ahead means nothing is
+// needed this period (null). Whole euros, rounded up.
+function autoAmountFor(n: { needed: number; regular: number }): { total: number; regular: number } | null {
+  if (n.needed <= 0.005) return null;
+  const regular = Math.ceil(n.regular - 0.005);
+  const total = Math.max(Math.ceil(n.needed - 0.005), regular);
+  return { total, regular };
 }
 
 // What the automatic plan asks for this period, split into the regular monthly
@@ -262,10 +265,7 @@ export function autoPlanBreakdown(
   startDay: number
 ): { total: number; regular: number } | null {
   const n = scheduleNeed(pot, baseBalance, periodStart, startDay);
-  if (!n || n.needed <= 0.005) return null;
-  const total = Math.ceil(n.needed - 0.005);
-  const regular = Math.min(total, Math.ceil(n.regular - 0.005));
-  return { total, regular };
+  return n ? autoAmountFor(n) : null;
 }
 
 // How much the pot really grows per month: what it gained since it started,
@@ -306,8 +306,8 @@ export function effectiveMonthly(
 ): number | null {
   if (pot.monthly_auto && pot.target_amount && pot.target_date) {
     if (startDay != null) {
-      const needed = amountToGetOnSchedule(pot, baseBalance, ref, startDay);
-      if (needed !== undefined) return needed > 0.005 ? Math.ceil(needed - 0.005) : null;
+      const need = scheduleNeed(pot, baseBalance, ref, startDay);
+      if (need !== undefined) return autoAmountFor(need)?.total ?? null;
     }
     const required = computeRequiredMonthlyDeposit(baseBalance, pot.target_amount, pot.target_date, ref);
     return required && required > 0 ? Math.ceil(required) : null;
