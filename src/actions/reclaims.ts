@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
 import { generateReferenceCode } from "@/lib/reclaims/reference-code";
+import { deleteWbwExpense, isWbwConfigured, wbwLogin } from "@/lib/wbw/client";
 import { combineReclaims, removeReclaimFromPaymentRequest } from "@/actions/payment-requests";
 
 export async function getRecentExpenseTransactions() {
@@ -123,7 +124,7 @@ export async function getReclaims() {
   const { data, error } = await supabase
     .from("reclaims")
     .select(
-      `id, person_id, transaction_id, amount_type, amount_value, computed_amount, source_total_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path, paid_at, wbw_list_id, wbw_member_id, wbw_group_id,
+      `id, person_id, transaction_id, amount_type, amount_value, computed_amount, source_total_amount, tikkie_link, status, created_at, settled_transaction_id, reference_code, settlement_method, note, receipt_path, paid_at, wbw_list_id, wbw_member_id, wbw_group_id, wbw_expense_id,
       people(name, person_groups(name)),
       transactions!reclaims_transaction_id_fkey(booking_date, counterparty_name, counterparty_iban, raw_description, amount),
       settled_transaction:transactions!reclaims_settled_transaction_id_fkey(booking_date, counterparty_name, amount)`
@@ -363,18 +364,37 @@ export async function undoWriteOffReclaim(reclaimId: string) {
   if (error) throw error;
 }
 
-export async function deleteReclaim(reclaimId: string) {
+export async function deleteReclaim(reclaimId: string): Promise<{ error?: string }> {
   const supabase = await createClient();
 
   const { data: reclaim, error: fetchError } = await supabase
     .from("reclaims")
-    .select("transaction_id")
+    .select("transaction_id, wbw_expense_id")
     .eq("id", reclaimId)
     .single();
-  if (fetchError) throw fetchError;
+  if (fetchError || !reclaim) return { error: "Terugvordering niet gevonden." };
+
+  // Put into WieBetaaltWat from here: that expense goes too, otherwise the saldo
+  // there keeps counting it. Others in the same expense become open again, as
+  // that expense no longer exists. If WieBetaaltWat cannot be reached nothing is
+  // deleted, so the two never end up out of step.
+  if (reclaim.wbw_expense_id) {
+    if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel, dus de uitgave in WieBetaaltWat kan niet verwijderd worden." };
+    try {
+      await deleteWbwExpense(await wbwLogin(), reclaim.wbw_expense_id);
+    } catch (e) {
+      console.error("deleting the WieBetaaltWat expense failed", e);
+      return { error: e instanceof Error ? e.message : "Verwijderen bij WieBetaaltWat mislukt." };
+    }
+    await supabase
+      .from("reclaims")
+      .update({ status: "requested", paid_at: null, wbw_expense_id: null })
+      .eq("wbw_expense_id", reclaim.wbw_expense_id)
+      .neq("id", reclaimId);
+  }
 
   const { error } = await supabase.from("reclaims").delete().eq("id", reclaimId);
-  if (error) throw error;
+  if (error) return { error: "Verwijderen mislukt. Probeer het opnieuw." };
 
   // If no other reclaim still covers this transaction, send it back to the
   // transactions to-do list instead of leaving it in reviewed limbo.
@@ -390,6 +410,8 @@ export async function deleteReclaim(reclaimId: string) {
       .update({ flagged_for_reclaim: false, reviewed: false })
       .eq("id", reclaim.transaction_id);
   }
+  revalidatePath("/", "layout");
+  return {};
 }
 
 // Link an incoming transaction (the actual payback) to a reclaim, and mark

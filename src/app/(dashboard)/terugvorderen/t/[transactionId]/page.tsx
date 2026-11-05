@@ -43,6 +43,7 @@ export default async function TransactionReclaimsPage({
     sourceTotal: number | null;
     note: string | null;
     settledText: string | null;
+    wbwExpenseId: string | null;
   }[] = [];
 
   for (const r of mine) {
@@ -82,6 +83,7 @@ export default async function TransactionReclaimsPage({
         referenceCode: r.reference_code,
         sourceTotal: r.source_total_amount,
         note: r.note ?? r.tikkie_link,
+        wbwExpenseId: r.wbw_expense_id ?? null,
         settledText: settled
           ? `${settled.counterparty_name ?? "onbekend"} · ${new Date(settled.booking_date).toLocaleDateString("nl-NL")} · ${euro(settled.amount)}`
           : null,
@@ -221,7 +223,7 @@ export default async function TransactionReclaimsPage({
                     {d.referenceCode && <p className="text-sm text-gray-500">Referentiecode {d.referenceCode}</p>}
                     {d.note && <p className="whitespace-pre-wrap break-words text-sm italic text-gray-600">{d.note}</p>}
                     {d.settledText && <p className="text-sm text-gray-500">Gekoppelde betaling: {d.settledText}</p>}
-                    <DoneActions kind="reclaim" id={d.id} status={d.status} />
+                    <DoneActions kind="reclaim" id={d.id} status={d.status} inWieBetaaltWat={Boolean(d.wbwExpenseId)} />
                   </div>
                 </details>
               </li>

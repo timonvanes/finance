@@ -223,11 +223,14 @@ export async function createWbwExpense(session: WbwSession, e: NewWbwExpense): P
   return { id: json?.expense?.id ?? "" };
 }
 
-// Is an expense still in WieBetaaltWat? "deleted" only on a clear sign (not found,
-// or marked deleted); anything unclear is "unknown" and changes nothing.
+// Is an expense still in WieBetaaltWat? WieBetaaltWat keeps a deleted expense in
+// the list marked "deleted" and answers 403 when you open it. "deleted" only on a
+// clear sign (403, not found, or marked deleted); anything unclear is "unknown"
+// and changes nothing. The caller must also check the list itself is reachable,
+// because a 403 would look the same if you had lost access to the whole list.
 export async function wbwExpenseState(session: WbwSession, expenseId: string): Promise<"present" | "deleted" | "unknown"> {
   const res = await fetch(`${BASE}/expenses/${encodeURIComponent(expenseId)}`, { headers: session.headers, cache: "no-store" });
-  if (res.status === 404 || res.status === 410) return "deleted";
+  if (res.status === 403 || res.status === 404 || res.status === 410) return "deleted";
   if (!res.ok) return "unknown";
   const json = (await res.json().catch(() => null)) as { expense?: { status?: unknown; deleted_at?: unknown } } | null;
   const e = json?.expense;
@@ -242,4 +245,16 @@ export async function wbwExpenseState(session: WbwSession, expenseId: string): P
 export async function wbwListReachable(session: WbwSession, listId: string): Promise<boolean> {
   const res = await fetch(`${BASE}/lists/${encodeURIComponent(listId)}`, { headers: session.headers, cache: "no-store" });
   return res.ok;
+}
+
+// Deletes an expense in WieBetaaltWat, like the delete button there. One that is
+// already gone (403 or 404) counts as done.
+export async function deleteWbwExpense(session: WbwSession, expenseId: string): Promise<void> {
+  const res = await fetch(`${BASE}/expenses/${encodeURIComponent(expenseId)}`, {
+    method: "DELETE",
+    headers: session.headers,
+    cache: "no-store",
+  });
+  if (res.ok || res.status === 403 || res.status === 404 || res.status === 410) return;
+  throw new Error(`Verwijderen bij WieBetaaltWat mislukt (status ${res.status}).`);
 }

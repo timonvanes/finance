@@ -416,7 +416,10 @@ export function ItemCard({
               disabled={isPending}
               onClick={() => {
                 if (!confirm("Deze terugvordering verwijderen?")) return;
-                run(() => deleteReclaim(item.id), true);
+                run(async () => {
+                  const r = await deleteReclaim(item.id);
+                  if (r.error) throw new Error(r.error);
+                }, true);
               }}
               className="min-h-[44px] rounded-xl border border-red-200 px-4 text-red-600 disabled:opacity-50"
             >
