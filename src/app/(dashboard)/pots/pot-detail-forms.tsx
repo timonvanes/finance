@@ -48,6 +48,7 @@ export function MonthlyPlanForm({
   initial,
   auto,
   autoAmount,
+  autoRegular,
   canAuto,
   remaining,
   requiredMonthly,
@@ -56,6 +57,8 @@ export function MonthlyPlanForm({
   initial: number | null;
   auto: boolean;
   autoAmount: number | null;
+  // The regular monthly part of autoAmount; the rest puts back what was taken out earlier.
+  autoRegular: number | null;
   canAuto: boolean;
   // Still to save for the goal, and what per month would reach it on time.
   remaining: number | null;
@@ -99,9 +102,11 @@ export function MonthlyPlanForm({
 
       {mode === "auto" && canAuto ? (
         <p className="rounded-xl bg-gray-50 p-4 text-base text-gray-700">
-          {autoAmount != null
-            ? `€${autoAmount} per maand — berekend uit je doelbedrag en doeldatum, en past zich aan naarmate je spaart.`
-            : "Je hebt je doel al gehaald, of de doeldatum is voorbij."}
+          {autoAmount == null
+            ? "Je hebt je doel al gehaald, of de doeldatum is voorbij."
+            : autoRegular != null && autoAmount - autoRegular >= 1
+              ? `€${autoAmount} deze periode: €${autoRegular} maandbedrag plus €${autoAmount - autoRegular} om terug te zetten wat eerder uit het potje is gehaald en niet voor het doel was. Daarna is het weer €${autoRegular} per maand.`
+              : `€${autoAmount} per maand — berekend uit je doelbedrag en doeldatum, en past zich aan naarmate je spaart.`}
         </p>
       ) : (
         <div>

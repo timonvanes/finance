@@ -179,13 +179,14 @@ export function netInPeriod(pot: PotForInsights, monthsAgo: number, startDay: nu
 // on its schedule again afterwards: the period's installment plus whatever is
 // still missing from before, such as money taken out that was not for the goal
 // (it is added in full to the next deposit, not spread over the remaining
-// months). Undefined when there is no schedule to measure against yet.
-function amountToGetOnSchedule(
+// months). `regular` is the installment alone. Undefined when there is no
+// schedule to measure against yet.
+function scheduleNeed(
   pot: PotForInsights,
   baseBalance: number,
   periodStart: Date,
   startDay: number
-): number | undefined {
+): { needed: number; regular: number } | undefined {
   if (!pot.target_amount || !pot.target_date) return undefined;
   const createdAt = pot.created_at ? new Date(pot.created_at) : periodStart;
   const createdDay = createdAt.toISOString().slice(0, 10);
@@ -202,7 +203,64 @@ function amountToGetOnSchedule(
   const perInstallment = (target - startBalance) / installments.length;
   const expectedAfter = Math.min(target, startBalance + perInstallment * dueByPeriodEnd);
   const base = baseBalance + goalSpentOf(entries.filter((e) => e.entry_date < isoDate(periodStart)));
-  return expectedAfter - base;
+  return { needed: expectedAfter - base, regular: perInstallment };
+}
+
+function amountToGetOnSchedule(
+  pot: PotForInsights,
+  baseBalance: number,
+  periodStart: Date,
+  startDay: number
+): number | undefined {
+  return scheduleNeed(pot, baseBalance, periodStart, startDay)?.needed;
+}
+
+// What the automatic plan asks for this period, split into the regular monthly
+// amount and what is put back on top of it (null without a schedule). Whole
+// euros, rounded up, like the plan itself.
+export function autoPlanBreakdown(
+  pot: PotForInsights,
+  baseBalance: number,
+  periodStart: Date,
+  startDay: number
+): { total: number; regular: number } | null {
+  const n = scheduleNeed(pot, baseBalance, periodStart, startDay);
+  if (!n || n.needed <= 0.005) return null;
+  const total = Math.ceil(n.needed - 0.005);
+  const regular = Math.min(total, Math.ceil(n.regular - 0.005));
+  return { total, regular };
+}
+
+// How much the pot really grows per month: what it gained since it started,
+// divided by the deposit days that have passed (the same days the schedule
+// uses), so money taken out and put back counts for nothing and the first euro
+// of a pot does not add a month of its own. Falls back to the average of the
+// periods while no deposit day has passed yet.
+export function monthlyPace(
+  pot: PotForInsights,
+  balance: number,
+  startDay: number,
+  graceDays = DEFAULT_GRACE_DAYS,
+  now = new Date()
+): number {
+  if (pot.created_at) {
+    const createdAt = new Date(pot.created_at);
+    const createdDay = createdAt.toISOString().slice(0, 10);
+    // A deposit day counts once its slack has passed, so the pace does not dip on
+    // the day itself while the transfer is still on its way.
+    const passed = installmentDates(createdAt, now, pot.schedule_day ?? startDay).filter(
+      (d) => d.getTime() + (Math.max(0, graceDays) + 1) * DAY_MS <= now.getTime()
+    ).length;
+    if (passed >= 1) {
+      const startBalance =
+        pot.opening_balance +
+        counted(pot)
+          .filter((e) => e.entry_date <= createdDay)
+          .reduce((sum, e) => sum + e.amount, 0);
+      return (balance - startBalance) / passed;
+    }
+  }
+  return averageMonthlyNet(pot, startDay);
 }
 
 // The monthly amount to save: either the fixed plan, or — when the plan is

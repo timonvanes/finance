@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { getPots } from "@/actions/pots";
 import { computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 import {
-  averageMonthlyNet,
+  autoPlanBreakdown,
   computeSchedule,
   depositedInPeriod,
   effectiveMonthly,
+  monthlyPace,
   netInPeriod,
   projectedFinish,
 } from "@/lib/pots/insights";
@@ -27,7 +28,7 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   const balance = computePotBalance(pot);
   const schedule = computeSchedule(pot, balance, new Date(), startDay, graceDays);
   const required = computeRequiredMonthlyDeposit(balance, pot.target_amount, pot.target_date);
-  const pace = averageMonthlyNet(pot, startDay);
+  const pace = Math.round(monthlyPace(pot, balance, startDay, graceDays));
   const finish = projectedFinish(balance, pot.target_amount, pace);
   const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
   const deposited = depositedInPeriod(pot, 0, startDay);
@@ -36,6 +37,7 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   const monthly = effectiveMonthly(pot, baseBalance, periodStart, startDay);
   const canAuto = !!(pot.target_amount && pot.target_date);
   const autoAmount = canAuto ? effectiveMonthly({ ...pot, monthly_auto: true }, baseBalance, periodStart, startDay) : null;
+  const autoBreakdown = canAuto ? autoPlanBreakdown({ ...pot, monthly_auto: true }, baseBalance, periodStart, startDay) : null;
   const pending = pot.target_amount
     ? pot.pot_entries
         .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= pot.opening_balance_date)
@@ -136,6 +138,7 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
               initial={pot.monthly_amount != null ? Number(pot.monthly_amount) : null}
               auto={!!pot.monthly_auto}
               autoAmount={autoAmount}
+              autoRegular={autoBreakdown?.regular ?? null}
               canAuto={canAuto}
               remaining={pot.target_amount != null ? Number(pot.target_amount) - balance : null}
               requiredMonthly={required}
