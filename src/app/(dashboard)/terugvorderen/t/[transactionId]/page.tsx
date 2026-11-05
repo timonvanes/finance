@@ -7,6 +7,8 @@ import { getBunqPaymentLinksEnabled } from "@/lib/settings";
 import { ItemCard, type OpenItem } from "../../item-card";
 import { TxDetails } from "../../tx-details";
 import { DoneActions } from "../../done-actions";
+import { WbwPushCard } from "../../wbw-push-card";
+import { getWbwListChoices } from "@/actions/wbw-push";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
@@ -108,6 +110,11 @@ export default async function TransactionReclaimsPage({
         amount: r.computed_amount,
       }));
 
+  // Open WieBetaaltWat reclaims of this payment: they can be put into
+  // WieBetaaltWat together as one expense.
+  const wbwOpen = open.filter(({ item }) => item.method === "external_app");
+  const wbwChoices = wbwOpen.length > 0 ? await getWbwListChoices() : { configured: false, lists: [] };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
@@ -143,6 +150,15 @@ export default async function TransactionReclaimsPage({
         <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
           Geen terugvorderingen gevonden voor deze transactie.
         </p>
+      )}
+
+      {wbwOpen.length > 0 && wbwChoices.configured && (
+        <WbwPushCard
+          reclaims={wbwOpen.map(({ item }) => ({ id: item.id, personName: item.title, amount: item.amount }))}
+          total={wbwOpen[0].item.sourceTotal ?? (tx ? Math.abs(tx.amount) : null)}
+          name={tx?.counterparty_name ?? "Uitgave"}
+          lists={wbwChoices.lists}
+        />
       )}
 
       {open.length > 0 && (
