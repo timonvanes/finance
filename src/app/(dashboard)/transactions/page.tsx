@@ -60,10 +60,14 @@ const FILTERS = [
 
 const PAGE_SIZE = 100;
 
-function buildHref(overrides: { type?: string; sort?: string; q?: string; l?: string }, current: { type: string; sort: string; q: string; l?: string }) {
+function buildHref(
+  overrides: { type?: string; sort?: string; q?: string; l?: string; bron?: string },
+  current: { type: string; sort: string; q: string; l?: string; bron?: string }
+) {
   const merged = { ...current, ...overrides };
   const params = new URLSearchParams();
   if (merged.type !== "unreviewed") params.set("type", merged.type);
+  if (merged.bron) params.set("bron", merged.bron);
   if (merged.sort !== "desc") params.set("sort", merged.sort);
   if (merged.q) params.set("q", merged.q);
   if (merged.l) params.set("l", merged.l);
@@ -74,17 +78,32 @@ function buildHref(overrides: { type?: string; sort?: string; q?: string; l?: st
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string; q?: string; l?: string }>;
+  searchParams: Promise<{ type?: string; sort?: string; q?: string; l?: string; bron?: string }>;
 }) {
-  const { type, sort, q, l } = await searchParams;
+  const { type, sort, q, l, bron } = await searchParams;
   // "Te categoriseren" is part of "Te doen" now; old links to it land there.
   const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "unreviewed";
   const limit = Math.min(1000, Math.max(PAGE_SIZE, parseInt(l ?? "", 10) || PAGE_SIZE));
   const activeSort = sort === "asc" ? "asc" : "desc";
   const activeQuery = q?.trim() ?? "";
-  const current = { type: activeFilter, sort: activeSort, q: activeQuery };
 
   const supabase = await createClient();
+
+  // Where transactions come from: each bank connection, plus WieBetaaltWat.
+  const { data: connectionRows } = await supabase
+    .from("bank_connections")
+    .select("id, institution_name, bank_accounts(id)")
+    .order("institution_name");
+  const sources = [
+    ...(connectionRows ?? []).map((c) => ({
+      value: c.id as string,
+      label: (c.institution_name as string) ?? "Bank",
+      accountIds: (c.bank_accounts as { id: string }[] | null)?.map((a) => a.id) ?? [],
+    })),
+    { value: "wbw", label: "WieBetaaltWat", accountIds: [] as string[] },
+  ];
+  const activeSource = sources.find((s) => s.value === bron) ?? null;
+  const current = { type: activeFilter, sort: activeSort, q: activeQuery, bron: activeSource?.value };
 
   let query = supabase
     // visible_transactions hides rows from before a connection's
@@ -103,6 +122,12 @@ export default async function TransactionsPage({
     .order("id", { ascending: true })
     .limit(limit);
 
+  if (activeSource) {
+    query =
+      activeSource.value === "wbw"
+        ? query.eq("source", "wbw")
+        : query.eq("source", "bank").in("bank_account_id", activeSource.accountIds.length > 0 ? activeSource.accountIds : ["00000000-0000-0000-0000-000000000000"]);
+  }
   if (activeFilter === "expense") query = query.lt("amount", 0);
   if (activeFilter === "income") query = query.gt("amount", 0);
   // To do: not checked yet, or still without a category.
@@ -187,8 +212,28 @@ export default async function TransactionsPage({
         ))}
       </div>
 
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {[{ value: "", label: "Alle bronnen" }, ...sources].map((s) => {
+          const active = (activeSource?.value ?? "") === s.value;
+          return (
+            <Link
+              key={s.value || "all"}
+              href={buildHref({ bron: s.value }, current)}
+              className={
+                active
+                  ? "flex min-h-[40px] shrink-0 items-center rounded-full bg-gray-900 px-4 text-sm font-medium text-white"
+                  : "flex min-h-[40px] shrink-0 items-center rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
+              }
+            >
+              {s.label}
+            </Link>
+          );
+        })}
+      </div>
+
       <form method="get" className="flex items-center gap-2">
         {activeFilter !== "unreviewed" && <input type="hidden" name="type" value={activeFilter} />}
+        {activeSource && <input type="hidden" name="bron" value={activeSource.value} />}
         {activeSort !== "desc" && <input type="hidden" name="sort" value={activeSort} />}
         <input
           type="search"
