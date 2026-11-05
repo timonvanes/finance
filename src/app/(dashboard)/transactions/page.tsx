@@ -53,7 +53,7 @@ export default async function TransactionsPage({
     // "Historie vanaf" date without deleting them.
     .from("visible_transactions")
     .select(
-      `id, booking_date, amount, currency, counterparty_name, raw_description, note, category_id, category_source, flagged_for_reclaim, reviewed, is_transfer,
+      `id, booking_date, amount, currency, counterparty_name, raw_description, note, category_id, category_source, flagged_for_reclaim, reviewed, is_transfer, source,
       bank_accounts(bank_connections(institution_name))`
     )
     .order("booking_date", { ascending: activeSort === "asc" })
@@ -214,9 +214,9 @@ export default async function TransactionsPage({
                     </p>
                     <p className="text-sm text-gray-500">
                       {new Date(tx.booking_date).toLocaleDateString("nl-NL")}
-                      {bankConnection?.institution_name && (
+                      {(tx.source === "wbw" ? "WieBetaaltWat" : bankConnection?.institution_name) && (
                         <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                          {bankConnection.institution_name}
+                          {tx.source === "wbw" ? "WieBetaaltWat" : bankConnection?.institution_name}
                         </span>
                       )}
                     </p>

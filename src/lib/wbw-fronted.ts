@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getMonthStartDay } from "@/lib/settings";
 import { wbwFrontedByPeriod, type WbwEntry } from "@/lib/wbw-balance";
+import { isoDate, periodStartFor } from "@/lib/month";
 
 // Name of the real expense category that holds what others fronted for the user.
 export const WBW_CATEGORY = "Via WieBetaaltWat";
@@ -10,7 +11,10 @@ export const WBW_CATEGORY = "Via WieBetaaltWat";
 // What others fronted for the user via WieBetaaltWat, per budget period. It is
 // derived from the saldo's the user filled in (see src/lib/wbw-balance.ts), so
 // it stays right when reclaims or fill-ins change. Booked as an expense with no
-// bank transaction. Cached per request: the overview asks for it several times.
+// bank transaction. From the period the real expenses are imported in (the
+// "Uitgaven inladen" setting) on, the estimate stops: those expenses are real
+// transactions then and would count twice. Cached per request: the overview asks
+// for it several times.
 export const getWbwFrontedRows = cache(async (): Promise<{ period_start: string; amount: number }[]> => {
   const supabase = await createClient();
   const { data: entries } = await supabase.from("wbw_entries").select("entry_date, kind, amount, created_at");
@@ -26,11 +30,17 @@ export const getWbwFrontedRows = cache(async (): Promise<{ period_start: string;
   });
 
   const startDay = await getMonthStartDay();
-  return wbwFrontedByPeriod(
+  const rows = wbwFrontedByPeriod(
     entries.map((e) => ({ ...e, amount: Number(e.amount) }) as WbwEntry),
     fronted,
     startDay
   );
+
+  const { data: settings } = await supabase.from("user_settings").select("wbw_import_from").maybeSingle();
+  const importFrom = settings?.wbw_import_from as string | null | undefined;
+  if (!importFrom) return rows;
+  const cutoff = isoDate(periodStartFor(new Date(`${importFrom}T00:00:00`), startDay));
+  return rows.filter((r) => r.period_start < cutoff);
 });
 
 export async function wbwFrontedInPeriod(periodStart: string) {

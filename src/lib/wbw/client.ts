@@ -258,3 +258,67 @@ export async function deleteWbwExpense(session: WbwSession, expenseId: string): 
   if (res.ok || res.status === 403 || res.status === 404 || res.status === 410) return;
   throw new Error(`Verwijderen bij WieBetaaltWat mislukt (status ${res.status}).`);
 }
+
+// One expense of a WieBetaaltWat list, reduced to what is needed to import it.
+export interface WbwExpense {
+  id: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  status: string; // "active" or "deleted"
+  payerId: string;
+  category: string | null; // WieBetaaltWat's main category, e.g. "Huishoudelijke uitgaven"
+  // Your part in cents (euro), 0 when you have none.
+  myShareCents: number;
+}
+
+export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[] {
+  const data = (json as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) throw new Error("WieBetaaltWat gaf een onverwacht antwoord (geen uitgaven).");
+  const out: WbwExpense[] = [];
+  for (const item of data) {
+    const e = (item as { expense?: Record<string, unknown> })?.expense;
+    if (!e || typeof e.id !== "string") continue; // incomes and payments between members are not imported
+    const shares = Array.isArray(e.shares) ? (e.shares as { share?: Record<string, unknown> }[]) : [];
+    const mine = shares.find((s) => s.share?.member_id === myMemberId)?.share;
+    const amount = mine?.amount as { currency?: unknown; fractional?: unknown } | undefined;
+    const cents = amount && amount.currency === "EUR" ? Number(amount.fractional) : 0;
+    const category = (e.category as { main_description?: unknown } | null)?.main_description;
+    out.push({
+      id: e.id,
+      name: typeof e.name === "string" ? e.name.trim() : "",
+      date: typeof e.payed_on === "string" ? e.payed_on.slice(0, 10) : "",
+      status: typeof e.status === "string" ? e.status : "active",
+      payerId: typeof e.payed_by_id === "string" ? e.payed_by_id : "",
+      category: typeof category === "string" ? category : null,
+      myShareCents: Number.isFinite(cents) && cents > 0 ? cents : 0,
+    });
+  }
+  return out;
+}
+
+// All expenses of a list from a date on (newest first, so it stops at the first
+// page that is entirely older). Deleted expenses are included, marked as such.
+export async function fetchWbwListExpenses(
+  session: WbwSession,
+  listId: string,
+  myMemberId: string,
+  fromDate: string
+): Promise<WbwExpense[]> {
+  const all: WbwExpense[] = [];
+  for (let page = 0; page < 40; page++) {
+    const res = await fetch(`${BASE}/lists/${encodeURIComponent(listId)}/list_items?page=${page}&per_page=50`, {
+      headers: session.headers,
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Uitgaven ophalen bij WieBetaaltWat mislukt (status ${res.status}).`);
+    const json = await res.json();
+    const expenses = parseWbwExpenses(json, myMemberId);
+    all.push(...expenses.filter((e) => e.date >= fromDate));
+    const totalPages = Number((json as { pagination?: { total_pages?: unknown } })?.pagination?.total_pages ?? 1);
+    // Sorted by date, newest first: once a whole page is older, the rest is too.
+    const rawCount = Array.isArray((json as { data?: unknown[] })?.data) ? (json as { data: unknown[] }).data.length : 0;
+    if (rawCount === 0 || page + 1 >= totalPages) break;
+    if (expenses.length > 0 && expenses.every((e) => e.date < fromDate)) break;
+  }
+  return all;
+}

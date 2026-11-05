@@ -7,6 +7,7 @@ import { sendPush } from "@/lib/push/send";
 import { clampStartDay } from "@/lib/month";
 import { fetchWbwBalancesTimed, isWbwConfigured, wbwLogin } from "@/lib/wbw/client";
 import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
+import { importWbwExpenses } from "@/lib/wbw/import";
 import { applyWbwLists, todayAmsterdam } from "@/lib/wbw/record";
 
 export const maxDuration = 60;
@@ -152,7 +153,15 @@ export async function GET(request: NextRequest) {
         const { lists } = await fetchWbwBalancesTimed(session);
         const r = await applyWbwLists(admin, userId, lists, todayAmsterdam());
         const gone = await removeReclaimsOfDeletedWbwExpenses(admin, session, userId);
-        report.wbw = r.error ? r.error : { saldo: r.balance, lists: lists.length, removedAfterWbwDelete: gone.removed };
+        const { data: st } = await admin
+          .from("user_settings")
+          .select("wbw_import_from, wbw_excluded_lists")
+          .eq("user_id", userId)
+          .maybeSingle();
+        const imports = st?.wbw_import_from
+          ? await importWbwExpenses(admin, session, userId, lists, (st.wbw_excluded_lists ?? []) as string[], st.wbw_import_from as string)
+          : null;
+        report.wbw = r.error ? r.error : { saldo: r.balance, lists: lists.length, removedAfterWbwDelete: gone.removed, imports };
       }
     } catch (e) {
       report.wbw = e instanceof Error ? e.message : "failed";

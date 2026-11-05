@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addWbwSettlement, deleteWbwEntry, saveWbwBalance, setWbwListIncluded, syncWbwBalance } from "@/actions/wbw";
+import {
+  addWbwSettlement,
+  deleteWbwEntry,
+  saveWbwBalance,
+  setWbwCategoryMapping,
+  setWbwImport,
+  setWbwListIncluded,
+  syncWbwBalance,
+} from "@/actions/wbw";
 import type { WbwCandidate, WbwEntryRow } from "@/actions/wbw";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -14,6 +22,10 @@ const toNumber = (s: string) => Number(s.replace(",", "."));
 export interface WbwStatus {
   periodLabel: string;
   configured: boolean;
+  importFrom: string | null;
+  importedCount: number;
+  importCategories: { name: string; count: number; categoryId: string | null }[];
+  categories: { id: string; name: string }[];
   lists: { id: string; name: string; currency: string; amount: number; included: boolean }[];
   latestBalance: number | null;
   latestDate: string | null;
@@ -110,11 +122,51 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
           `Saldo opgehaald: ${euro(r.balance)} over ${r.lists} lijsten.` +
             (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "") +
             (r.removed > 0 ? ` ${r.removed} terugvordering(en) verwijderd omdat de uitgave in WieBetaaltWat is verwijderd.` : "") +
+            (r.imports
+              ? ` Uitgaven: ${r.imports.imported} nieuw, ${r.imports.updated} bijgewerkt, ${r.imports.removed} verwijderd.`
+              : "") +
             ` (${r.timings}, tot het antwoord er was ${((Date.now() - startedAt) / 1000).toFixed(1)}s)`
         );
         router.refresh();
       })
       .catch(() => setError("Saldo ophalen mislukt. Probeer het opnieuw."))
+      .finally(() => setPending(false));
+  }
+
+  // Importing your part of what others paid as transactions. Switching it on
+  // reads them straight away; switching it off removes them again.
+  function toggleImport(enable: boolean) {
+    if (
+      !enable &&
+      !confirm(
+        "Uitgaven niet meer inladen? De ingeladen transacties worden verwijderd en de schatting uit je saldo komt terug."
+      )
+    )
+      return;
+    setError(null);
+    setSyncNote(null);
+    setPending(true);
+    setWbwImport(enable)
+      .then(async (r) => {
+        if (r.error) {
+          setError(r.error);
+          return;
+        }
+        if (enable) {
+          const s = await syncWbwBalance();
+          if ("error" in s) {
+            setError(s.error);
+            return;
+          }
+          setSyncNote(
+            s.imports
+              ? `Ingeladen: ${s.imports.imported} uitgaven. Koppel hieronder de categorieën.`
+              : "Ingeschakeld."
+          );
+        }
+        router.refresh();
+      })
+      .catch(() => setError("Er ging iets mis. Probeer het opnieuw."))
       .finally(() => setPending(false));
   }
 
@@ -193,7 +245,61 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
           </section>
         )}
 
-        <section className="space-y-3">
+        {status.configured && (
+          <section className="space-y-3 border-t border-gray-100 pt-5">
+            <h3 className="text-base font-medium text-gray-900">Uitgaven inladen als transacties</h3>
+            <p className="text-sm text-gray-500">
+              Jouw deel van wat anderen in WieBetaaltWat betaalden komt als uitgave tussen je transacties, zodat je ze
+              kunt categoriseren. Wat jij zelf betaalde staat al via de bank. De schatting uit je saldo vervalt dan voor
+              die periodes.
+            </p>
+            <label className="flex min-h-[44px] items-center justify-between gap-3">
+              <span className="text-base text-gray-900">
+                {status.importFrom
+                  ? `Aan, vanaf ${shortDate(status.importFrom)} (${status.importedCount} ingeladen)`
+                  : "Uitgaven inladen"}
+              </span>
+              <input
+                type="checkbox"
+                checked={Boolean(status.importFrom)}
+                disabled={isPending}
+                onChange={(e) => toggleImport(e.target.checked)}
+                className="h-6 w-6 shrink-0 accent-teal-700"
+              />
+            </label>
+
+            {status.importFrom && status.importCategories.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-500">Categorie in WieBetaaltWat wordt bij jou:</p>
+                <ul className="space-y-2">
+                  {status.importCategories.map((c) => (
+                    <li key={c.name} className="space-y-1">
+                      <p className="flex justify-between gap-3 text-base text-gray-900">
+                        <span className="min-w-0 truncate">{c.name}</span>
+                        <span className="shrink-0 text-sm text-gray-500">{c.count}x</span>
+                      </p>
+                      <select
+                        value={c.categoryId ?? ""}
+                        disabled={isPending}
+                        onChange={(e) => run(() => setWbwCategoryMapping(c.name, e.target.value || null))}
+                        className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 disabled:opacity-50"
+                      >
+                        <option value="">Nog geen categorie</option>
+                        {status.categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="space-y-3 border-t border-gray-100 pt-5">
           <h3 className="text-base font-medium text-gray-900">
             {status.configured ? "Of zelf invullen" : "Saldo invullen"}
           </h3>
