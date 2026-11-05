@@ -17,7 +17,7 @@ interface WbwDetails {
   list: string;
   payer: string;
   total: number;
-  shares: { name: string; amount: number; you: boolean }[];
+  shares: { name: string; amount: number; you: boolean; weight?: string | null }[];
 }
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -38,7 +38,10 @@ function WbwSplit({ details }: { details: WbwDetails }) {
         <ul className="divide-y divide-gray-200">
           {details.shares.map((s, i) => (
             <li key={`${s.name}-${i}`} className="flex items-center justify-between gap-3 py-1.5">
-              <span className={s.you ? "font-medium text-gray-900" : ""}>{s.you ? "Jij" : s.name}</span>
+              <span className={s.you ? "font-medium text-gray-900" : ""}>
+                {s.you ? "Jij" : s.name}
+                {s.weight && <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">{s.weight}</span>}
+              </span>
               <span className={s.you ? "font-semibold text-gray-900" : ""}>{euro(s.amount)}</span>
             </li>
           ))}

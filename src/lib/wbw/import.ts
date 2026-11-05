@@ -39,7 +39,7 @@ export async function importWbwExpenses(
       cents: number;
       category: string | null;
       description: string;
-      details: { list: string; payer: string; total: number; shares: { name: string; amount: number; you: boolean }[] };
+      details: { list: string; payer: string; total: number; shares: { name: string; amount: number; you: boolean; weight: string | null }[] };
     }
   >();
   const seen = new Set<string>();
@@ -69,7 +69,7 @@ export async function importWbwExpenses(
           payer: memberName(e.payerId),
           total: e.totalCents / 100,
           shares: e.shares
-            .map((s) => ({ name: memberName(s.memberId), amount: s.cents / 100, you: s.memberId === list.memberId }))
+            .map((s) => ({ name: memberName(s.memberId), amount: s.cents / 100, you: s.memberId === list.memberId, weight: s.weight }))
             .sort((a, b) => Number(b.you) - Number(a.you) || b.amount - a.amount),
         },
       });

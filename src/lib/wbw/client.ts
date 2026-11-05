@@ -271,7 +271,23 @@ export interface WbwExpense {
   myShareCents: number;
   // The whole expense and everyone's part in it, in cents (euro).
   totalCents: number;
-  shares: { memberId: string; cents: number }[];
+  shares: { memberId: string; cents: number; weight: string | null }[];
+}
+
+// How a share was set in WieBetaaltWat: a factor ("2x"), a percentage or an exact amount.
+function shareWeight(meta: unknown): string | null {
+  const m = meta as { type?: unknown; multiplier?: unknown; percent?: unknown; percentage?: unknown } | null | undefined;
+  if (!m || typeof m.type !== "string") return null;
+  if (m.type === "factor") {
+    const x = Number(m.multiplier);
+    return Number.isFinite(x) && x > 0 ? `${String(x).replace(".", ",")}x` : null;
+  }
+  if (m.type === "percent") {
+    const p = Number(m.percent ?? m.percentage);
+    return Number.isFinite(p) ? `${String(p).replace(".", ",")}%` : "percentage";
+  }
+  if (m.type === "exact") return "vast bedrag";
+  return null;
 }
 
 export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[] {
@@ -290,7 +306,7 @@ export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[
       const sh = s.share;
       const a = sh?.amount as { currency?: unknown; fractional?: unknown } | undefined;
       const c = a && a.currency === "EUR" ? Number(a.fractional) : NaN;
-      return typeof sh?.member_id === "string" && Number.isFinite(c) && c > 0 ? [{ memberId: sh.member_id, cents: c }] : [];
+      return typeof sh?.member_id === "string" && Number.isFinite(c) && c > 0 ? [{ memberId: sh.member_id, cents: c, weight: shareWeight(sh.meta) }] : [];
     });
     const total = (e.amount as { currency?: unknown; fractional?: unknown } | undefined)?.fractional;
     out.push({
