@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addWbwSettlement, deleteWbwEntry, saveWbwBalance, setWbwListIncluded, syncWbwBalance } from "@/actions/wbw";
+import { addWbwSettlement, deleteWbwEntry, saveWbwBalance } from "@/actions/wbw";
 import type { WbwCandidate, WbwEntryRow } from "@/actions/wbw";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -95,33 +96,6 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
     );
   }
 
-  const [syncNote, setSyncNote] = useState<string | null>(null);
-  function syncNow() {
-    setError(null);
-    setSyncNote(null);
-    const startedAt = Date.now();
-    setPending(true);
-    syncWbwBalance()
-      .then((r) => {
-        if ("error" in r) {
-          setError(r.error);
-          return;
-        }
-        setSyncNote(
-          `Saldo opgehaald: ${euro(r.balance)} over ${r.lists} lijsten.` +
-            (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "") +
-            (r.removed > 0 ? ` ${r.removed} terugvordering(en) verwijderd omdat de uitgave in WieBetaaltWat is verwijderd.` : "") +
-            (r.imports
-              ? ` Uitgaven: ${r.imports.imported} nieuw, ${r.imports.updated} bijgewerkt, ${r.imports.removed} verwijderd.`
-              : "") +
-            ` (${r.timings}, tot het antwoord er was ${((Date.now() - startedAt) / 1000).toFixed(1)}s)`
-        );
-        router.refresh();
-      })
-      .catch(() => setError("Saldo ophalen mislukt. Probeer het opnieuw."))
-      .finally(() => setPending(false));
-  }
-
   // Filling in by hand is only needed without the link with WieBetaaltWat, or when
   // it is switched on (Instellingen > Bankkoppelingen) because the link stopped working.
   const showManual = !status.configured || status.manual;
@@ -148,63 +122,12 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
         </p>
 
         {status.configured && (
-          <section className="space-y-2">
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={syncNow}
-              className="min-h-[48px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
-            >
-              {isPending ? "Bezig…" : "Saldo ophalen uit WieBetaaltWat"}
-            </button>
-            {syncNote && <p className="text-sm text-teal-700">{syncNote}</p>}
-            <p className="text-sm text-gray-500">
-              Haalt je saldo van al je lijsten op (alleen lezen) en slaat het op als het saldo van vandaag. Dit gebeurt
-              ook elke dag automatisch.
-            </p>
-          </section>
-        )}
-
-        {status.configured && status.lists.length > 0 && (
-          <section className="space-y-2">
-            <h3 className="text-base font-medium text-gray-900">Lijsten die meetellen</h3>
-            <p className="text-sm text-gray-500">
-              Haal een lijst uit je saldo, bijvoorbeeld een testlijst of een oude vakantie. Lijsten in een andere munt
-              tellen niet mee.
-            </p>
-            <ul className="divide-y divide-gray-100 rounded-xl ring-1 ring-gray-200">
-              {status.lists.map((l) => {
-                const foreign = l.currency !== "EUR";
-                return (
-                  <li key={l.id}>
-                    <label className="flex min-h-[52px] items-center justify-between gap-3 px-4 py-2">
-                      <span className="min-w-0">
-                        <span className="block truncate text-base text-gray-900">{l.name}</span>
-                        <span className="block text-sm text-gray-500">
-                          {foreign
-                            ? `${l.currency} ${l.amount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })} · andere munt`
-                            : euro(l.amount)}
-                        </span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={l.included && !foreign}
-                        disabled={isPending || foreign}
-                        onChange={(e) => run(() => setWbwListIncluded(l.id, e.target.checked))}
-                        className="h-6 w-6 shrink-0 accent-teal-700"
-                      />
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        {status.configured && (
           <p className="text-sm text-gray-500">
-            Uitgaven inladen als transacties, de startdatum en welke lijsten meetellen stel je in bij Instellingen &gt;
-            Bankkoppelingen.
+            Verversen, de startdatum van het inladen en welke lijsten meetellen vind je bij{" "}
+            <Link href="/settings/bank-connections" className="text-teal-700 underline">
+              Instellingen &gt; Bankkoppelingen
+            </Link>
+            .
           </p>
         )}
 

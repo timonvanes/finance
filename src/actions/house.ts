@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getPots } from "@/actions/pots";
 import { getDebts } from "@/actions/debts";
 import { computePotBalance } from "@/lib/pots/balance";
-import { periodMonthly } from "@/lib/pots/insights";
+import { nextPeriodMonthly } from "@/lib/pots/insights";
 import { getMonthStartDay } from "@/lib/settings";
 import { summarize } from "@/lib/debts/calc";
 import type { HouseInputs } from "@/lib/house/calc";
@@ -29,7 +29,7 @@ export async function getHousePlanData() {
   let monthlyInvest = 0;
   for (const p of pots) {
     const balance = computePotBalance(p);
-    const monthly = periodMonthly(p, balance, startDay) ?? 0;
+    const monthly = nextPeriodMonthly(p, balance, startDay) ?? 0;
     if (p.kind === "investment") {
       investBalance += balance;
       monthlyInvest += monthly;

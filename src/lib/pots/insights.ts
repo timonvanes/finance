@@ -236,7 +236,9 @@ function scheduleNeed(
 
   const target = pot.target_amount + goalSpentOf(entries);
   const perInstallment = (target - startBalance) / installments.length;
-  const expectedAfter = Math.min(target, startBalance + perInstallment * dueByPeriodEnd);
+  // Whole euros, rounded down: a pot that began with a euro would otherwise ask
+  // 361 where you put in 2 x 180, and every period would be a euro off.
+  const expectedAfter = Math.min(target, Math.floor(startBalance + perInstallment * dueByPeriodEnd + 1e-6));
   const base = baseBalance + goalSpentOf(entries.filter((e) => e.entry_date < isoDate(periodStart)));
   return { needed: expectedAfter - base, regular: perInstallment };
 }
@@ -368,6 +370,15 @@ export function planCatchUp(pot: PotForInsights, startDay: number, now = new Dat
 // The planned amount for the current budget period. It is worked out from the
 // balance at the START of the period and the period's start date, so
 // depositing during the month never changes what was expected for that month.
+// What to put into the pot in the NEXT period (the one that starts when the
+// current one ends), measured from where the pot stands now. This is what to set
+// aside from the next salary: what was already put in during the current period,
+// including money put back, is not asked a second time.
+export function nextPeriodMonthly(pot: PotForInsights, balance: number, startDay: number): number | null {
+  const next = periodRange(0, startDay).endDate;
+  return effectiveMonthly(pot, balance, next, startDay);
+}
+
 export function periodMonthly(pot: PotForInsights, balance: number, startDay: number): number | null {
   const range = periodRange(0, startDay);
   return effectiveMonthly(pot, balance - netInPeriod(pot, 0, startDay), range.startDate, startDay);

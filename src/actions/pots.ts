@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { matchPotTransfers, rematchPotHistory } from "@/lib/pots/matching";
 import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
 import { computePotBalance } from "@/lib/pots/balance";
-import { effectiveMonthly, periodMonthly } from "@/lib/pots/insights";
+import { effectiveMonthly, nextPeriodMonthly } from "@/lib/pots/insights";
 import { getMonthStartDay } from "@/lib/settings";
 import { isoDate, periodStartFor } from "@/lib/month";
 
@@ -273,7 +273,7 @@ export async function decidePotPeriod(potId: string, periodStart: string, decisi
 export async function getPlannedSavingsTotal() {
   const pots = await getPots();
   const startDay = await getMonthStartDay();
-  return pots.reduce((sum, pot) => sum + (periodMonthly(pot, computePotBalance(pot), startDay) ?? 0), 0);
+  return pots.reduce((sum, pot) => sum + (nextPeriodMonthly(pot, computePotBalance(pot), startDay) ?? 0), 0);
 }
 
 // One tap for "I transferred the planned amount this month" when the
