@@ -304,6 +304,11 @@ export function effectiveMonthly(
   ref: Date = new Date(),
   startDay?: number
 ): number | null {
+  // A plan that only begins in a later period asks nothing of this one.
+  if (startDay != null && pot.schedule_start) {
+    const periodEnd = new Date(ref.getFullYear(), ref.getMonth() + 1, startDay);
+    if (pot.schedule_start.slice(0, 10) >= isoDate(periodEnd)) return null;
+  }
   if (pot.monthly_auto && pot.target_amount && pot.target_date) {
     if (startDay != null) {
       const need = scheduleNeed(pot, baseBalance, ref, startDay);
@@ -378,6 +383,28 @@ export function planCatchUp(pot: PotForInsights, startDay: number, now = new Dat
 // The planned amount for the current budget period. It is worked out from the
 // balance at the START of the period and the period's start date, so
 // depositing during the month never changes what was expected for that month.
+// All monthly amounts of a pot's plan, worked out in ONE place so that the plan,
+// "Nodig" and the overview always agree:
+//  - monthly: what the running period asks (null when the plan has not begun yet);
+//  - autoAmount / autoBreakdown: what the automatic plan asks, for the running
+//    period, or for the first one when the plan only begins later;
+//  - startsOn: the first day of the plan when it begins in a later period.
+export function planAmounts(pot: PotForInsights, balance: number, startDay: number) {
+  const range = periodRange(0, startDay);
+  const baseBalance = balance - netInPeriod(pot, 0, startDay);
+  const startsLater = !!pot.schedule_start && pot.schedule_start.slice(0, 10) >= range.end;
+  const refStart = startsLater ? range.endDate : range.startDate;
+  const base = startsLater ? balance : baseBalance;
+  const canAuto = !!(pot.target_amount && pot.target_date);
+  const auto = { ...pot, monthly_auto: true };
+  return {
+    monthly: effectiveMonthly(pot, baseBalance, range.startDate, startDay),
+    autoAmount: canAuto ? effectiveMonthly(auto, base, refStart, startDay) : null,
+    autoBreakdown: canAuto ? autoPlanBreakdown(auto, base, refStart, startDay) : null,
+    startsOn: startsLater ? pot.schedule_start!.slice(0, 10) : null,
+  };
+}
+
 // What to put into the pot in the NEXT period (the one that starts when the
 // current one ends), measured from where the pot stands now. This is what to set
 // aside from the next salary: what was already put in during the current period,

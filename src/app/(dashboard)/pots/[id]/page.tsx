@@ -2,15 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPots } from "@/actions/pots";
 import { computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
-import {
-  autoPlanBreakdown,
-  computeSchedule,
-  depositedInPeriod,
-  effectiveMonthly,
-  monthlyPace,
-  netInPeriod,
-  projectedFinish,
-} from "@/lib/pots/insights";
+import { computeSchedule, depositedInPeriod, monthlyPace, planAmounts, projectedFinish } from "@/lib/pots/insights";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { periodRange } from "@/lib/month";
 import { InfoButton } from "../../info-button";
@@ -33,12 +25,12 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   const finish = pace == null ? null : projectedFinish(balance, pot.target_amount, pace);
   const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
   const deposited = depositedInPeriod(pot, 0, startDay);
-  const baseBalance = balance - netInPeriod(pot, 0, startDay);
-  const periodStart = periodRange(0, startDay).startDate;
-  const monthly = effectiveMonthly(pot, baseBalance, periodStart, startDay);
   const canAuto = !!(pot.target_amount && pot.target_date);
-  const autoAmount = canAuto ? effectiveMonthly({ ...pot, monthly_auto: true }, baseBalance, periodStart, startDay) : null;
-  const autoBreakdown = canAuto ? autoPlanBreakdown({ ...pot, monthly_auto: true }, baseBalance, periodStart, startDay) : null;
+  const plan = planAmounts(pot, balance, startDay);
+  const monthly = plan.monthly;
+  // "Nodig per maand": the regular amount of the plan itself, so it always equals
+  // the plan below it (and the overview); without a schedule, what is left over the months left.
+  const neededMonthly = plan.autoBreakdown?.regular ?? (required != null && required > 0 ? Math.ceil(required - 0.005) : null);
   const pending = pot.target_amount
     ? pot.pot_entries
         .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= pot.opening_balance_date)
@@ -115,9 +107,8 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
                   ? "Op schema"
                   : `${euro(Math.abs(schedule.difference))} ${schedule.status === "ahead" ? "voor" : "achter"} op schema`}
             </li>
-            {required != null && required > 0 && (
-              // Whole euros, rounded up: the same amount the monthly plan puts in.
-              <li className="text-gray-700">Nodig: {euro(Math.ceil(required - 0.005))} per maand om op tijd te zijn</li>
+            {neededMonthly != null && neededMonthly > 0 && (
+              <li className="text-gray-700">Nodig: {euro(neededMonthly)} per maand om op tijd te zijn</li>
             )}
             {pace != null && (
               <li className="text-gray-500">
@@ -150,11 +141,12 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
               potId={pot.id}
               initial={pot.monthly_amount != null ? Number(pot.monthly_amount) : null}
               auto={!!pot.monthly_auto}
-              autoAmount={autoAmount}
-              autoRegular={autoBreakdown?.regular ?? null}
+              autoAmount={plan.autoAmount}
+              autoRegular={plan.autoBreakdown?.regular ?? null}
+              startsOn={plan.startsOn}
               canAuto={canAuto}
               remaining={pot.target_amount != null ? Number(pot.target_amount) - balance : null}
-              requiredMonthly={required}
+              requiredMonthly={neededMonthly}
             />
           </div>
           <div className="space-y-3 border-t border-gray-100 pt-6">

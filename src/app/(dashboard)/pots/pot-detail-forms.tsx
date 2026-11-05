@@ -50,6 +50,7 @@ export function MonthlyPlanForm({
   auto,
   autoAmount,
   autoRegular,
+  startsOn,
   canAuto,
   remaining,
   requiredMonthly,
@@ -60,6 +61,8 @@ export function MonthlyPlanForm({
   autoAmount: number | null;
   // The regular monthly part of autoAmount; the rest puts back what was taken out earlier.
   autoRegular: number | null;
+  // The first day of the plan when it only begins in a later period.
+  startsOn: string | null;
   canAuto: boolean;
   // Still to save for the goal, and what per month would reach it on time.
   remaining: number | null;
@@ -107,7 +110,11 @@ export function MonthlyPlanForm({
             ? "Je hebt je doel al gehaald, of de doeldatum is voorbij."
             : autoRegular != null && autoAmount - autoRegular >= 1
               ? `€${autoAmount} deze periode: €${autoRegular} maandbedrag plus €${autoAmount - autoRegular} om terug te zetten wat eerder uit het potje is gehaald en niet voor het doel was. Daarna is het weer €${autoRegular} per maand.`
-              : `€${autoAmount} per maand — berekend uit je doelbedrag en doeldatum, en past zich aan naarmate je spaart.`}
+              : `€${autoAmount} per maand — berekend uit je doelbedrag en doeldatum, en past zich aan naarmate je spaart.${
+                  startsOn
+                    ? ` Het plan begint op ${new Date(`${startsOn}T00:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "long" })}.`
+                    : ""
+                }`}
         </p>
       ) : (
         <div>
