@@ -19,32 +19,8 @@ interface TxRow {
   id: string;
   booking_date: string;
   booked_at: string | null;
-  amount: number;
-  currency: string;
   counterparty_name: string | null;
-  counterparty_iban: string | null;
   raw_description: string | null;
-  external_transaction_id: string;
-  bank_accounts: unknown;
-}
-
-const DAY_FORMAT: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
-
-// The moment of the payment: the exact time when known, otherwise the time the
-// bank put in the description. Without either, only the date is known.
-function whenOf(tx: TxRow): { date: string; time: string | null } {
-  if (tx.booked_at) {
-    const at = new Date(tx.booked_at);
-    return {
-      date: at.toLocaleDateString("nl-NL", { ...DAY_FORMAT, timeZone: "Europe/Amsterdam" }),
-      time: at.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam" }),
-    };
-  }
-  const m = tx.raw_description?.match(/\b(\d{2}:\d{2}(?::\d{2})?)\b/);
-  return {
-    date: new Date(`${tx.booking_date}T12:00:00`).toLocaleDateString("nl-NL", DAY_FORMAT),
-    time: m ? m[1] : null,
-  };
 }
 
 export default async function BewijsPage({
@@ -96,7 +72,7 @@ export default async function BewijsPage({
     ? await supabase
         .from("transactions")
         .select(
-          "id, booking_date, booked_at, amount, currency, counterparty_name, counterparty_iban, raw_description, external_transaction_id, bank_accounts(display_name, bank_connections(institution_name))"
+          "id, booking_date, booked_at, counterparty_name, raw_description"
         )
         .in("id", ids)
     : { data: [] };
@@ -130,47 +106,22 @@ export default async function BewijsPage({
           {reference && <p className="text-sm text-gray-500">Referentie {reference}</p>}
         </div>
         <ul className="divide-y divide-gray-200 border-y border-gray-200">
-          {items.map(({ line: l, tx }, i) => {
-            const when = tx ? whenOf(tx) : null;
-            const account = tx
-              ? one(tx.bank_accounts as { display_name: string | null; bank_connections: unknown } | null)
-              : null;
-            const bank = account ? one(account.bank_connections as { institution_name: string } | null)?.institution_name : null;
-            const rows: [string, string | null][] = tx
-              ? [
-                  ["Datum", when?.date ?? null],
-                  ["Tijdstip", when?.time ?? "niet door de bank doorgegeven"],
-                  ["Tegenpartij", tx.counterparty_name],
-                  ["IBAN tegenpartij", tx.counterparty_iban],
-                  ["Omschrijving", tx.raw_description],
-                  ["Afschrijving", `${euro(Math.abs(tx.amount))}${tx.currency && tx.currency !== "EUR" ? ` (${tx.currency})` : ""}`],
-                  ["Rekening", [bank, account?.display_name].filter(Boolean).join(" · ") || null],
-                  ["Transactienummer", tx.external_transaction_id],
-                  ["Opmerking", l.note],
-                ]
-              : [["Opmerking", l.note]];
-            return (
-              <li key={i} className="space-y-2 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 text-base font-semibold text-gray-900">{tx?.counterparty_name ?? "Onbekend"}</p>
-                  <p className="shrink-0 text-base font-semibold text-gray-900">{euro(l.share)}</p>
+          {items.map(({ line: l, tx }, i) => (
+            <li key={i} className="space-y-1 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-base text-gray-900">{tx?.counterparty_name ?? "Onbekend"}</p>
+                  <p className="text-sm text-gray-500">
+                    {tx?.booking_date ? new Date(tx.booking_date).toLocaleDateString("nl-NL") : ""}
+                    {l.total != null && Math.abs(l.total - l.share) > 0.01 && ` · totaal ${euro(l.total)}`}
+                  </p>
                 </div>
-                {l.total != null && Math.abs(l.total - l.share) > 0.01 && (
-                  <p className="text-sm text-gray-500">Jouw deel van {euro(l.total)}</p>
-                )}
-                <dl className="space-y-1 text-sm">
-                  {rows
-                    .filter(([, v]) => v)
-                    .map(([label, value]) => (
-                      <div key={label} className="grid grid-cols-[8.5rem_1fr] gap-3">
-                        <dt className="text-gray-500">{label}</dt>
-                        <dd className="min-w-0 break-words text-gray-900">{value}</dd>
-                      </div>
-                    ))}
-                </dl>
-              </li>
-            );
-          })}
+                <p className="shrink-0 text-base font-medium text-gray-900">{euro(l.share)}</p>
+              </div>
+              {tx?.raw_description && <p className="break-words text-sm text-gray-600">{tx.raw_description}</p>}
+              {l.note && <p className="break-words text-sm italic text-gray-600">{l.note}</p>}
+            </li>
+          ))}
         </ul>
         <div className="flex items-center justify-between">
           <p className="text-base font-semibold text-gray-900">Totaal</p>
