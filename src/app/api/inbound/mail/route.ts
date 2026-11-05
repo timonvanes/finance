@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processInboundMail } from "@/lib/inbound/process-mail";
+import { secretOk } from "@/lib/security/secret";
 
 // Receives forwarded mails from the inbound-mail provider (Postmark JSON
 // format). Protected by a secret in the URL; the mails belong to one user.
 export const maxDuration = 60;
-
-function tokenOk(given: string | null) {
-  const secret = process.env.INBOUND_MAIL_SECRET;
-  if (!secret || !given) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(secret);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 function htmlToText(html: string) {
   return html
@@ -28,7 +20,7 @@ function htmlToText(html: string) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!tokenOk(request.nextUrl.searchParams.get("token"))) {
+  if (!secretOk(request, "INBOUND_MAIL_SECRET")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

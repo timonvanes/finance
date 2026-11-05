@@ -1,22 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processBunqForUser } from "@/lib/bunq/process";
+import { secretOk } from "@/lib/security/secret";
 
 // bunq calls this after every mutation on the account. The payload is never
 // trusted: it is only a signal to go and ask bunq what actually happened.
 export const maxDuration = 60;
 
-function tokenOk(given: string | null) {
-  const secret = process.env.INBOUND_MAIL_SECRET;
-  if (!secret || !given) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(secret);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 export async function POST(request: NextRequest) {
-  if (!tokenOk(request.nextUrl.searchParams.get("token"))) {
+  if (!secretOk(request, "BUNQ_CALLBACK_SECRET", "INBOUND_MAIL_SECRET")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

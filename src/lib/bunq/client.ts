@@ -1,5 +1,6 @@
 import { createSign, generateKeyPairSync, randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { bunqCallbackSecret } from "@/lib/security/secret";
 
 const BASE = "https://api.bunq.com";
 const USER_AGENT = "finance-app";
@@ -214,7 +215,7 @@ export async function ensureBunqCallback(userId: string) {
     if (data?.callback_registered) return;
 
     const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-    const secret = process.env.INBOUND_MAIL_SECRET;
+    const secret = bunqCallbackSecret();
     if (!host || !secret) return;
 
     const acc = await getBunqAccount(userId);
