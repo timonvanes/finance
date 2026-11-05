@@ -47,25 +47,6 @@ export async function getWbwStatus() {
     .map((l) => ({ ...l, included: !excludedIds.has(l.id) }))
     .sort((a, b) => a.name.localeCompare(b.name, "nl"));
 
-  const { data: importRows } = await supabase
-    .from("transactions")
-    .select("wbw_category")
-    .eq("source", "wbw")
-    .limit(3000);
-  const { data: mapRows } = await supabase.from("wbw_category_map").select("wbw_category, category_id");
-  const mapped = new Map((mapRows ?? []).map((m) => [m.wbw_category as string, (m.category_id as string | null) ?? null]));
-  const counts = new Map<string, number>();
-  for (const r of importRows ?? []) {
-    const key = (r.wbw_category as string | null) ?? "Overig";
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  const { data: expenseCategories } = await supabase
-    .from("categories")
-    .select("id, name")
-    .eq("kind", "expense")
-    .order("name");
-  const { data: importSettings } = await supabase.from("user_settings").select("wbw_import_from").maybeSingle();
-
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const [rows, { data: recent }] = await Promise.all([
     getWbwFrontedRows(),
@@ -102,12 +83,6 @@ export async function getWbwStatus() {
   return {
     periodLabel: period.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" }),
     configured: isWbwConfigured(),
-    importFrom: (importSettings?.wbw_import_from as string | null | undefined) ?? null,
-    importedCount: (importRows ?? []).length,
-    importCategories: [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count, categoryId: mapped.get(name) ?? null })),
-    categories: (expenseCategories ?? []).map((c) => ({ id: c.id as string, name: c.name as string })),
     lists: wbwLists,
     latestBalance: latest ? latest.amount : null,
     latestDate: latest ? latest.date : null,
@@ -292,52 +267,56 @@ export async function deleteWbwEntry(id: string): Promise<{ error?: string }> {
   return {};
 }
 
-
-// Switches importing of your part of what others paid on or off. On: from the
-// start of the current period. Off: the imported transactions are removed again
-// (they come back when it is switched on), as the estimate takes over.
-export async function setWbwImport(enabled: boolean): Promise<{ error?: string }> {
+// Sets the date WieBetaaltWat expenses are taken in from (null = do not import).
+// Moving it later, or switching off, removes the imported transactions from before
+// that date; they come back if it is moved earlier again.
+export async function setWbwImportFrom(date: string | null): Promise<{ error?: string; removed?: number }> {
+  if (date !== null && !ISO_DAY.test(date)) return { error: "Kies een geldige datum." };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Niet ingelogd." };
 
-  const startDay = await getMonthStartDay();
-  const from = enabled ? isoDate(periodRange(0, startDay).startDate) : null;
   const { error } = await supabase
     .from("user_settings")
-    .upsert({ user_id: user.id, wbw_import_from: from, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    .upsert({ user_id: user.id, wbw_import_from: date, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
 
-  if (!enabled) {
-    await supabase.from("transactions").delete().eq("user_id", user.id).eq("source", "wbw");
-  }
+  let removed = 0;
+  let del = supabase.from("transactions").delete({ count: "exact" }).eq("user_id", user.id).eq("source", "wbw");
+  if (date !== null) del = del.lt("booking_date", date);
+  const { count } = await del;
+  removed = count ?? 0;
   revalidatePath("/", "layout");
-  return {};
+  return { removed };
 }
 
-// Which of your categories a WieBetaaltWat category becomes. Applies to the
-// imported transactions as well, except where you picked a category by hand.
-export async function setWbwCategoryMapping(wbwCategory: string, categoryId: string | null): Promise<{ error?: string }> {
+// Everything the WieBetaaltWat part of the bank connections page shows.
+export async function getWbwSettings() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Niet ingelogd." };
-
-  const { error } = await supabase
-    .from("wbw_category_map")
-    .upsert({ user_id: user.id, wbw_category: wbwCategory, category_id: categoryId }, { onConflict: "user_id,wbw_category" });
-  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
-
-  await supabase
-    .from("transactions")
-    .update({ category_id: categoryId, category_source: categoryId ? "rule" : "none" })
-    .eq("user_id", user.id)
-    .eq("source", "wbw")
-    .eq("wbw_category", wbwCategory)
-    .neq("category_source", "manual");
-  revalidatePath("/", "layout");
-  return {};
+  const [{ data: st }, { data: latest }, { count }] = await Promise.all([
+    supabase.from("user_settings").select("wbw_import_from, wbw_excluded_lists, wbw_lists").maybeSingle(),
+    supabase
+      .from("wbw_entries")
+      .select("entry_date, amount, created_at")
+      .eq("kind", "balance")
+      .order("entry_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("source", "wbw"),
+  ]);
+  const excluded = new Set<string>((st?.wbw_excluded_lists ?? []) as string[]);
+  return {
+    configured: isWbwConfigured(),
+    importFrom: (st?.wbw_import_from as string | null | undefined) ?? null,
+    importedCount: count ?? 0,
+    latestDate: (latest?.entry_date as string | undefined) ?? null,
+    latestSyncedAt: (latest?.created_at as string | undefined) ?? null,
+    latestBalance: latest ? Number(latest.amount) : null,
+    lists: ((st?.wbw_lists ?? []) as WbwListBalance[])
+      .map((l) => ({ ...l, included: !excluded.has(l.id) }))
+      .sort((a, b) => a.name.localeCompare(b.name, "nl")),
+  };
 }

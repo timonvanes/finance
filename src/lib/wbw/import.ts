@@ -15,9 +15,11 @@ export function isImportable(e: WbwExpense, myMemberId: string): boolean {
 
 // Takes your part of the expenses others paid in WieBetaaltWat into the
 // transactions, from the chosen date on. Safe to run again and again:
-//  - a new expense becomes a transaction;
-//  - a changed one is updated (amount, date, name), but a category you chose
-//    yourself is left alone;
+//  - a new expense becomes a transaction on your to-do list (WieBetaaltWat has no
+//    categories you use: you categorise, or mark it as your own expense or send it
+//    on as a reclaim, like any bank transaction);
+//  - a changed one is updated (amount, date, name); what you did with it (category,
+//    reviewed) is left alone;
 //  - an expense that was deleted there (or is no longer yours) is removed here.
 // Only transactions that came from WieBetaaltWat are ever touched.
 export async function importWbwExpenses(
@@ -57,15 +59,11 @@ export async function importWbwExpenses(
     }
   }
 
-  const [{ data: existing }, { data: mapRows }] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("id, wbw_expense_id, category_source")
-      .eq("user_id", userId)
-      .eq("source", "wbw"),
-    supabase.from("wbw_category_map").select("wbw_category, category_id").eq("user_id", userId),
-  ]);
-  const categoryFor = new Map((mapRows ?? []).map((r) => [r.wbw_category as string, r.category_id as string | null]));
+  const { data: existing } = await supabase
+    .from("transactions")
+    .select("id, wbw_expense_id")
+    .eq("user_id", userId)
+    .eq("source", "wbw");
   const local = new Map((existing ?? []).map((r) => [r.wbw_expense_id as string, r]));
 
   let imported = 0;
@@ -84,7 +82,6 @@ export async function importWbwExpenses(
     };
     const row = local.get(id);
     if (!row) {
-      const mapped = w.category ? categoryFor.get(w.category) ?? null : null;
       inserts.push({
         ...base,
         user_id: userId,
@@ -92,20 +89,13 @@ export async function importWbwExpenses(
         wbw_expense_id: id,
         external_transaction_id: `wbw:${id}`,
         is_transfer: false,
-        // Not part of the to-do list of bank transactions; categorising is done in the list.
-        reviewed: true,
-        category_id: mapped,
-        category_source: mapped ? "rule" : "none",
+        // On the to-do list, like a new bank transaction.
+        reviewed: false,
+        category_source: "none",
       });
     } else {
-      // A category you picked by hand stays; otherwise it follows the mapping.
-      const patch: Record<string, unknown> = { ...base };
-      if (row.category_source !== "manual") {
-        const mapped = w.category ? categoryFor.get(w.category) ?? null : null;
-        patch.category_id = mapped;
-        patch.category_source = mapped ? "rule" : "none";
-      }
-      const { error } = await supabase.from("transactions").update(patch).eq("id", row.id);
+      // Only what comes from WieBetaaltWat is refreshed; your own choices stay.
+      const { error } = await supabase.from("transactions").update(base).eq("id", row.id);
       if (!error) updated++;
     }
   }

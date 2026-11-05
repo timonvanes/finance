@@ -6,6 +6,8 @@ import { SyncButton } from "./sync-button";
 import { SyncFromDate } from "./sync-from-date";
 import { DeleteConnectionButton } from "./delete-button";
 import { ReauthorizeButton } from "./reauthorize-button";
+import { WbwSection } from "./wbw-section";
+import { getWbwSettings } from "@/actions/wbw";
 
 // A first-time 90-day sync across several accounts can take a while —
 // raise the default serverless function timeout so "Sync now" doesn't get
@@ -27,7 +29,7 @@ export default async function BankConnectionsPage({
   const { error, linked, warning } = await searchParams;
   const supabase = await createClient();
 
-  const [{ data: connections }, { data: accounts }, banks] = await Promise.all([
+  const [{ data: connections }, { data: accounts }, banks, wbw] = await Promise.all([
     supabase
       .from("bank_connections")
       .select(
@@ -36,6 +38,7 @@ export default async function BankConnectionsPage({
       .order("created_at", { ascending: false }),
     supabase.from("bank_accounts").select("bank_connection_id"),
     getAvailableBanks(),
+    getWbwSettings(),
   ]);
 
   const accountCounts = new Map<string, number>();
@@ -168,6 +171,8 @@ export default async function BankConnectionsPage({
           <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">Nog geen bank gekoppeld.</p>
         )}
       </section>
+
+      <WbwSection settings={wbw} />
 
       <section>
         <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">Bank koppelen</h2>
