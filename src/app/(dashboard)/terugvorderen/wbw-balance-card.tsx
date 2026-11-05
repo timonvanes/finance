@@ -92,6 +92,7 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
   function syncNow() {
     setError(null);
     setSyncNote(null);
+    const startedAt = Date.now();
     startTransition(async () => {
       const r = await syncWbwBalance();
       if ("error" in r) {
@@ -100,7 +101,8 @@ export function WbwBalanceCard({ status }: { status: WbwStatus }) {
       }
       setSyncNote(
         `Saldo opgehaald: ${euro(r.balance)} over ${r.lists} lijsten.` +
-          (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "")
+          (r.other.length > 0 ? ` Niet meegeteld (andere munt): ${r.other.join(", ")}.` : "") +
+          ` (${r.timings}, hele knop ${((Date.now() - startedAt) / 1000).toFixed(1)}s)`
       );
       router.refresh();
     });

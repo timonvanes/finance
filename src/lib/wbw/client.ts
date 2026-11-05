@@ -70,7 +70,18 @@ function cookiesFrom(res: Response) {
   return raw.map((c) => c.split(";")[0]).join("; ");
 }
 
+export interface WbwTimings {
+  loginMs: number;
+  balancesMs: number;
+}
+
 export async function fetchWbwBalances(): Promise<WbwListBalance[]> {
+  return (await fetchWbwBalancesTimed()).lists;
+}
+
+// Same, plus how long each step took (the sync button shows it to find what is slow).
+export async function fetchWbwBalancesTimed(): Promise<{ lists: WbwListBalance[]; timings: WbwTimings }> {
+  const t0 = Date.now();
   const email = process.env.WBW_EMAIL;
   const password = process.env.WBW_PASSWORD;
   if (!email || !password) throw new Error("WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel.");
@@ -93,8 +104,11 @@ export async function fetchWbwBalances(): Promise<WbwListBalance[]> {
 
   const cookie = cookiesFrom(login);
   if (!cookie) throw new Error("Inloggen bij WieBetaaltWat gaf geen sessie terug.");
+  const loginMs = Date.now() - t0;
 
+  const t1 = Date.now();
   const res = await fetch(`${BASE}/balances`, { headers: { ...headers, Cookie: cookie }, cache: "no-store" });
   if (!res.ok) throw new Error(`Saldo's ophalen bij WieBetaaltWat mislukt (status ${res.status}).`);
-  return parseWbwBalances(await res.json());
+  const lists = parseWbwBalances(await res.json());
+  return { lists, timings: { loginMs, balancesMs: Date.now() - t1 } };
 }

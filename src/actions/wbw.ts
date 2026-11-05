@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getWbwFrontedRows } from "@/lib/wbw-fronted";
-import { fetchWbwBalances, isWbwConfigured } from "@/lib/wbw/client";
+import { fetchWbwBalancesTimed, isWbwConfigured } from "@/lib/wbw/client";
 import { applyWbwLists, recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
 import { euroSaldo, type WbwListBalance } from "@/lib/wbw/client";
 
@@ -108,20 +108,27 @@ export async function saveWbwBalance(balance: number, date?: string): Promise<{ 
 
 // Reads the saldo of all lists from WieBetaaltWat itself (read-only) and stores
 // it as today's saldo, so it no longer has to be typed in.
-export async function syncWbwBalance(): Promise<{ error: string } | { balance: number; lists: number; other: string[] }> {
+export async function syncWbwBalance(): Promise<
+  { error: string } | { balance: number; lists: number; other: string[]; timings: string }
+> {
   try {
     if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    const started = Date.now();
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { error: "Niet ingelogd." };
 
-    const lists = await fetchWbwBalances();
+    const { lists, timings } = await fetchWbwBalancesTimed();
+    const savedAt = Date.now();
     const result = await applyWbwLists(supabase, user.id, lists, todayAmsterdam());
     if (result.error) return { error: result.error };
+    const saveMs = Date.now() - savedAt;
     revalidatePath("/", "layout");
+    const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
     return {
+      timings: `inloggen ${sec(timings.loginMs)}, saldo's ${sec(timings.balancesMs)}, opslaan ${sec(saveMs)}, totaal op de server ${sec(Date.now() - started)}`,
       balance: result.balance,
       lists: lists.length,
       other: lists
