@@ -65,6 +65,8 @@ export default async function TransactionReclaimsPage({
           wbwListId: r.wbw_list_id,
           wbwMemberId: r.wbw_member_id,
           wbwGroupId: r.wbw_group_id,
+          tikkieUrl: r.tikkie_url,
+          remindedAt: r.tikkie_reminded_at,
           bunqLink: (() => {
             const l = bunqLinks.find((x) => x.reclaim_id === r.id);
             return l ? { url: l.share_url as string, amount: Number(l.amount), status: l.status as string } : null;
