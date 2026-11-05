@@ -266,7 +266,6 @@ export interface WbwExpense {
   date: string; // YYYY-MM-DD
   status: string; // "active" or "deleted"
   payerId: string;
-  category: string | null; // WieBetaaltWat's main category, e.g. "Huishoudelijke uitgaven"
   // Your part in cents (euro), 0 when you have none.
   myShareCents: number;
   // The whole expense and everyone's part in it, in cents (euro).
@@ -301,7 +300,6 @@ export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[
     const mine = shares.find((s) => s.share?.member_id === myMemberId)?.share;
     const amount = mine?.amount as { currency?: unknown; fractional?: unknown } | undefined;
     const cents = amount && amount.currency === "EUR" ? Number(amount.fractional) : 0;
-    const category = (e.category as { main_description?: unknown } | null)?.main_description;
     const allShares = shares.flatMap((s) => {
       const sh = s.share;
       const a = sh?.amount as { currency?: unknown; fractional?: unknown } | undefined;
@@ -315,7 +313,6 @@ export function parseWbwExpenses(json: unknown, myMemberId: string): WbwExpense[
       date: typeof e.payed_on === "string" ? e.payed_on.slice(0, 10) : "",
       status: typeof e.status === "string" ? e.status : "active",
       payerId: typeof e.payed_by_id === "string" ? e.payed_by_id : "",
-      category: typeof category === "string" ? category : null,
       myShareCents: Number.isFinite(cents) && cents > 0 ? cents : 0,
       totalCents: Number.isFinite(Number(total)) ? Number(total) : allShares.reduce((sum, x) => sum + x.cents, 0),
       shares: allShares,

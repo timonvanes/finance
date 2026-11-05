@@ -37,7 +37,6 @@ export async function importWbwExpenses(
       name: string;
       date: string;
       cents: number;
-      category: string | null;
       description: string;
       details: { list: string; payer: string; total: number; shares: { name: string; amount: number; you: boolean; weight: string | null }[] };
     }
@@ -61,7 +60,6 @@ export async function importWbwExpenses(
         name: e.name || "WieBetaaltWat",
         date: e.date,
         cents: e.myShareCents,
-        category: e.category,
         description: `WieBetaaltWat · ${list.name} · betaald door ${memberName(e.payerId)}`,
         // Who was charged and for how much, kept to show when the transaction is opened.
         details: {
@@ -95,7 +93,6 @@ export async function importWbwExpenses(
       currency: "EUR",
       counterparty_name: w.name,
       raw_description: w.description,
-      wbw_category: w.category,
       wbw_details: w.details,
     };
     const row = local.get(id);
