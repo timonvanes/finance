@@ -8,7 +8,6 @@ import { getWbwFrontedRows } from "@/lib/wbw-fronted";
 import { fetchWbwBalancesTimed, isWbwConfigured, wbwLogin } from "@/lib/wbw/client";
 import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
 import { importWbwExpenses } from "@/lib/wbw/import";
-import { isoDate } from "@/lib/month";
 import { applyWbwLists, recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
 import { euroSaldo, type WbwListBalance } from "@/lib/wbw/client";
 
@@ -326,6 +325,16 @@ export async function getWbwSettings() {
   };
 }
 
+
+// Does Terugvorderen show the WieBetaaltWat card? Only when entering by hand is
+// needed: the link is not set up, or the fallback is switched on. While the link
+// works there is nothing to show (and nothing to load) there.
+export async function wbwCardVisible(): Promise<boolean> {
+  if (!isWbwConfigured()) return true;
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("wbw_manual").maybeSingle();
+  return data?.wbw_manual === true;
+}
 
 // Brings the manual WieBetaaltWat entry (saldo, squaring up) back, or hides it
 // again. For when WieBetaaltWat blocks the link; the entry works as it always did.

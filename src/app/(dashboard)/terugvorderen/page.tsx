@@ -3,18 +3,19 @@ import { getQueuedTransactions, getReclaims } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { CombineSuggestion } from "./combine-suggestion";
 import { WbwBalanceCard } from "./wbw-balance-card";
-import { getWbwStatus } from "@/actions/wbw";
+import { getWbwStatus, wbwCardVisible } from "@/actions/wbw";
 
 const euro = (n: number) =>
   n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 
 export default async function TerugvorderenPage() {
+  const showWbw = await wbwCardVisible();
   const [reclaims, paymentRequests, queued, wbwStatus] = await Promise.all([
     getReclaims(),
     getPaymentRequests(),
     getQueuedTransactions(),
-    getWbwStatus(),
+    showWbw ? getWbwStatus() : Promise.resolve(null),
   ]);
 
   type PersonRef = { name: string; person_groups: { name: string } | { name: string }[] | null };
@@ -249,7 +250,7 @@ export default async function TerugvorderenPage() {
         <span className="text-2xl text-gray-300">›</span>
       </Link>
 
-      <WbwBalanceCard status={wbwStatus} />
+      {wbwStatus && <WbwBalanceCard status={wbwStatus} />}
     </div>
   );
 }
