@@ -76,7 +76,7 @@ const TABS: {
   {
     href: "/meer",
     label: "Meer",
-    match: (p) => p.startsWith("/meer") || p.startsWith("/pots") || p.startsWith("/settings"),
+    match: (p) => p.startsWith("/meer") || p.startsWith("/plan") || p.startsWith("/pots") || p.startsWith("/settings"),
     icon: icon(
       <>
         <circle cx="5" cy="12" r="1.2" />
