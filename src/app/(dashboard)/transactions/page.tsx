@@ -15,7 +15,6 @@ export const maxDuration = 60;
 
 const FILTERS = [
   { value: "unreviewed", label: "Te doen" },
-  { value: "uncategorized", label: "Te categoriseren" },
   { value: "all", label: "Alles" },
   { value: "expense", label: "Afschrijvingen" },
   { value: "income", label: "Bijschrijvingen" },
@@ -40,6 +39,7 @@ export default async function TransactionsPage({
   searchParams: Promise<{ type?: string; sort?: string; q?: string; l?: string }>;
 }) {
   const { type, sort, q, l } = await searchParams;
+  // "Te categoriseren" is part of "Te doen" now; old links to it land there.
   const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "unreviewed";
   const limit = Math.min(1000, Math.max(PAGE_SIZE, parseInt(l ?? "", 10) || PAGE_SIZE));
   const activeSort = sort === "asc" ? "asc" : "desc";
@@ -67,9 +67,8 @@ export default async function TransactionsPage({
 
   if (activeFilter === "expense") query = query.lt("amount", 0);
   if (activeFilter === "income") query = query.gt("amount", 0);
-  if (activeFilter === "unreviewed") query = query.eq("reviewed", false);
-  if (activeFilter === "uncategorized")
-    query = query.eq("category_source", "none").eq("is_transfer", false);
+  // To do: not checked yet, or still without a category.
+  if (activeFilter === "unreviewed") query = query.or("reviewed.eq.false,and(category_source.eq.none,is_transfer.eq.false)");
   if (activeQuery) {
     // Strip characters that would break the PostgREST .or() filter syntax.
     const safeQuery = activeQuery.replace(/[,()]/g, "");
@@ -176,7 +175,7 @@ export default async function TransactionsPage({
         )}
       </form>
 
-      {(activeFilter === "uncategorized" || activeFilter === "all") && <RecategorizeButton />}
+      {(activeFilter === "unreviewed" || activeFilter === "all") && <RecategorizeButton />}
 
       <p className="flex flex-wrap items-center gap-3 px-1 text-xs text-gray-500">
         <span className="flex items-center gap-1">
@@ -238,7 +237,7 @@ export default async function TransactionsPage({
                     transactionId={tx.id}
                     categoryId={tx.category_id}
                     categorySource={tx.category_source}
-                    hideWhenCategorized={activeFilter === "uncategorized"}
+                    hideWhenCategorized={activeFilter === "unreviewed" && tx.reviewed}
                     categories={categories.filter((c) =>
                       tx.amount > 0 ? c.kind === "income" : c.kind === "expense"
                     )}
@@ -289,6 +288,7 @@ export default async function TransactionsPage({
                   people={loanData.people}
                   openLoans={loanData.openLoans}
                   hideWhenHandled={activeFilter === "unreviewed"}
+                  passOn={tx.source === "wbw"}
                   settledBy={settledBy.get(tx.id) ?? null}
                 />
               </li>
@@ -306,10 +306,6 @@ export default async function TransactionsPage({
             alle transacties
           </Link>
           .
-        </p>
-      ) : activeFilter === "uncategorized" ? (
-        <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">
-          Niks te categoriseren — alles heeft al een categorie.
         </p>
       ) : (
         <p className="rounded-2xl bg-white p-5 text-base text-gray-500 ring-1 ring-gray-200">

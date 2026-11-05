@@ -196,6 +196,8 @@ export async function recategorizeAll(includeAuto: boolean) {
       .select("id, amount, counterparty_name, raw_description, category_id, category_source")
       .in("category_source", sources)
       .eq("is_transfer", false)
+      // WieBetaaltWat expenses are categorised by hand, never by the rules.
+      .neq("source", "wbw")
       .order("id")
       .range(from, from + PAGE - 1);
     if (error) throw error;

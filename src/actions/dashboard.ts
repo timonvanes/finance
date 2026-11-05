@@ -126,17 +126,13 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
 
   const { start: prevStart, end: prevEnd } = periodRange(monthsAgo + 1, startDay);
 
-  const [{ count: unreviewedCount }, { count: uncategorizedCount }, { data: openReclaims }, { data: monthTx }, { data: prevMonthTx }] =
+  const [{ count: unreviewedCount }, { data: openReclaims }, { data: monthTx }, { data: prevMonthTx }] =
     await Promise.all([
+      // To do: not checked yet, or still without a category.
       supabase
         .from("visible_transactions")
         .select("id", { count: "exact", head: true })
-        .eq("reviewed", false),
-      supabase
-        .from("visible_transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("category_source", "none")
-        .eq("is_transfer", false),
+        .or("reviewed.eq.false,and(category_source.eq.none,is_transfer.eq.false)"),
       // "requested" only — written-off reclaims aren't really outstanding.
       supabase.from("reclaims").select("computed_amount").eq("status", "requested"),
       supabase
@@ -189,7 +185,6 @@ export async function getDashboardSummary(monthsAgo: number = 0) {
 
   return {
     unreviewedCount: unreviewedCount ?? 0,
-    uncategorizedCount: uncategorizedCount ?? 0,
     outstandingReclaimsTotal,
     monthIncome,
     monthIncomeNotCounted,

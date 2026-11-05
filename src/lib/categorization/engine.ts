@@ -141,7 +141,9 @@ export async function applyCategoryRules(
     .select("id, amount, counterparty_name, raw_description")
     .in("id", transactionIds)
     .eq("category_source", "none")
-    .eq("is_transfer", false);
+    .eq("is_transfer", false)
+    // WieBetaaltWat expenses are categorised by hand, never by the rules.
+    .neq("source", "wbw");
   if (!transactions || transactions.length === 0) return;
 
   const categorize = await buildCategorizer(supabase, userId);

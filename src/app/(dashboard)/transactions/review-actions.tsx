@@ -28,6 +28,7 @@ export function ReviewActions({
   people = [],
   openLoans = [],
   hideWhenHandled = false,
+  passOn = false,
   settledBy = null,
 }: {
   transactionId: string;
@@ -42,6 +43,9 @@ export function ReviewActions({
   people?: { id: string; name: string }[];
   openLoans?: { id: string; personName: string; balance: number }[];
   hideWhenHandled?: boolean;
+  // A WieBetaaltWat expense (your part of something someone else paid): you pass
+  // on part of it to someone else instead of reclaiming it from the payer.
+  passOn?: boolean;
   settledBy?: { kind: "reclaim" | "request"; id: string; label: string } | null;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -156,7 +160,7 @@ export function ReviewActions({
             href={splitHref}
             className="flex min-h-[44px] items-center rounded-xl bg-gray-900 px-4 text-sm font-medium text-white active:bg-gray-700"
           >
-            Terugvorderen
+            {passOn ? "Doorvorderen" : "Terugvorderen"}
           </Link>
         </>
       )}

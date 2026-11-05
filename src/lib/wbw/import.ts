@@ -61,7 +61,7 @@ export async function importWbwExpenses(
 
   const { data: existing } = await supabase
     .from("transactions")
-    .select("id, wbw_expense_id")
+    .select("id, wbw_expense_id, category_source")
     .eq("user_id", userId)
     .eq("source", "wbw");
   const local = new Map((existing ?? []).map((r) => [r.wbw_expense_id as string, r]));
@@ -94,8 +94,14 @@ export async function importWbwExpenses(
         category_source: "none",
       });
     } else {
-      // Only what comes from WieBetaaltWat is refreshed; your own choices stay.
-      const { error } = await supabase.from("transactions").update(base).eq("id", row.id);
+      // Only what comes from WieBetaaltWat is refreshed; your own choices stay. A
+      // category the rules gave it earlier (never one you picked) is taken away again.
+      const patch: Record<string, unknown> = { ...base };
+      if (row.category_source === "rule") {
+        patch.category_id = null;
+        patch.category_source = "none";
+      }
+      const { error } = await supabase.from("transactions").update(patch).eq("id", row.id);
       if (!error) updated++;
     }
   }
