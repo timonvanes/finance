@@ -7,9 +7,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listAspsps, startAuthorization } from "@/lib/enablebanking/auth";
 import { syncBankConnection } from "@/lib/enablebanking/sync";
-import { isWbwConfigured } from "@/lib/wbw/client";
 import { syncWbwBalance } from "@/actions/wbw";
 import type { PsuContext } from "@/lib/enablebanking/client";
+import { wbwAvailable } from "@/lib/owner";
 
 const CONSENT_DAYS = 90;
 
@@ -156,7 +156,7 @@ export async function syncAllNow() {
   const psu = await getPsuContext();
 
   // Your WieBetaaltWat saldo is refreshed alongside the banks, at the same time.
-  const wbw: Promise<SyncResult> | null = isWbwConfigured()
+  const wbw: Promise<SyncResult> | null = (await wbwAvailable())
     ? syncWbwBalance().then((r) => ({
         name: "WieBetaaltWat",
         count: 0,

@@ -9,6 +9,7 @@ import { fetchWbwBalancesTimed, isWbwConfigured, wbwLogin } from "@/lib/wbw/clie
 import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
 import { importWbwExpenses } from "@/lib/wbw/import";
 import { applyWbwLists, todayAmsterdam } from "@/lib/wbw/record";
+import { ownerUserId } from "@/lib/owner";
 
 export const maxDuration = 60;
 
@@ -46,7 +47,11 @@ export async function GET(request: NextRequest) {
       const label = days === 0 ? "vandaag" : days === 1 ? "morgen" : `over ${days} dagen`;
       perUser.set(o.user_id, [...(perUser.get(o.user_id) ?? []), `${o.merchant_name} (${label})`]);
     }
+    // Users who switched the returns module off get no deadline reminders.
+    const { data: off } = await admin.from("user_settings").select("user_id").eq("returns_enabled", false);
+    const returnsOff = new Set((off ?? []).map((r) => r.user_id as string));
     for (const [userId, lines] of perUser) {
+      if (returnsOff.has(userId)) continue;
       await sendPush(userId, "deadline", {
         title: "Retourtermijn bijna om",
         body: `Laatste dag om terug te sturen: ${lines.join(", ")}`,
@@ -170,13 +175,9 @@ export async function GET(request: NextRequest) {
     report.bankSync = e instanceof Error ? e.message : "failed";
   }
 
-  // The single user of this app (same lookup for bunq and WieBetaaltWat).
-  const resolveUserId = async () => {
-    const fromEnv = process.env.INBOUND_MAIL_USER_ID ?? null;
-    if (fromEnv) return fromEnv;
-    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
-    return data.users[0]?.id ?? null;
-  };
+  // The user the shared logins (bunq, WieBetaaltWat) belong to. Nobody when several users
+  // exist and none is pinned with OWNER_USER_ID.
+  const resolveUserId = ownerUserId;
 
   if (isWbwConfigured()) {
     try {

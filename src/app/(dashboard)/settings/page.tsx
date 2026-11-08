@@ -62,6 +62,11 @@ const GROUPS: {
     title: "Retouren",
     items: [
       {
+        href: "/settings/retouren",
+        label: "Retouren aan of uit",
+        description: "Zet bestellingen, retourtermijnen en het scannen van bonnen uit als je ze niet gebruikt",
+      },
+      {
         href: "/settings/agenda",
         label: "Agenda",
         description: "Zet retourtermijnen automatisch in je agenda",

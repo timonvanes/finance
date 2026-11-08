@@ -5,11 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getWbwFrontedRows } from "@/lib/wbw-fronted";
-import { fetchWbwBalancesTimed, isWbwConfigured, wbwLogin } from "@/lib/wbw/client";
+import { fetchWbwBalancesTimed, wbwLogin } from "@/lib/wbw/client";
 import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
 import { importWbwExpenses } from "@/lib/wbw/import";
 import { applyWbwLists, recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
 import { euroSaldo, type WbwListBalance } from "@/lib/wbw/client";
+import { wbwAvailable } from "@/lib/owner";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -84,7 +85,7 @@ export async function getWbwStatus() {
 
   return {
     periodLabel: period.labelDate.toLocaleDateString("nl-NL", { month: "long", year: "numeric" }),
-    configured: isWbwConfigured(),
+    configured: await wbwAvailable(),
     manual: manualMode,
     lists: wbwLists,
     latestBalance: latest ? latest.amount : null,
@@ -126,7 +127,7 @@ export async function syncWbwBalance(): Promise<
     }
 > {
   try {
-    if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
     const started = Date.now();
     const supabase = await createClient();
     const {
@@ -312,7 +313,7 @@ export async function getWbwSettings() {
   ]);
   const excluded = new Set<string>((st?.wbw_excluded_lists ?? []) as string[]);
   return {
-    configured: isWbwConfigured(),
+    configured: await wbwAvailable(),
     manual: st?.wbw_manual === true,
     importFrom: (st?.wbw_import_from as string | null | undefined) ?? null,
     importedCount: count ?? 0,
@@ -330,7 +331,7 @@ export async function getWbwSettings() {
 // needed: the link is not set up, or the fallback is switched on. While the link
 // works there is nothing to show (and nothing to load) there.
 export async function wbwCardVisible(): Promise<boolean> {
-  if (!isWbwConfigured()) return true;
+  if (!(await wbwAvailable())) return true;
   const supabase = await createClient();
   const { data } = await supabase.from("user_settings").select("wbw_manual").maybeSingle();
   return data?.wbw_manual === true;

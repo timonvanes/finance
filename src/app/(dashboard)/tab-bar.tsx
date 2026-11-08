@@ -87,7 +87,7 @@ const TABS: {
   },
 ];
 
-export function TabBar() {
+export function TabBar({ showReturns = true }: { showReturns?: boolean }) {
   const pathname = usePathname();
   // The new-reclaim wizard is a full-screen flow with its own bottom buttons.
   if (pathname.startsWith("/terugvorderen/nieuw")) return null;
@@ -95,7 +95,7 @@ export function TabBar() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 print:hidden border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <ul className="mx-auto flex max-w-4xl">
-        {TABS.map((tab) => {
+        {TABS.filter((t) => showReturns || t.href !== "/returns").map((tab) => {
           const active = tab.match(pathname);
           return (
             <li key={tab.href} className="flex-1">

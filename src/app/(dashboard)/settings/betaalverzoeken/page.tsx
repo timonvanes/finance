@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { getBunqPaymentLinksEnabled } from "@/lib/settings";
-import { isBunqConfigured } from "@/lib/bunq/client";
+import { bunqAvailable } from "@/lib/owner";
 import { BunqLinksForm } from "./bunq-links-form";
 
 export default async function PaymentRequestSettingsPage() {
-  const [enabled, configured] = await Promise.all([getBunqPaymentLinksEnabled(), Promise.resolve(isBunqConfigured())]);
+  const [enabled, configured] = await Promise.all([getBunqPaymentLinksEnabled(), bunqAvailable()]);
 
   return (
     <div className="space-y-5">

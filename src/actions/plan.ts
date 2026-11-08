@@ -14,7 +14,8 @@ import { periodRange } from "@/lib/month";
 import { summarize } from "@/lib/debts/calc";
 import { todayAmsterdam } from "@/lib/wbw/record";
 import { defaultExtra, mergeExtra, type AppData, type PlanDoc, type StudyLoanData, type VariantOverride } from "@/lib/plan/types";
-import { seedDoc } from "@/lib/plan/scenarios";
+import { blankDoc, seedDoc } from "@/lib/plan/scenarios";
+import { currentUserIsOwner } from "@/lib/owner";
 
 const normVariant = (v: Partial<VariantOverride> | undefined): VariantOverride => ({
   fields: v?.fields ?? {},
@@ -141,7 +142,8 @@ export async function getPlanData() {
   } else {
     const hadPlan = house.saved;
     const oldX = row?.extra ? mergeExtra(row.extra, today) : defaultExtra(today);
-    doc = seedDoc(app, hadPlan ? { b: house.inputs, x: oldX } : null);
+    // The starting scenarios A and B describe the owner. Anyone else starts empty.
+    doc = (await currentUserIsOwner()) ? seedDoc(app, hadPlan ? { b: house.inputs, x: oldX } : null) : blankDoc(app, house.inputs);
   }
   return { doc, app, hasDoc: Boolean(storedDoc) };
 }

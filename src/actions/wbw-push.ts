@@ -7,13 +7,13 @@ import {
   createWbwExpense,
   fetchWbwBalancesTimed,
   fetchWbwListMembers,
-  isWbwConfigured,
   wbwLogin,
   type WbwListBalance,
   type WbwSession,
 } from "@/lib/wbw/client";
 import { buildShares, matchMember } from "@/lib/wbw/match";
 import { todayAmsterdam } from "@/lib/wbw/record";
+import { wbwAvailable } from "@/lib/owner";
 
 const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
 const toCents = (euro: number) => Math.round(Number(euro) * 100);
@@ -26,7 +26,7 @@ export async function getWbwListChoices(): Promise<{ configured: boolean; lists:
     .filter((l) => l.currency === "EUR")
     .map((l) => ({ id: l.id, name: l.name }))
     .sort((a, b) => a.name.localeCompare(b.name, "nl"));
-  return { configured: isWbwConfigured(), lists };
+  return { configured: await wbwAvailable(), lists };
 }
 
 export interface WbwMemberChoice {
@@ -48,7 +48,7 @@ export async function getWbwMembersForList(
   listId: string
 ): Promise<{ error: string } | { members: WbwMemberChoice[] }> {
   try {
-    if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
     const session = await wbwLogin();
     const [members, balances] = await Promise.all([
       fetchWbwListMembers(session, listId),
@@ -217,7 +217,7 @@ export async function pushWbwExpense(
   name?: string
 ): Promise<{ error: string } | { ok: true; listName: string }> {
   try {
-    if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
     if (assignments.length === 0) return { error: "Kies minstens één persoon om aan te slaan." };
 
     const supabase = await createClient();
@@ -256,7 +256,7 @@ export async function pushStoredWbw(
   name?: string
 ): Promise<{ error: string } | { ok: true; listName: string; expenses: number }> {
   try {
-    if (!isWbwConfigured()) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
     if (reclaimIds.length === 0) return { error: "Niets om door te voeren." };
 
     const supabase = await createClient();

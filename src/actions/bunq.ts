@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { ensureBunqCallback, getBunqAccount, isBunqConfigured } from "@/lib/bunq/client";
+import { ensureBunqCallback, getBunqAccount } from "@/lib/bunq/client";
 import { matchBunqSweeps } from "@/lib/reclaims/matching";
 import { createBunqTab } from "@/lib/bunq/links";
 import { processBunqForUser } from "@/lib/bunq/process";
+import { bunqAvailable } from "@/lib/owner";
 
 async function requireUserId() {
   const supabase = await createClient();
@@ -17,7 +18,7 @@ async function requireUserId() {
 }
 
 export async function testBunqConnection() {
-  if (!isBunqConfigured()) return { ok: false as const, message: "BUNQ_API_KEY staat nog niet in Vercel." };
+  if (!(await bunqAvailable())) return { ok: false as const, message: "BUNQ_API_KEY staat nog niet in Vercel." };
   try {
     const { userId } = await requireUserId();
     const acc = await getBunqAccount(userId);
@@ -53,7 +54,7 @@ export async function createBunqPaymentLink(
 }
 
 async function createBunqPaymentLinkOrThrow(kind: "reclaim" | "request", id: string, description: string) {
-  if (!isBunqConfigured()) throw new Error("bunq is nog niet gekoppeld.");
+  if (!(await bunqAvailable())) throw new Error("bunq is nog niet gekoppeld.");
   const { supabase, userId } = await requireUserId();
 
   let amount = 0;

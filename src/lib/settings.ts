@@ -15,6 +15,13 @@ export const getHiddenDashboardModules = cache(async (): Promise<string[]> => {
   return (data?.dashboard_hidden ?? []) as string[];
 });
 
+// The returns module can be switched off per user. On unless it was switched off.
+export const getReturnsEnabled = cache(async (): Promise<boolean> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("returns_enabled").maybeSingle();
+  return data?.returns_enabled !== false;
+});
+
 export const getInvestReminderDay = cache(async (): Promise<number | null> => {
   const supabase = await createClient();
   const { data } = await supabase.from("user_settings").select("invest_reminder_day").maybeSingle();

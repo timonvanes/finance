@@ -94,6 +94,19 @@ export async function setDashboardModuleVisible(key: string, visible: boolean) {
   revalidatePath("/", "layout");
 }
 
+export async function setReturnsEnabled(enabled: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, returns_enabled: enabled, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) throw error;
+  revalidatePath("/", "layout");
+}
+
 // (Re)creates the secret in the calendar subscription URL; the old link stops working.
 export async function createCalendarToken() {
   const supabase = await createClient();

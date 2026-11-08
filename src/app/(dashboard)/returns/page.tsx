@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getReturnsEnabled } from "@/lib/settings";
 import { getInboundMails, getOrders, getUnlinkedIncomingTransactionsForReturns } from "@/actions/returns";
 import { ImportForm } from "./import-form";
 import { OrderRow } from "./order-row";
@@ -6,6 +8,7 @@ import { ReturnMailForm } from "./return-mail-form";
 import { InfoButton } from "../info-button";
 
 export default async function ReturnsPage() {
+  if (!(await getReturnsEnabled())) redirect("/");
   const [rawOrders, incomingTransactions, inboundMails] = await Promise.all([
     getOrders(),
     getUnlinkedIncomingTransactionsForReturns(),

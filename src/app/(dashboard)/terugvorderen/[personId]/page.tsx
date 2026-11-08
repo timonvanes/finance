@@ -2,8 +2,8 @@ import Link from "next/link";
 import { getReclaims, getUnlinkedIncomingTransactions } from "@/actions/reclaims";
 import { getPaymentRequests } from "@/actions/payment-requests";
 import { getBunqLinks } from "@/actions/bunq";
-import { isBunqConfigured } from "@/lib/bunq/client";
 import { getBunqPaymentLinksEnabled } from "@/lib/settings";
+import { bunqAvailable } from "@/lib/owner";
 import { ItemCard, type OpenItem } from "../item-card";
 import { TxDetails } from "../tx-details";
 import { DoneActions } from "../done-actions";
@@ -17,7 +17,7 @@ export default async function PersonPage({
   params: Promise<{ personId: string }>;
 }) {
   const { personId } = await params;
-  const bunqEnabled = isBunqConfigured() && (await getBunqPaymentLinksEnabled());
+  const bunqEnabled = (await bunqAvailable()) && (await getBunqPaymentLinksEnabled());
   const [reclaims, paymentRequests, incoming, bunqLinks] = await Promise.all([
     getReclaims(),
     getPaymentRequests(),

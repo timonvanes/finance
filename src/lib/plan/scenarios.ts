@@ -180,6 +180,24 @@ function scenarioB(a: Scenario): Scenario {
   return copy;
 }
 
+// A plan for anyone but the owner: one empty scenario with neutral starting values,
+// filled in from the user's own pots and spending. Nothing personal.
+export function blankDoc(app: AppData, b: HouseInputs): PlanDoc {
+  const x = defaultExtra(app.today);
+  x.otherSpendingMonth = Math.max(0, Math.round(app.avgSpentExSaving));
+  x.studyRepayYear = Number(app.today.slice(0, 4));
+  const empty = (): VariantOverride => ({ fields: {}, salaryYou: {}, salaryPartner: {} });
+  const scenario: Scenario = {
+    id: "A",
+    name: "Mijn plan",
+    description: "Vul je eigen gegevens in. Alles is nog een neutrale standaardwaarde.",
+    b: { ...b, incomeGrossYear: 0, partnerIncomeGrossYear: 0 },
+    x,
+    variants: { stress: empty(), gunstig: empty() },
+  };
+  return { version: 1, activeId: "A", variant: "basis", scenarios: [scenario], meta: {}, history: [], snapshots: [] };
+}
+
 export function seedDoc(app: AppData, existing: { b: HouseInputs; x: Extra } | null): PlanDoc {
   const a = scenarioA(app);
   const scenarios: Scenario[] = [a, scenarioB(a)];
