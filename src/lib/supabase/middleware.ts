@@ -78,9 +78,10 @@ export async function updateSession(request: NextRequest) {
       verifyUrl.search = "";
       return NextResponse.redirect(verifyUrl);
     }
-    // Compulsory for everyone (REQUIRE_MFA=1 in the server settings): whoever has no second
-    // step yet is sent to set one up first.
-    if (!enrolled && process.env.REQUIRE_MFA === "1" && !request.nextUrl.pathname.startsWith("/settings/account")) {
+    // Compulsory for everyone: whoever has no second step yet is sent to set one up first.
+    // (Set REQUIRE_MFA=0 in the server settings to switch that off.) A login that already
+    // passed the code (aal2) clearly has one, even if the flag is not in its token yet.
+    if (!enrolled && c.aal !== "aal2" && process.env.REQUIRE_MFA !== "0" && !request.nextUrl.pathname.startsWith("/settings/account")) {
       const setupUrl = request.nextUrl.clone();
       setupUrl.pathname = "/settings/account";
       setupUrl.search = "?mfa=required";

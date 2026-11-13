@@ -127,7 +127,7 @@ export function MfaSection({ initial }: { initial: FactorInfo[] }) {
           <p className="text-xs text-gray-500">
             {on
               ? "Voeg bij voorkeur een tweede apparaat toe als reserve. Raak je je telefoon kwijt zonder reserve, dan kan alleen de beheerder van de app de tweede stap voor je uitzetten."
-              : "Dit is een keuze: zet je het aan, dan vraagt de app bij elke nieuwe inlog om een code uit je app."}
+              : "Verplicht: zonder tweestapsverificatie kom je niet verder in de app. Bij elke nieuwe inlog vraagt de app om een code uit je authenticator-app."}
           </p>
         </>
       )}

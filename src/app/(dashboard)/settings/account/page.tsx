@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { listMfaFactors } from "@/actions/mfa";
 import { AccountForms } from "./account-forms";
 import { MfaSection } from "./mfa-section";
+import { LockSection } from "./lock-section";
 import { PasskeySection } from "./passkey-section";
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ mfa?: string }> }) {
@@ -14,7 +14,6 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   } = await supabase.auth.getUser();
 
   const factors = await listMfaFactors();
-  const lockOn = (await cookies()).get("applock")?.value === "1";
 
   return (
     <div className="space-y-5">
@@ -40,9 +39,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         </p>
       )}
 
+      <LockSection />
+
       <MfaSection initial={factors} />
 
-      <PasskeySection lockOn={lockOn} />
+      <PasskeySection />
 
       <AccountForms />
     </div>

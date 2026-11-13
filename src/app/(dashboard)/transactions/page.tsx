@@ -61,13 +61,14 @@ const FILTERS = [
 const PAGE_SIZE = 100;
 
 function buildHref(
-  overrides: { type?: string; sort?: string; q?: string; l?: string; bron?: string },
-  current: { type: string; sort: string; q: string; l?: string; bron?: string }
+  overrides: { type?: string; sort?: string; q?: string; l?: string; bron?: string; cat?: string },
+  current: { type: string; sort: string; q: string; l?: string; bron?: string; cat?: string }
 ) {
   const merged = { ...current, ...overrides };
   const params = new URLSearchParams();
   if (merged.type !== "unreviewed") params.set("type", merged.type);
   if (merged.bron) params.set("bron", merged.bron);
+  if (merged.cat) params.set("cat", merged.cat);
   if (merged.sort !== "desc") params.set("sort", merged.sort);
   if (merged.q) params.set("q", merged.q);
   if (merged.l) params.set("l", merged.l);
@@ -78,9 +79,11 @@ function buildHref(
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string; q?: string; l?: string; bron?: string }>;
+  searchParams: Promise<{ type?: string; sort?: string; q?: string; l?: string; bron?: string; cat?: string }>;
 }) {
-  const { type, sort, q, l, bron } = await searchParams;
+  const { type, sort, q, l, bron, cat } = await searchParams;
+  // A category id, or "geen" for transactions that have none yet. Anything else is ignored.
+  const activeCat = cat === "geen" || /^[0-9a-f-]{36}$/i.test(cat ?? "") ? cat! : "";
   // "Te categoriseren" is part of "Te doen" now; old links to it land there.
   const activeFilter = FILTERS.some((f) => f.value === type) ? type! : "unreviewed";
   const limit = Math.min(1000, Math.max(PAGE_SIZE, parseInt(l ?? "", 10) || PAGE_SIZE));
@@ -103,7 +106,7 @@ export default async function TransactionsPage({
     { value: "wbw", label: "WieBetaaltWat", accountIds: [] as string[] },
   ];
   const activeSource = sources.find((s) => s.value === bron) ?? null;
-  const current = { type: activeFilter, sort: activeSort, q: activeQuery, bron: activeSource?.value };
+  const current = { type: activeFilter, sort: activeSort, q: activeQuery, bron: activeSource?.value, cat: activeCat };
 
   let query = supabase
     // visible_transactions hides rows from before a connection's
@@ -128,6 +131,8 @@ export default async function TransactionsPage({
         ? query.eq("source", "wbw")
         : query.eq("source", "bank").in("bank_account_id", activeSource.accountIds.length > 0 ? activeSource.accountIds : ["00000000-0000-0000-0000-000000000000"]);
   }
+  if (activeCat === "geen") query = query.is("category_id", null);
+  else if (activeCat) query = query.eq("category_id", activeCat);
   if (activeFilter === "expense") query = query.lt("amount", 0);
   if (activeFilter === "income") query = query.gt("amount", 0);
   // To do: not checked yet, or still without a category.
@@ -148,6 +153,14 @@ export default async function TransactionsPage({
     categoriesPromise,
     getIncomeSourceOptions(),
   ]);
+
+  const activeCategory = categories.find((c) => c.id === activeCat) ?? null;
+  const categoryLabel = activeCat === "geen" ? "Zonder categorie" : (activeCategory?.name ?? "");
+  const filterLabel = [activeSource?.label, categoryLabel].filter(Boolean).join(", ");
+  const chip = (active: boolean) =>
+    active
+      ? "flex min-h-[40px] items-center rounded-full bg-gray-900 px-4 text-sm font-medium text-white"
+      : "flex min-h-[40px] items-center rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100";
 
   const allTxIds = (transactions ?? []).map((tx) => tx.id);
   const expenseTxIds = (transactions ?? []).filter((tx) => tx.amount < 0).map((tx) => tx.id);
@@ -214,7 +227,7 @@ export default async function TransactionsPage({
 
       <details className="group">
         <summary className="flex min-h-[44px] w-fit cursor-pointer list-none items-center gap-2 rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100 [&::-webkit-details-marker]:hidden">
-          <span>Filter{activeSource ? `: ${activeSource.label}` : ""}</span>
+          <span>Filter{filterLabel ? `: ${filterLabel}` : ""}</span>
           <span className="text-gray-400 transition-transform group-open:rotate-90">›</span>
         </summary>
         <div className="mt-2 space-y-1">
@@ -223,19 +236,19 @@ export default async function TransactionsPage({
             {[{ value: "", label: "Alle bronnen" }, ...sources].map((s) => {
               const active = (activeSource?.value ?? "") === s.value;
               return (
-                <Link
-                  key={s.value || "all"}
-                  href={buildHref({ bron: s.value }, current)}
-                  className={
-                    active
-                      ? "flex min-h-[40px] items-center rounded-full bg-gray-900 px-4 text-sm font-medium text-white"
-                      : "flex min-h-[40px] items-center rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
-                  }
-                >
+                <Link key={s.value || "all"} href={buildHref({ bron: s.value }, current)} className={chip(active)}>
                   {s.label}
                 </Link>
               );
             })}
+          </div>
+          <p className="px-1 pt-2 text-xs text-gray-500">Categorie</p>
+          <div className="flex flex-wrap gap-2">
+            {[{ id: "", name: "Alle categorieën" }, { id: "geen", name: "Zonder categorie" }, ...categories].map((c) => (
+              <Link key={c.id || "all"} href={buildHref(c.id && current.type === "unreviewed" ? { cat: c.id, type: "all" } : { cat: c.id }, current)} className={chip(activeCat === c.id)}>
+                {c.name}
+              </Link>
+            ))}
           </div>
         </div>
       </details>
@@ -243,6 +256,7 @@ export default async function TransactionsPage({
       <form method="get" className="flex items-center gap-2">
         {activeFilter !== "unreviewed" && <input type="hidden" name="type" value={activeFilter} />}
         {activeSource && <input type="hidden" name="bron" value={activeSource.value} />}
+        {activeCat && <input type="hidden" name="cat" value={activeCat} />}
         {activeSort !== "desc" && <input type="hidden" name="sort" value={activeSort} />}
         <input
           type="search"
