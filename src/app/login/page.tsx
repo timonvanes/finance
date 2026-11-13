@@ -29,6 +29,7 @@ export default async function LoginPage({
             id="email"
             name="email"
             type="email"
+            autoComplete="username"
             required
             className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 text-base"
           />
@@ -45,6 +46,7 @@ export default async function LoginPage({
             id="password"
             name="password"
             type="password"
+            autoComplete="current-password"
             required
             className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 text-base"
           />

@@ -3,7 +3,7 @@ import { getNavTabs } from "@/lib/settings";
 import { getReturnsEnabled } from "@/lib/settings";
 import { MenuForm } from "./menu-form";
 
-export default async function MenuSettingsPage() {
+export default async function BottomBarSettingsPage() {
   const [tabs, returnsOn] = await Promise.all([getNavTabs(), getReturnsEnabled()]);
 
   return (
@@ -16,7 +16,7 @@ export default async function MenuSettingsPage() {
         >
           ‹
         </Link>
-        <h1 className="text-2xl font-semibold text-gray-900">Menu</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Onderbalk</h1>
       </div>
 
       <p className="px-1 text-base text-gray-600">

@@ -64,6 +64,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // The signed flag says this person has a second step. A login that has not passed it
+  // (still "aal1") may only visit the second-step page. Only signed login-token fields
+  // are read here, nothing that the browser could have changed.
+  if (user && !isPublicPath) {
+    const c = user as unknown as { aal?: string; app_metadata?: { mfa_required?: boolean } };
+    if (c.app_metadata?.mfa_required === true && c.aal !== "aal2") {
+      const verifyUrl = request.nextUrl.clone();
+      verifyUrl.pathname = "/login/verify";
+      verifyUrl.search = "";
+      return NextResponse.redirect(verifyUrl);
+    }
+  }
+
   if (user && request.nextUrl.pathname === "/login") {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/";

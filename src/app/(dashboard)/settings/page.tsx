@@ -19,9 +19,9 @@ const GROUPS: {
         description: "Je e-mailadres en wachtwoord wijzigen",
       },
       {
-        href: "/settings/menu",
-        label: "Menu",
-        description: "Kies wat onderin staat en wat onder Meer valt",
+        href: "/settings/onderbalk",
+        label: "Onderbalk",
+        description: "Kies wat onderin de balk staat en wat onder Meer valt",
       },
     ],
   },

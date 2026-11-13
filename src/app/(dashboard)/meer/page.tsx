@@ -5,7 +5,7 @@ import { getNavTabs } from "@/lib/settings";
 import { NavIcon } from "../nav-icon";
 
 // Everything that is not in the bottom bar. The person decides what that is under
-// Instellingen, Menu.
+// Instellingen, Onderbalk.
 export default async function MeerPage() {
   const tabs = new Set(await getNavTabs());
   const items = NAV_ITEMS.filter((i) => !tabs.has(i.key));
@@ -32,13 +32,6 @@ export default async function MeerPage() {
           ))}
         </ul>
       )}
-
-      <Link
-        href="/settings/menu"
-        className="flex min-h-[48px] items-center justify-center rounded-2xl text-sm text-teal-700 active:bg-gray-100"
-      >
-        Kies wat onderin staat
-      </Link>
 
       <form action={logout}>
         <button
