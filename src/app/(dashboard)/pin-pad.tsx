@@ -63,6 +63,24 @@ export function PinPad({
     setDigits(digitsRef.current);
   }, []);
 
+  // The lock screen does not scroll, bounce or zoom: the page behind it stays put too.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    const stop = (e: Event) => e.preventDefault();
+    const stopMulti = (e: TouchEvent) => e.preventDefault();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // Safari's pinch gesture, and any drag on the screen itself.
+    document.addEventListener("gesturestart", stop);
+    root?.addEventListener("touchmove", stopMulti, { passive: false });
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("gesturestart", stop);
+      root?.removeEventListener("touchmove", stopMulti);
+    };
+  }, []);
+
   // A keyboard works too (on a computer).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -78,7 +96,7 @@ export function PinPad({
   const message = error ?? notice ?? null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-between overflow-y-auto bg-gradient-to-b from-teal-700 via-teal-800 to-teal-950 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))] text-white">
+    <div ref={rootRef} className="fixed inset-0 z-[100] flex h-dvh touch-none select-none flex-col items-center justify-between overflow-hidden overscroll-none bg-gradient-to-b from-teal-700 via-teal-800 to-teal-950 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))] text-white">
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-400/25 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-emerald-300/15 blur-3xl" />
 

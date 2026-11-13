@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   title: "Finance",
   description: "Persoonlijk overzicht van uitgaven, terugvorderingen en retouren",
   manifest: "/manifest.json",
+  // On a phone the app runs under the status bar (clock, battery): full screen, like a
+  // banking app. A teal bar behind it (globals.css) keeps the clock readable.
+  appleWebApp: { capable: true, title: "Finance", statusBarStyle: "black-translucent" },
   icons: {
     icon: "/icons/icon.svg",
     apple: "/icons/apple-touch-icon.png",
@@ -25,6 +28,9 @@ export const metadata: Metadata = {
 export const viewport = {
   themeColor: "#0f766e",
   viewportFit: "cover",
+  // An app, not a page: no pinching in or out.
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

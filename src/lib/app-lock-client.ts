@@ -40,7 +40,7 @@ export async function createLockCredential(): Promise<void> {
   const credential = (await navigator.credentials.create({
     publicKey: {
       rp: { name: "Finance", id: window.location.hostname },
-      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "ontgrendelen", displayName: "Finance ontgrendelen" },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "Finance", displayName: "Finance" },
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       pubKeyCredParams: [
         { type: "public-key", alg: -7 },

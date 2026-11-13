@@ -35,6 +35,20 @@ body {
      scrolling and pinch-to-zoom for accessibility. */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  /* The app runs under the phone's status bar: everything starts below it... */
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ...and a teal strip behind the status bar keeps the clock and battery readable. */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: #0f766e;
+  z-index: 40;
 }
 
 /* App-style touch targets and softer corners for the older pages. :where()
