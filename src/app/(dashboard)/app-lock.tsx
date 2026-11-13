@@ -42,13 +42,6 @@ export function AppLock({ hasPin, children }: { hasPin: boolean; children: React
     setFaceBusy(false);
   }
 
-  // Where Face ID is on, ask for it as soon as the lock screen shows.
-  useEffect(() => {
-    if (!locked || !faceId) return;
-    const t = window.setTimeout(() => void tryFaceId(), 300);
-    return () => window.clearTimeout(t);
-  }, [locked, faceId]);
-
   return (
     <>
       <div inert={locked || !hasPin} aria-hidden={locked || !hasPin}>
