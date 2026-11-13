@@ -2,14 +2,30 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { logout } from "@/actions/auth";
-import { createBrowserSupabase } from "@/lib/supabase/client";
 
 // After this long in the background the app locks again, like a banking app.
 const LOCK_AFTER_MS = 60_000;
 
-// Opening the app shows a lock screen first. One tap on Face ID (a passkey) opens it. The
-// person stays logged in, so no password is typed. The screen only appears on devices
-// where it was switched on.
+// Asks the phone for Face ID, like a banking app. Nothing is sent anywhere and the login
+// stays exactly as it is: this only keeps someone who holds the unlocked phone out.
+async function faceIdOnThisDevice(): Promise<boolean> {
+  const credential = (await navigator.credentials.get({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rpId: window.location.hostname,
+      userVerification: "required",
+      timeout: 60_000,
+    },
+  })) as PublicKeyCredential | null;
+  if (!credential) return false;
+  // Byte 32 of the authenticator data holds the flags; bit 2 says the face (or finger) was checked.
+  const data = new Uint8Array((credential.response as AuthenticatorAssertionResponse).authenticatorData);
+  return (data[32] & 0x04) !== 0;
+}
+
+// Opening the app shows a lock screen first. One tap on Face ID opens it. The person stays
+// logged in, so no password and no code. The screen only appears on devices where it was
+// switched on.
 export function AppLock({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const [locked, setLocked] = useState(enabled);
   const [busy, setBusy] = useState(false);
@@ -30,16 +46,21 @@ export function AppLock({ enabled, children }: { enabled: boolean; children: Rea
   async function unlock(auto: boolean) {
     setBusy(true);
     setError(null);
-    const { error: err } = await createBrowserSupabase().auth.signInWithPasskey();
-    setBusy(false);
-    if (!err) {
-      setLocked(false);
-      return;
-    }
-    // A phone may refuse to ask for Face ID without a tap: then the button does it.
-    if (!auto) {
-      const m = err.message.toLowerCase();
-      setError(/cancel|abort|not allowed|timed out/.test(m) ? "Face ID is geannuleerd. Tik op de knop om het opnieuw te proberen." : "Ontgrendelen lukte niet. Probeer het opnieuw of log in met je wachtwoord.");
+    try {
+      const ok = await faceIdOnThisDevice();
+      setBusy(false);
+      if (ok) {
+        setLocked(false);
+        return;
+      }
+      if (!auto) setError("Face ID is niet bevestigd. Probeer het opnieuw.");
+    } catch (e) {
+      setBusy(false);
+      // A phone may refuse to ask for Face ID without a tap: then the button does it.
+      if (!auto) {
+        const m = (e instanceof Error ? e.message : "").toLowerCase();
+        setError(/cancel|abort|not allowed|timed out/.test(m) ? "Face ID is geannuleerd. Tik op de knop om het opnieuw te proberen." : "Ontgrendelen lukte niet. Probeer het opnieuw of log in met je wachtwoord.");
+      }
     }
   }
 

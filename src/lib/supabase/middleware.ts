@@ -68,20 +68,23 @@ export async function updateSession(request: NextRequest) {
   // (still "aal1") may only visit the second-step page. Only signed login-token fields
   // are read here, nothing that the browser could have changed.
   if (user && !isPublicPath) {
-    const c = user as unknown as {
-      aal?: string;
-      amr?: ({ method?: string } | string)[];
-      app_metadata?: { mfa_required?: boolean };
-    };
-    // A login with a passkey (Face ID) is already two things in one: the phone and the
-    // face. It counts as the second step. Anything else still needs the code.
-    const methods = (Array.isArray(c.amr) ? c.amr : []).map((a) => (typeof a === "string" ? a : a?.method));
-    const viaPasskey = methods.some((m) => m === "passkey" || m === "webauthn");
-    if (c.app_metadata?.mfa_required === true && c.aal !== "aal2" && !viaPasskey) {
+    const c = user as unknown as { aal?: string; app_metadata?: { mfa_required?: boolean } };
+    const enrolled = c.app_metadata?.mfa_required === true;
+    // Every new login, with the password or with Face ID, needs the code. A login that
+    // stays open does not ask again.
+    if (enrolled && c.aal !== "aal2") {
       const verifyUrl = request.nextUrl.clone();
       verifyUrl.pathname = "/login/verify";
       verifyUrl.search = "";
       return NextResponse.redirect(verifyUrl);
+    }
+    // Compulsory for everyone (REQUIRE_MFA=1 in the server settings): whoever has no second
+    // step yet is sent to set one up first.
+    if (!enrolled && process.env.REQUIRE_MFA === "1" && !request.nextUrl.pathname.startsWith("/settings/account")) {
+      const setupUrl = request.nextUrl.clone();
+      setupUrl.pathname = "/settings/account";
+      setupUrl.search = "?mfa=required";
+      return NextResponse.redirect(setupUrl);
     }
   }
 

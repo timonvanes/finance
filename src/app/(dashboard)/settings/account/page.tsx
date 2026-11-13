@@ -6,7 +6,8 @@ import { AccountForms } from "./account-forms";
 import { MfaSection } from "./mfa-section";
 import { PasskeySection } from "./passkey-section";
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ mfa?: string }> }) {
+  const { mfa } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,9 +34,15 @@ export default async function AccountPage() {
         <p className="break-all text-lg font-medium text-gray-900">{user?.email ?? "onbekend"}</p>
       </div>
 
-      <PasskeySection lockOn={lockOn} />
+      {mfa === "required" && (
+        <p className="rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-900 ring-1 ring-amber-200">
+          Voor deze app is tweestapsverificatie verplicht. Stel hieronder de authenticator-app in, dan kun je verder.
+        </p>
+      )}
 
       <MfaSection initial={factors} />
+
+      <PasskeySection lockOn={lockOn} />
 
       <AccountForms />
     </div>
