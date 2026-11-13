@@ -4,7 +4,6 @@ import { listMfaFactors } from "@/actions/mfa";
 import { AccountForms } from "./account-forms";
 import { MfaSection } from "./mfa-section";
 import { LockSection } from "./lock-section";
-import { PasskeySection } from "./passkey-section";
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ mfa?: string }> }) {
   const { mfa } = await searchParams;
@@ -42,8 +41,6 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <LockSection />
 
       <MfaSection initial={factors} />
-
-      <PasskeySection />
 
       <AccountForms />
     </div>

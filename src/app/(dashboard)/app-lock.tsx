@@ -66,8 +66,8 @@ export function AppLock({ hasPin, children }: { hasPin: boolean; children: React
           faceIdBusy={faceBusy}
           footer={
             <form action={forgotPin}>
-              <button type="submit" className="min-h-[44px] px-4 text-sm text-teal-100/80 underline decoration-teal-100/40 underline-offset-4">
-                Pincode vergeten? Uitloggen en een nieuwe kiezen
+              <button type="submit" className="min-h-[52px] rounded-xl border-2 border-white px-6 text-base font-medium text-white active:bg-white/15">
+                Pincode vergeten? Uitloggen
               </button>
             </form>
           }

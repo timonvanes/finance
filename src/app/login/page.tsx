@@ -1,5 +1,4 @@
 import { login } from "@/actions/auth";
-import { PasskeyLogin } from "./passkey-login";
 
 export default async function LoginPage({
   searchParams,
@@ -58,13 +57,6 @@ export default async function LoginPage({
           Inloggen
         </button>
       </form>
-
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className="h-px flex-1 bg-gray-200" />
-          of
-          <span className="h-px flex-1 bg-gray-200" />
-        </div>
-        <PasskeyLogin />
       </div>
     </div>
   );

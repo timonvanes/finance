@@ -4,8 +4,21 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 const LENGTH = 6;
 
+// The letters under the digits, like on a phone.
+const KEYS: { digit: string; letters: string }[] = [
+  { digit: "1", letters: "" },
+  { digit: "2", letters: "ABC" },
+  { digit: "3", letters: "DEF" },
+  { digit: "4", letters: "GHI" },
+  { digit: "5", letters: "JKL" },
+  { digit: "6", letters: "MNO" },
+  { digit: "7", letters: "PQRS" },
+  { digit: "8", letters: "TUV" },
+  { digit: "9", letters: "WXYZ" },
+];
+
 // The full-screen look of everything about the app code: the lock screen, choosing a code
-// and changing it. Teal, with a keypad, like a banking app.
+// and changing it. Dark, with the logo, six dots and a big keypad, like a banking app.
 export function PinPad({
   title,
   hint,
@@ -91,67 +104,69 @@ export function PinPad({
     return () => window.removeEventListener("keydown", onKey);
   }, [press, back]);
 
-  const keyClass =
-    "flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/10 text-3xl font-light text-white ring-1 ring-white/15 backdrop-blur transition active:scale-95 active:bg-white/25 disabled:opacity-50";
+  // Keys: no circles, big digits; the row height shrinks a little on a short screen.
+  const keyBase = "flex h-[min(5.25rem,9.5dvh)] flex-col items-center justify-center rounded-2xl text-white transition active:bg-white/15 disabled:opacity-50";
   const message = error ?? notice ?? null;
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-[100] flex h-dvh touch-none select-none flex-col items-center justify-between overflow-hidden overscroll-none bg-gradient-to-b from-teal-700 via-teal-800 to-teal-950 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))] text-white">
-      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-400/25 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-emerald-300/15 blur-3xl" />
-
-      <div className="relative z-10 flex flex-col items-center gap-2 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <div
+      ref={rootRef}
+      className="fixed inset-0 z-[100] flex h-dvh touch-none select-none flex-col items-center justify-between overflow-hidden overscroll-none bg-[#212121] px-8 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))] text-white"
+    >
+      <div className="flex flex-col items-center gap-2 text-center">
+        <div className="flex h-[min(5.75rem,11dvh)] w-[min(5.75rem,11dvh)] items-center justify-center rounded-[26%] bg-gradient-to-br from-teal-500 to-teal-800 shadow-lg shadow-black/40">
+          <svg viewBox="0 0 24 24" width="48%" height="48%" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
           </svg>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {hint && <p className="max-w-xs text-sm text-teal-100/80">{hint}</p>}
+        <h1 className="pt-2 text-xl font-semibold tracking-tight">{title}</h1>
+        {hint && <p className="max-w-xs text-sm text-white/65">{hint}</p>}
       </div>
 
-      <div className="relative z-10 flex flex-col items-center gap-3 py-4">
-        <div className="flex gap-4" aria-label={`${digits.length} van ${LENGTH} cijfers ingevuld`}>
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex gap-5" aria-label={`${digits.length} van ${LENGTH} cijfers ingevuld`}>
           {Array.from({ length: LENGTH }, (_, i) => (
-            <span key={i} className={`h-4 w-4 rounded-full ring-2 ring-white/70 transition ${i < digits.length ? "bg-white" : "bg-transparent"} ${busy ? "animate-pulse" : ""}`} />
+            <span key={i} className={`h-[18px] w-[18px] rounded-full border-2 border-white transition ${i < digits.length ? "bg-white" : "bg-transparent"} ${busy ? "animate-pulse" : ""}`} />
           ))}
         </div>
-        <p className="min-h-[2.5rem] max-w-xs rounded-xl px-3 py-1 text-center text-sm text-teal-50" role="status">
+        <p className="min-h-[2.5rem] max-w-xs px-3 pt-2 text-center text-sm text-white/85" role="status">
           {message}
         </p>
       </div>
 
-      <div className="relative z-10 grid grid-cols-3 gap-x-6 gap-y-4">
-        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-          <button key={d} type="button" className={keyClass} onClick={() => press(d)} disabled={busy}>
-            {d}
+      <div className="grid w-full max-w-[22rem] grid-cols-3 gap-x-2">
+        {KEYS.map(({ digit, letters }) => (
+          <button key={digit} type="button" className={keyBase} onClick={() => press(digit)} disabled={busy}>
+            <span className="text-[2.6rem] font-light leading-none">{digit}</span>
+            <span className="h-4 pt-1 text-[0.7rem] font-medium leading-none tracking-[0.3em]">{letters}</span>
           </button>
         ))}
         {onFaceId ? (
-          <button type="button" className={`${keyClass} text-base`} onClick={onFaceId} disabled={busy || faceIdBusy} aria-label="Ontgrendelen met Face ID">
-            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <button type="button" className={keyBase} onClick={onFaceId} disabled={busy || faceIdBusy} aria-label="Ontgrendelen met Face ID">
+            <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2" />
               <path d="M9 10v1.5M15 10v1.5M12 10v3h-.6M9 16c1.5 1.5 4.5 1.5 6 0" />
             </svg>
           </button>
         ) : onCancel ? (
-          <button type="button" className="h-[72px] w-[72px] text-sm text-teal-100/90" onClick={onCancel}>
+          <button type="button" className={`${keyBase} text-base`} onClick={onCancel}>
             Annuleer
           </button>
         ) : (
           <span />
         )}
-        <button type="button" className={keyClass} onClick={() => press("0")} disabled={busy}>
-          0
+        <button type="button" className={keyBase} onClick={() => press("0")} disabled={busy}>
+          <span className="text-[2.6rem] font-light leading-none">0</span>
+          <span className="h-4" />
         </button>
-        <button type="button" className="flex h-[72px] w-[72px] items-center justify-center text-teal-50 active:opacity-60" onClick={back} aria-label="Wis laatste cijfer">
-          <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <button type="button" className={keyBase} onClick={back} aria-label="Wis laatste cijfer">
+          <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M21 5H9l-6 7 6 7h12a1 1 0 001-1V6a1 1 0 00-1-1zM17 9l-6 6M11 9l6 6" />
           </svg>
         </button>
       </div>
 
-      <div className="relative z-10 mt-4 flex min-h-[44px] items-center">{footer}</div>
+      <div className="flex min-h-[3.5rem] items-center pt-2">{footer}</div>
     </div>
   );
 }
