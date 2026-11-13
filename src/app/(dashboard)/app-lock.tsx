@@ -1,36 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { forgotPin, verifyPin } from "@/actions/pin";
 import { confirmWithFaceId, hasLockCredential, subscribeLock } from "@/lib/app-lock-client";
 import { PinPad } from "./pin-pad";
 import { PinSetupFlow } from "./pin-flows";
 
-// After this long in the background the app locks again, like a banking app.
-const LOCK_AFTER_MS = 60_000;
-
-// The app is always locked on opening, and again after a minute in the background. It
+// The app is locked when it is opened. Leaving it for a moment (home screen, another app)
+// does not lock it again: only opening it afresh does, when the phone has closed it. It
 // opens with the 6-digit code (compulsory, chosen first) or, where switched on as an
 // extra, with Face ID. The person stays logged in: the lock is only a check on the phone.
 export function AppLock({ hasPin, children }: { hasPin: boolean; children: ReactNode }) {
   const router = useRouter();
   const [locked, setLocked] = useState(hasPin);
   const [faceBusy, setFaceBusy] = useState(false);
-  const hiddenAt = useRef<number | null>(null);
   // Face ID is an extra, chosen per device.
   const faceId = useSyncExternalStore(subscribeLock, hasLockCredential, () => false);
-
-  // Back from the background after a while: lock again.
-  useEffect(() => {
-    if (!hasPin) return;
-    const onChange = () => {
-      if (document.visibilityState === "hidden") hiddenAt.current = Date.now();
-      else if (hiddenAt.current !== null && Date.now() - hiddenAt.current > LOCK_AFTER_MS) setLocked(true);
-    };
-    document.addEventListener("visibilitychange", onChange);
-    return () => document.removeEventListener("visibilitychange", onChange);
-  }, [hasPin]);
 
   async function tryFaceId() {
     setFaceBusy(true);
