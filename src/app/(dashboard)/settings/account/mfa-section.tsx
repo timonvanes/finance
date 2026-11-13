@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { confirmMfaEnrollment, removeMfaFactor, startMfaEnrollment, syncMfaFlag, type FactorInfo } from "@/actions/mfa";
-import { createBrowserSupabase } from "@/lib/supabase/client";
+import { confirmMfaEnrollment, removeMfaFactor, startMfaEnrollment, type FactorInfo } from "@/actions/mfa";
 
 const field = "box-border min-h-[56px] w-full rounded-xl border border-gray-300 bg-white px-3 text-center text-2xl tracking-[0.4em]";
 const button = "min-h-[52px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50";
@@ -45,38 +44,6 @@ export function MfaSection({ initial }: { initial: FactorInfo[] }) {
     setCode("");
     setDone("Tweestapsverificatie staat aan. Bij het volgende inloggen vraagt de app om een code.");
     router.refresh();
-  }
-
-  // Face ID (or a fingerprint or security key): the phone itself asks for it, so this
-  // runs in the browser. Afterwards the server notes that a second step exists.
-  async function addPasskey() {
-    setBusy(true);
-    setError(null);
-    setDone(null);
-    const supabase = createBrowserSupabase();
-    const stamp = new Date().toISOString().slice(0, 10);
-    const { error: err } = await supabase.auth.mfa.webauthn.register({ friendlyName: `Face ID ${stamp}` });
-    if (err) {
-      setBusy(false);
-      const m = `${err.message} ${(err as { code?: string }).code ?? ""}`.toLowerCase();
-      setError(
-        m.includes("not_enabled") || m.includes("not enabled")
-          ? "Face ID als tweede stap staat nog niet aan in Supabase. Zet WebAuthn aan bij Authentication, Sign In / Providers, Multi-Factor."
-          : /cancel|abort|not allowed|timed out/.test(m)
-            ? "Face ID is geannuleerd of verlopen. Probeer het opnieuw."
-            : "Face ID toevoegen mislukte. Probeer het opnieuw, of gebruik de authenticator-app."
-      );
-      return;
-    }
-    await syncMfaFlag();
-    setBusy(false);
-    setDone(
-      factors.some((f) => f.type === "totp")
-        ? "Face ID is toegevoegd. Bij het inloggen kies je Face ID of je code."
-        : "Face ID is toegevoegd. Zet voor de zekerheid ook de authenticator-app aan als reserve."
-    );
-    router.refresh();
-    setFactors((list) => [...list, { id: `new-${stamp}`, name: `Face ID ${stamp}`, createdAt: new Date().toISOString(), type: "webauthn" }]);
   }
 
   async function remove(f: FactorInfo) {
@@ -144,7 +111,7 @@ export function MfaSection({ initial }: { initial: FactorInfo[] }) {
               {factors.map((f) => (
                 <li key={f.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                   <span className="min-w-0 text-gray-800">
-                    {f.type === "webauthn" ? "Face ID" : "Authenticator-app"} · {f.name}
+                    {f.name}
                     <span className="block text-xs text-gray-500">toegevoegd {new Date(f.createdAt).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })}</span>
                   </span>
                   <button type="button" disabled={busy} onClick={() => void remove(f)} className="min-h-[44px] shrink-0 text-red-600 underline disabled:opacity-40">
@@ -155,19 +122,11 @@ export function MfaSection({ initial }: { initial: FactorInfo[] }) {
             </ul>
           )}
           <button type="button" disabled={busy} onClick={() => void start()} className={button}>
-            {busy ? "Bezig…" : factors.some((f) => f.type === "totp") ? "Nog een authenticator toevoegen" : "Authenticator-app instellen"}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void addPasskey()}
-            className="min-h-[52px] w-full rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-900 active:bg-gray-50 disabled:opacity-50"
-          >
-            {busy ? "Bezig…" : "Face ID toevoegen"}
+            {busy ? "Bezig…" : on ? "Nog een apparaat toevoegen" : "Tweestapsverificatie instellen"}
           </button>
           <p className="text-xs text-gray-500">
             {on
-              ? "Heb je zowel Face ID als een authenticator-app, dan mag je bij het inloggen kiezen. Houd altijd een reserve: raak je je telefoon kwijt zonder reserve, dan kan alleen de beheerder van de app de tweede stap voor je uitzetten. Face ID werkt alleen op het adres van deze app."
+              ? "Voeg bij voorkeur een tweede apparaat toe als reserve. Raak je je telefoon kwijt zonder reserve, dan kan alleen de beheerder van de app de tweede stap voor je uitzetten."
               : "Dit is een keuze: zet je het aan, dan vraagt de app bij elke nieuwe inlog om een code uit je app."}
           </p>
         </>

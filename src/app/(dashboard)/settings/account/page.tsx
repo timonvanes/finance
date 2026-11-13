@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listMfaFactors } from "@/actions/mfa";
 import { AccountForms } from "./account-forms";
 import { MfaSection } from "./mfa-section";
+import { PasskeySection } from "./passkey-section";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -29,6 +30,8 @@ export default async function AccountPage() {
         <p className="text-sm text-gray-500">Je logt in met</p>
         <p className="break-all text-lg font-medium text-gray-900">{user?.email ?? "onbekend"}</p>
       </div>
+
+      <PasskeySection />
 
       <MfaSection initial={factors} />
 

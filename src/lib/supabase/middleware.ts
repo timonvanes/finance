@@ -68,8 +68,16 @@ export async function updateSession(request: NextRequest) {
   // (still "aal1") may only visit the second-step page. Only signed login-token fields
   // are read here, nothing that the browser could have changed.
   if (user && !isPublicPath) {
-    const c = user as unknown as { aal?: string; app_metadata?: { mfa_required?: boolean } };
-    if (c.app_metadata?.mfa_required === true && c.aal !== "aal2") {
+    const c = user as unknown as {
+      aal?: string;
+      amr?: ({ method?: string } | string)[];
+      app_metadata?: { mfa_required?: boolean };
+    };
+    // A login with a passkey (Face ID) is already two things in one: the phone and the
+    // face. It counts as the second step. Anything else still needs the code.
+    const methods = (Array.isArray(c.amr) ? c.amr : []).map((a) => (typeof a === "string" ? a : a?.method));
+    const viaPasskey = methods.some((m) => m === "passkey" || m === "webauthn");
+    if (c.app_metadata?.mfa_required === true && c.aal !== "aal2" && !viaPasskey) {
       const verifyUrl = request.nextUrl.clone();
       verifyUrl.pathname = "/login/verify";
       verifyUrl.search = "";
