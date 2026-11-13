@@ -7,13 +7,13 @@ import {
   createWbwExpense,
   fetchWbwBalancesTimed,
   fetchWbwListMembers,
-  wbwLogin,
   type WbwListBalance,
   type WbwSession,
 } from "@/lib/wbw/client";
 import { buildShares, matchMember } from "@/lib/wbw/match";
 import { todayAmsterdam } from "@/lib/wbw/record";
 import { wbwAvailable } from "@/lib/owner";
+import { wbwSessionForCurrentUser } from "@/lib/wbw/session";
 
 const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
 const toCents = (euro: number) => Math.round(Number(euro) * 100);
@@ -48,8 +48,8 @@ export async function getWbwMembersForList(
   listId: string
 ): Promise<{ error: string } | { members: WbwMemberChoice[] }> {
   try {
-    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
-    const session = await wbwLogin();
+    if (!(await wbwAvailable())) return { error: "WieBetaaltWat is niet gekoppeld. Koppel het onder Instellingen, Bankkoppelingen." };
+    const session = await wbwSessionForCurrentUser();
     const [members, balances] = await Promise.all([
       fetchWbwListMembers(session, listId),
       fetchWbwBalancesTimed(session),
@@ -217,7 +217,7 @@ export async function pushWbwExpense(
   name?: string
 ): Promise<{ error: string } | { ok: true; listName: string }> {
   try {
-    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    if (!(await wbwAvailable())) return { error: "WieBetaaltWat is niet gekoppeld. Koppel het onder Instellingen, Bankkoppelingen." };
     if (assignments.length === 0) return { error: "Kies minstens één persoon om aan te slaan." };
 
     const supabase = await createClient();
@@ -226,7 +226,7 @@ export async function pushWbwExpense(
     const reclaims = (data ?? []) as unknown as ReclaimRow[];
     if (error || reclaims.length !== ids.length) return { error: "Terugvorderingen niet gevonden." };
 
-    const session = await wbwLogin();
+    const session = await wbwSessionForCurrentUser();
     const opened = await openList(session, listId);
     if (!opened) return { error: "Je zit niet in deze lijst." };
 
@@ -256,7 +256,7 @@ export async function pushStoredWbw(
   name?: string
 ): Promise<{ error: string } | { ok: true; listName: string; expenses: number }> {
   try {
-    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    if (!(await wbwAvailable())) return { error: "WieBetaaltWat is niet gekoppeld. Koppel het onder Instellingen, Bankkoppelingen." };
     if (reclaimIds.length === 0) return { error: "Niets om door te voeren." };
 
     const supabase = await createClient();
@@ -298,7 +298,7 @@ export async function pushStoredWbw(
       groups.set(key, [...(groups.get(key) ?? []), r]);
     }
 
-    const session = await wbwLogin();
+    const session = await wbwSessionForCurrentUser();
     const opened = await openList(session, listId);
     if (!opened) return { error: "Je zit niet in deze lijst." };
     const memberOf = new Map(reclaims.map((r) => [r.id, r.wbw_member_id!]));

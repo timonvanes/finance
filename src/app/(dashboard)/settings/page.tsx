@@ -11,6 +11,16 @@ const GROUPS: {
   }[];
 }[] = [
   {
+    title: "Account",
+    items: [
+      {
+        href: "/settings/account",
+        label: "Account",
+        description: "Je e-mailadres en wachtwoord wijzigen",
+      },
+    ],
+  },
+  {
     title: "Geld",
     items: [
       {

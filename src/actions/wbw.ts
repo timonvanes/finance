@@ -5,12 +5,16 @@ import { createClient } from "@/lib/supabase/server";
 import { periodRange } from "@/lib/month";
 import { getMonthStartDay } from "@/lib/settings";
 import { getWbwFrontedRows } from "@/lib/wbw-fronted";
-import { fetchWbwBalancesTimed, wbwLogin } from "@/lib/wbw/client";
+import { fetchWbwBalancesTimed } from "@/lib/wbw/client";
 import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
 import { importWbwExpenses } from "@/lib/wbw/import";
 import { applyWbwLists, recordWbwBalance, todayAmsterdam } from "@/lib/wbw/record";
 import { euroSaldo, type WbwListBalance } from "@/lib/wbw/client";
 import { wbwAvailable } from "@/lib/owner";
+import { wbwSessionForCurrentUser } from "@/lib/wbw/session";
+import { deleteSecret, encryptionConfigured, hasSecret, saveSecret } from "@/lib/credentials";
+import { currentUserId } from "@/lib/owner";
+import { wbwLogin } from "@/lib/wbw/client";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -127,7 +131,7 @@ export async function syncWbwBalance(): Promise<
     }
 > {
   try {
-    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel." };
+    if (!(await wbwAvailable())) return { error: "WieBetaaltWat is niet gekoppeld. Koppel het onder Instellingen, Bankkoppelingen." };
     const started = Date.now();
     const supabase = await createClient();
     const {
@@ -135,7 +139,7 @@ export async function syncWbwBalance(): Promise<
     } = await supabase.auth.getUser();
     if (!user) return { error: "Niet ingelogd." };
 
-    const session = await wbwLogin();
+    const session = await wbwSessionForCurrentUser();
     const { lists, timings } = await fetchWbwBalancesTimed(session);
     const savedAt = Date.now();
     const result = await applyWbwLists(supabase, user.id, lists, todayAmsterdam());
@@ -312,8 +316,12 @@ export async function getWbwSettings() {
     supabase.from("transactions").select("id", { count: "exact", head: true }).eq("source", "wbw"),
   ]);
   const excluded = new Set<string>((st?.wbw_excluded_lists ?? []) as string[]);
+  const uid = await currentUserId();
+  const own = uid ? await hasSecret(uid, "wbw") : false;
   return {
     configured: await wbwAvailable(),
+    linkedByUser: own,
+    canLink: encryptionConfigured(),
     manual: st?.wbw_manual === true,
     importFrom: (st?.wbw_import_from as string | null | undefined) ?? null,
     importedCount: count ?? 0,
@@ -326,6 +334,43 @@ export async function getWbwSettings() {
   };
 }
 
+
+// Links the signed-in user's own WieBetaaltWat login. It is tried first, then kept
+// encrypted; the password is never shown again or written to a log.
+export async function connectWbw(email: string, password: string): Promise<{ error: string } | { ok: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Niet ingelogd." };
+  if (!encryptionConfigured()) return { error: "Koppelen kan nog niet: CREDENTIALS_ENCRYPTION_KEY staat nog niet in Vercel." };
+  const e = email.trim();
+  if (!e || !password) return { error: "Vul je e-mailadres en wachtwoord van WieBetaaltWat in." };
+  try {
+    await wbwLogin({ email: e, password });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Inloggen bij WieBetaaltWat mislukt." };
+  }
+  try {
+    await saveSecret(user.id, "wbw", { email: e, password });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Opslaan mislukt." };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+// Removes the login again. What was imported stays.
+export async function disconnectWbw(): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Niet ingelogd." };
+  await deleteSecret(user.id, "wbw");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
 
 // Does Terugvorderen show the WieBetaaltWat card? Only when entering by hand is
 // needed: the link is not set up, or the fallback is switched on. While the link

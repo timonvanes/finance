@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { autoMatchNewReclaim, learnPersonAlias } from "@/lib/reclaims/matching";
 import { generateReferenceCode } from "@/lib/reclaims/reference-code";
-import { deleteWbwExpense, wbwLogin } from "@/lib/wbw/client";
+import { deleteWbwExpense } from "@/lib/wbw/client";
 import { wbwAvailable } from "@/lib/owner";
+import { wbwSessionForCurrentUser } from "@/lib/wbw/session";
 import { combineReclaims, removeReclaimFromPaymentRequest } from "@/actions/payment-requests";
 
 export async function getRecentExpenseTransactions() {
@@ -380,9 +381,9 @@ export async function deleteReclaim(reclaimId: string): Promise<{ error?: string
   // that expense no longer exists. If WieBetaaltWat cannot be reached nothing is
   // deleted, so the two never end up out of step.
   if (reclaim.wbw_expense_id) {
-    if (!(await wbwAvailable())) return { error: "WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel, dus de uitgave in WieBetaaltWat kan niet verwijderd worden." };
+    if (!(await wbwAvailable())) return { error: "WieBetaaltWat is niet gekoppeld, dus de uitgave in WieBetaaltWat kan niet verwijderd worden." };
     try {
-      await deleteWbwExpense(await wbwLogin(), reclaim.wbw_expense_id);
+      await deleteWbwExpense(await wbwSessionForCurrentUser(), reclaim.wbw_expense_id);
     } catch (e) {
       console.error("deleting the WieBetaaltWat expense failed", e);
       return { error: e instanceof Error ? e.message : "Verwijderen bij WieBetaaltWat mislukt." };

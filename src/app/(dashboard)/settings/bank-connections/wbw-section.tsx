@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { setWbwImportFrom, setWbwListIncluded, setWbwManual, syncWbwBalance } from "@/actions/wbw";
+import { connectWbw, disconnectWbw, setWbwImportFrom, setWbwListIncluded, setWbwManual, syncWbwBalance } from "@/actions/wbw";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const longDate = (iso: string) =>
@@ -10,6 +10,8 @@ const longDate = (iso: string) =>
 
 export interface WbwSettings {
   configured: boolean;
+  linkedByUser: boolean;
+  canLink: boolean;
   manual: boolean;
   importFrom: string | null;
   importedCount: number;
@@ -45,6 +47,37 @@ export function WbwSection({ settings }: { settings: WbwSettings }) {
       setBusy(false);
     }
   }
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Links the user's own login: tried first, then kept encrypted on the server.
+  const connect = () =>
+    work(async () => {
+      const r = await connectWbw(email, password);
+      setPassword("");
+      if ("error" in r) {
+        setError(r.error);
+        return null;
+      }
+      const s = await syncWbwBalance();
+      if ("error" in s) {
+        setError(s.error);
+        return "Gekoppeld.";
+      }
+      return `Gekoppeld. Saldo ${euro(s.balance)} over ${s.lists} lijsten.`;
+    });
+
+  const disconnect = () =>
+    work(async () => {
+      if (!confirm("De koppeling met WieBetaaltWat verwijderen? Wat al is ingeladen blijft staan.")) return null;
+      const r = await disconnectWbw();
+      if ("error" in r) {
+        setError(r.error);
+        return null;
+      }
+      return "Koppeling verwijderd.";
+    });
 
   const refresh = () =>
     work(async () => {
@@ -105,9 +138,43 @@ export function WbwSection({ settings }: { settings: WbwSettings }) {
       <h2 className="mb-2 px-1 text-lg font-semibold text-gray-900">WieBetaaltWat</h2>
       <div className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
         {!settings.configured ? (
-          <p className="text-base text-gray-500">
-            Niet gekoppeld. Zet WBW_EMAIL en WBW_PASSWORD in Vercel om je saldo en uitgaven op te halen.
-          </p>
+          <div className="space-y-3">
+            <p className="text-base text-gray-600">
+              Niet gekoppeld. Log hieronder in met je WieBetaaltWat-account om je saldo en je uitgaven op te halen. Je wachtwoord wordt versleuteld bewaard en alleen gebruikt om bij WieBetaaltWat in te loggen. Werkt je account alleen met Google of Apple, dan gaat dit niet.
+            </p>
+            {settings.canLink ? (
+              <>
+                <input
+                  type="email"
+                  autoComplete="off"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="E-mailadres van WieBetaaltWat"
+                  className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base"
+                />
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Wachtwoord van WieBetaaltWat"
+                  className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base"
+                />
+                <button
+                  type="button"
+                  disabled={busy || !email || !password}
+                  onClick={() => void connect()}
+                  className="min-h-[48px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800 disabled:opacity-50"
+                >
+                  {busy ? "Bezig…" : "Koppelen"}
+                </button>
+                {note && <p className="text-sm text-teal-700">{note}</p>}
+                {error && <p className="text-sm text-red-600">{error}</p>}
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">Koppelen is nog niet ingeschakeld op de server.</p>
+            )}
+          </div>
         ) : (
           <>
             <div>
@@ -136,6 +203,11 @@ export function WbwSection({ settings }: { settings: WbwSettings }) {
             </button>
             {note && <p className="text-sm text-teal-700">{note}</p>}
             {error && <p className="text-sm text-red-600">{error}</p>}
+            {settings.linkedByUser && (
+              <button type="button" disabled={busy} onClick={() => void disconnect()} className="min-h-[44px] text-sm text-red-600 underline">
+                Koppeling verwijderen
+              </button>
+            )}
 
             <div className="space-y-2 border-t border-gray-100 pt-4">
               <h3 className="text-base font-medium text-gray-900">Uitgaven inladen</h3>

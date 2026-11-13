@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isBunqConfigured } from "@/lib/bunq/client";
 import { isWbwConfigured } from "@/lib/wbw/client";
+import { hasSecret } from "@/lib/credentials";
 
 // Some logins live in the server settings (WieBetaaltWat, bunq) and belong to one
 // person. They must never be used for another user of the app: that user would see
@@ -26,8 +27,20 @@ export const currentUserIsOwner = cache(async (): Promise<boolean> => {
   return user.id === (await ownerUserId());
 });
 
-// The shared logins are set up AND this user is the one they belong to.
+export const currentUserId = cache(async (): Promise<string | null> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.id ?? null;
+});
+
+// WieBetaaltWat works for this user: they linked their own login, or they are the
+// owner and the login in the server settings is set.
 export async function wbwAvailable() {
+  const id = await currentUserId();
+  if (!id) return false;
+  if (await hasSecret(id, "wbw")) return true;
   return isWbwConfigured() && (await currentUserIsOwner());
 }
 

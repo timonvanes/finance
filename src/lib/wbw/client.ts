@@ -94,11 +94,16 @@ export interface WbwSession {
 
 // Logs in like the website does and returns the headers (with the session
 // cookie) for the calls that follow.
-export async function wbwLogin(): Promise<WbwSession> {
+export interface WbwCredentials {
+  email: string;
+  password: string;
+}
+
+export async function wbwLogin(creds?: WbwCredentials): Promise<WbwSession> {
   const t0 = Date.now();
-  const email = process.env.WBW_EMAIL;
-  const password = process.env.WBW_PASSWORD;
-  if (!email || !password) throw new Error("WBW_EMAIL en WBW_PASSWORD staan nog niet in Vercel.");
+  const email = creds?.email ?? process.env.WBW_EMAIL;
+  const password = creds?.password ?? process.env.WBW_PASSWORD;
+  if (!email || !password) throw new Error("WieBetaaltWat is niet gekoppeld.");
 
   const headers: Record<string, string> = { ...HEADERS, "X-Device-Id": DEVICE_ID };
   const login = await fetch(`${BASE}/users/sign_in`, {

@@ -5,7 +5,9 @@ import { ensureBunqCallback, isBunqConfigured } from "@/lib/bunq/client";
 import { processBunqForUser } from "@/lib/bunq/process";
 import { sendPush } from "@/lib/push/send";
 import { clampStartDay } from "@/lib/month";
-import { fetchWbwBalancesTimed, isWbwConfigured, wbwLogin } from "@/lib/wbw/client";
+import { fetchWbwBalancesTimed, isWbwConfigured } from "@/lib/wbw/client";
+import { wbwLoginFor } from "@/lib/wbw/session";
+import { hasSecret } from "@/lib/credentials";
 import { removeReclaimsOfDeletedWbwExpenses } from "@/lib/wbw/sync-deleted";
 import { importWbwExpenses } from "@/lib/wbw/import";
 import { applyWbwLists, todayAmsterdam } from "@/lib/wbw/record";
@@ -25,6 +27,9 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient();
   const report: Record<string, unknown> = {};
+  // Does the saldo of this user fill itself in? Their own login, or the owner's login in the settings.
+  const wbwLinked = async (userId: string) =>
+    (await hasSecret(userId, "wbw")) || (isWbwConfigured() && userId === (await ownerUserId()));
 
   const { error: pingError } = await admin.from("bank_connections").select("id").limit(1);
   report.ping = pingError ? pingError.message : "ok";
@@ -79,7 +84,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle();
       const startDay = clampStartDay(settings?.month_start_day ?? 1);
       if (todayOfMonth !== startDay) continue;
-      if (isWbwConfigured() && !settings?.wbw_manual) continue;
+      if ((await wbwLinked(userId)) && !settings?.wbw_manual) continue;
       await sendPush(userId, "wbw_reminder", {
         title: "WieBetaaltWat invullen",
         body: "Vul het saldo van deze maand in bij Terugvorderen, dan klopt je overzicht weer.",
@@ -179,11 +184,24 @@ export async function GET(request: NextRequest) {
   // exist and none is pinned with OWNER_USER_ID.
   const resolveUserId = ownerUserId;
 
-  if (isWbwConfigured()) {
+  // WieBetaaltWat, for everyone whose own login is linked, plus the owner's login from
+  // the server settings.
+  {
+    const wbwUsers = new Set<string>();
     try {
-      const userId = await resolveUserId();
-      if (userId) {
-        const session = await wbwLogin();
+      const { data: linked } = await admin.from("user_credentials").select("user_id").eq("kind", "wbw");
+      for (const r of linked ?? []) wbwUsers.add(r.user_id as string);
+      if (isWbwConfigured()) {
+        const owner = await resolveUserId();
+        if (owner) wbwUsers.add(owner);
+      }
+    } catch (e) {
+      report.wbw = e instanceof Error ? e.message : "failed";
+    }
+    const perUser: Record<string, unknown> = {};
+    for (const userId of wbwUsers) {
+      try {
+        const session = await wbwLoginFor(userId);
         const { lists } = await fetchWbwBalancesTimed(session);
         const r = await applyWbwLists(admin, userId, lists, todayAmsterdam());
         const gone = await removeReclaimsOfDeletedWbwExpenses(admin, session, userId);
@@ -195,11 +213,12 @@ export async function GET(request: NextRequest) {
         const imports = st?.wbw_import_from
           ? await importWbwExpenses(admin, session, userId, lists, (st.wbw_excluded_lists ?? []) as string[], st.wbw_import_from as string)
           : null;
-        report.wbw = r.error ? r.error : { saldo: r.balance, lists: lists.length, removedAfterWbwDelete: gone.removed, imports };
+        perUser[userId.slice(0, 8)] = r.error ? r.error : { saldo: r.balance, lists: lists.length, removedAfterWbwDelete: gone.removed, imports };
+      } catch (e) {
+        perUser[userId.slice(0, 8)] = e instanceof Error ? e.message : "failed";
       }
-    } catch (e) {
-      report.wbw = e instanceof Error ? e.message : "failed";
     }
+    if (wbwUsers.size > 0) report.wbw = perUser;
   }
 
   if (isBunqConfigured()) {
