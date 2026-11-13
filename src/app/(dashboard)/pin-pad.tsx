@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { AppLogo } from "../app-logo";
 
 const LENGTH = 6;
 
@@ -114,11 +115,7 @@ export function PinPad({
       className="fixed inset-0 z-[100] flex h-dvh touch-none select-none flex-col items-center justify-between overflow-hidden overscroll-none bg-[#212121] px-8 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))] text-white"
     >
       <div className="flex flex-col items-center gap-2 text-center">
-        <div className="flex h-[min(5.75rem,11dvh)] w-[min(5.75rem,11dvh)] items-center justify-center rounded-[26%] bg-gradient-to-br from-teal-500 to-teal-800 shadow-lg shadow-black/40">
-          <svg viewBox="0 0 24 24" width="48%" height="48%" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
-          </svg>
-        </div>
+        <AppLogo className="h-[min(5.75rem,11dvh)] w-[min(5.75rem,11dvh)] drop-shadow-[0_8px_24px_rgba(0,0,0,0.5)]" />
         <h1 className="pt-2 text-xl font-semibold tracking-tight">{title}</h1>
         {hint && <p className="max-w-xs text-sm text-white/65">{hint}</p>}
       </div>
