@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { listMfaFactors } from "@/actions/mfa";
 import { AccountForms } from "./account-forms";
@@ -12,6 +13,7 @@ export default async function AccountPage() {
   } = await supabase.auth.getUser();
 
   const factors = await listMfaFactors();
+  const lockOn = (await cookies()).get("applock")?.value === "1";
 
   return (
     <div className="space-y-5">
@@ -31,7 +33,7 @@ export default async function AccountPage() {
         <p className="break-all text-lg font-medium text-gray-900">{user?.email ?? "onbekend"}</p>
       </div>
 
-      <PasskeySection />
+      <PasskeySection lockOn={lockOn} />
 
       <MfaSection initial={factors} />
 

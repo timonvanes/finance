@@ -12,12 +12,24 @@ interface Passkey {
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
 
+function writeLockCookie(on: boolean) {
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = on ? `applock=1; Max-Age=31536000; Path=/; SameSite=Lax${secure}` : `applock=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
+}
+
 // Face ID (a passkey on this phone) as a way to log in instead of typing the password.
-export function PasskeySection() {
+export function PasskeySection({ lockOn }: { lockOn: boolean }) {
   const [list, setList] = useState<Passkey[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [lock, setLock] = useState(lockOn);
+
+  // The lock is a choice per device, kept in a cookie the server can read.
+  function setLockCookie(on: boolean) {
+    writeLockCookie(on);
+    setLock(on);
+  }
 
   const toList = (data: { id: string; friendly_name?: string; created_at: string; last_used_at?: string }[] | null): Passkey[] =>
     (data ?? []).map((p) => ({ id: p.id, name: p.friendly_name ?? "Face ID", createdAt: p.created_at, lastUsedAt: p.last_used_at }));
@@ -38,7 +50,6 @@ export function PasskeySection() {
     return () => {
       stale = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function add() {
@@ -75,7 +86,9 @@ export function PasskeySection() {
       setError("Verwijderen mislukt. Probeer het opnieuw.");
       return;
     }
-    void load();
+    await load();
+    // Without a Face ID left there is nothing to unlock with: the lock goes off.
+    if (lock && (list?.length ?? 0) <= 1) setLockCookie(false);
   }
 
   return (
@@ -120,6 +133,17 @@ export function PasskeySection() {
       >
         {busy ? "Bezig…" : list && list.length > 0 ? "Nog een apparaat toevoegen" : "Face ID instellen"}
       </button>
+      {list && list.length > 0 && (
+        <label className="flex items-start gap-3 rounded-xl bg-gray-50 px-4 py-3">
+          <input type="checkbox" checked={lock} onChange={(e) => setLockCookie(e.target.checked)} className="mt-1 h-6 w-6 shrink-0 accent-teal-700" />
+          <span className="text-sm text-gray-800">
+            Vraag Face ID als ik de app open, op dit apparaat
+            <span className="block text-xs text-gray-500">
+              Zoals een bankapp: je blijft ingelogd, maar de app is dicht tot je ontgrendelt. Ook na een minuut op de achtergrond.
+            </span>
+          </span>
+        </label>
+      )}
       <p className="text-xs text-gray-500">
         Elk apparaat stel je zelf in. Het wachtwoord blijft werken. Face ID werkt alleen op het adres van deze app.
       </p>
