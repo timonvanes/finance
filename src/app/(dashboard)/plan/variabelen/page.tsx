@@ -70,19 +70,6 @@ export default function VariablesPage() {
 
       <VariantPanel />
 
-      <nav className="-mx-4 overflow-x-auto px-4 pb-1">
-        <ul className="flex gap-2">
-          {BLOCKS.map((blk) => (
-            <li key={blk.anchor} className="shrink-0">
-              <a href={`#${blk.anchor}`} className="flex min-h-[40px] items-center rounded-full bg-white px-4 text-sm text-gray-700 ring-1 ring-gray-200 active:bg-gray-100">
-                {blk.title.replace(/^\d+\. /, "")}
-                {missingGroups.has(blk.group) && <span className="ml-2 h-2 w-2 rounded-full bg-amber-500" />}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
       {BLOCKS.map((blk) => {
         const ids = FIELDS.filter((f) => f.group === blk.group).map((f) => f.id);
         return (
