@@ -2,7 +2,9 @@ import Link from "next/link";
 import { getPots, getSavingsInbox } from "@/actions/pots";
 import { computePotBalance } from "@/lib/pots/balance";
 import { computeSchedule, depositedInPeriod, nextPeriodMonthly, periodMonthly, planCatchUp } from "@/lib/pots/insights";
+import { createClient } from "@/lib/supabase/server";
 import { CatchUpCard } from "./catch-up-card";
+import { TransferCard } from "./transfer-card";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { InfoButton } from "../info-button";
 import { PlanRow } from "./plan-row";
@@ -12,13 +14,37 @@ import { GoalSpendCard } from "./goal-spend-card";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
-export default async function PotsPage() {
-  const [pots, inbox, startDay, graceDays] = await Promise.all([
+export default async function PotsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ betaling?: string; bedrag?: string; modus?: string; reden?: string }>;
+}) {
+  const { betaling, bedrag, modus, reden } = await searchParams;
+  const supabase = await createClient();
+  const [pots, inbox, startDay, graceDays, { data: accountRows }, { data: manualRows }] = await Promise.all([
     getPots(),
     getSavingsInbox(),
     getMonthStartDay(),
     getPotGraceDays(),
+    supabase.from("bank_accounts").select("id, iban, display_name, bank_connections(institution_name, consent_status)"),
+    supabase.from("manual_own_ibans").select("iban, label"),
   ]);
+
+  // The accounts a transfer can leave from (linked banks) and arrive at (any own account).
+  const ibanLabel = (bank: string, name: string | null, iban: string) => `${bank} · ${name ?? "Rekening"} · …${iban.slice(-4)}`;
+  const linkedAccounts = (accountRows ?? []).flatMap((a) => {
+    const c = Array.isArray(a.bank_connections) ? a.bank_connections[0] : a.bank_connections;
+    return a.iban && c ? [{ id: a.id as string, iban: a.iban as string, bank: c.institution_name as string, name: a.display_name as string | null, linked: c.consent_status === "linked" }] : [];
+  });
+  const transferFrom = linkedAccounts.filter((a) => a.linked).map((a) => ({ id: a.id, label: ibanLabel(a.bank, a.name, a.iban) }));
+  const transferTo = [
+    ...linkedAccounts.map((a) => ({ iban: a.iban, label: ibanLabel(a.bank, a.name, a.iban) })),
+    ...(manualRows ?? []).map((m) => ({ iban: m.iban as string, label: `${(m.label as string | null) ?? "Eigen rekening"} · …${(m.iban as string).slice(-4)}` })),
+  ].filter((t, i, all) => all.findIndex((x) => x.iban === t.iban) === i);
+  const transferStatus = betaling === "ok" ? "ok" : betaling === "mislukt" ? "mislukt" : betaling === "onbekend" ? "onbekend" : null;
+  const transferResult: { status: "ok" | "mislukt" | "onbekend"; amount?: string; mode?: string; reason?: string } | null = transferStatus
+    ? { status: transferStatus, amount: bedrag, mode: modus, reason: reden }
+    : null;
 
   const balances = new Map(pots.map((p) => [p.id, computePotBalance(p)]));
   const totalBalance = [...balances.values()].reduce((s, b) => s + b, 0);
@@ -92,6 +118,8 @@ export default async function PotsPage() {
           <p className="mt-1 text-sm text-gray-500">{euro(plannedBaseTotal)} per maand gepland</p>
         )}
       </div>
+
+      <TransferCard accounts={transferFrom} targets={transferTo} suggested={Math.ceil(plannedBaseTotal)} result={transferResult} />
 
       {catchUpItems.length > 0 && <CatchUpCard items={catchUpItems} />}
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPaymentState, readPaymentState } from "@/lib/enablebanking/payments";
 import {
   createSessionWithRetry,
   getAccountDetails,
@@ -16,6 +17,24 @@ export async function GET(request: NextRequest) {
   const providerErrorDescription = request.nextUrl.searchParams.get("error_description");
 
   const redirectTo = new URL("/settings/bank-connections", request.url);
+
+  // Coming back from approving a payment (not from linking a bank): the state is signed by
+  // this app, so a made-up address cannot show a made-up result.
+  if (authRef && isPaymentState(authRef)) {
+    const back = new URL("/pots", request.url);
+    const info = readPaymentState(authRef);
+    if (!info) {
+      back.searchParams.set("betaling", "onbekend");
+    } else if (providerError) {
+      back.searchParams.set("betaling", "mislukt");
+      back.searchParams.set("reden", `${providerError}${providerErrorDescription ? ": " + providerErrorDescription : ""}`.slice(0, 200));
+    } else {
+      back.searchParams.set("betaling", "ok");
+      back.searchParams.set("bedrag", info.amount);
+      back.searchParams.set("modus", info.mode);
+    }
+    return NextResponse.redirect(back);
+  }
 
   if (providerError) {
     console.error(
