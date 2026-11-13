@@ -16,6 +16,7 @@ export interface FactorInfo {
   id: string;
   name: string;
   createdAt: string;
+  type: "totp" | "webauthn";
 }
 
 export interface MfaResult {
@@ -30,14 +31,32 @@ async function setRequired(userId: string, on: boolean) {
   await admin.auth.admin.updateUserById(userId, { app_metadata: { mfa_required: on } });
 }
 
+// The second steps that are really set up (verified): authenticator apps and Face ID / passkeys.
 export async function listMfaFactors(): Promise<FactorInfo[]> {
   const supabase = await createClient();
   const { data } = await supabase.auth.mfa.listFactors();
-  return (data?.totp ?? []).map((f) => ({
-    id: f.id,
-    name: f.friendly_name ?? "Authenticator",
-    createdAt: f.created_at,
-  }));
+  return (data?.all ?? [])
+    .filter((f) => f.status === "verified" && (f.factor_type === "totp" || f.factor_type === "webauthn"))
+    .map((f) => ({
+      id: f.id,
+      name: f.friendly_name ?? (f.factor_type === "webauthn" ? "Face ID" : "Authenticator"),
+      createdAt: f.created_at,
+      type: f.factor_type as "totp" | "webauthn",
+    }));
+}
+
+// Keeps the signed flag in step with what is really set up. Called after a second step
+// was added in the browser (Face ID), where the server did not see it happen.
+export async function syncMfaFlag(): Promise<MfaResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Niet ingelogd." };
+  const verified = (user.factors ?? []).some((f) => f.status === "verified");
+  await setRequired(user.id, verified);
+  revalidatePath("/settings/account");
+  return {};
 }
 
 // Step 1 of switching on: a secret and a QR code to scan. Nothing is active until the
@@ -98,7 +117,7 @@ export async function removeMfaFactor(factorId: string): Promise<MfaResult> {
   const { error } = await supabase.auth.mfa.unenroll({ factorId });
   if (error) return { error: "Verwijderen mislukt. Log opnieuw in met je code en probeer het nog eens." };
   const left = await listMfaFactors();
-  if (left.length === 0) await setRequired(user.id, false);
+  await setRequired(user.id, left.length > 0);
   revalidatePath("/settings/account");
   return {};
 }
@@ -114,7 +133,7 @@ export async function verifyLoginCode(_prev: MfaResult, formData: FormData): Pro
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const factors = await listMfaFactors();
+  const factors = (await listMfaFactors()).filter((f) => f.type === "totp");
   let ok = false;
   // More than one app set up: the code can come from any of them.
   for (const f of factors) {
