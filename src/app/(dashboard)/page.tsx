@@ -24,6 +24,7 @@ import { MonthTiles } from "./month-tiles";
 import { periodRange } from "@/lib/month";
 import { getHiddenDashboardModules, getMonthStartDay } from "@/lib/settings";
 import { getDebtFixedCosts } from "@/actions/debts";
+import { currentUserId } from "@/lib/owner";
 
 const MONTH_NAMES = [
   "januari", "februari", "maart", "april", "mei", "juni",
@@ -74,7 +75,9 @@ export default async function DashboardPage({
     requestHeaders.has("next-router-prefetch") || requestHeaders.get("purpose") === "prefetch";
   // Captured now: request headers aren't available inside after().
   const psu = await getPsuContext();
-  if (!isPrefetch) after(() => autoSyncStaleConnections(psu));
+  // Captured now: the session is not available inside after().
+  const uid = (await currentUserId()) ?? undefined;
+  if (!isPrefetch) after(() => autoSyncStaleConnections(psu, uid));
 
   const { month } = await searchParams;
   // 0 = this month, 1 = previous month, etc. — can't navigate into the future.

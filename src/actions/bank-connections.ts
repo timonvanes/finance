@@ -213,18 +213,27 @@ const AUTO_SYNC_STALE_MS = 2 * 60 * 60 * 1000; // 2 hours
 // the response has already been sent, and Next.js doesn't allow reading
 // cookies() at that point — this crashed the callback on every single page
 // load. Bypassing RLS here is intentional: this scans stale connections for
-// ALL users in one background pass, not just the current session's user.
+// ALL users in one background pass when run by the daily job; a page load only does
+// the banks of the person who opened it.
 // Since there's no auth.uid() session context on this client, syncBankConnection
 // must stamp user_id explicitly on every insert it makes (transactions, pot_entries).
-export async function autoSyncStaleConnections(psu?: PsuContext) {
+export async function autoSyncStaleConnections(psu?: PsuContext, userId?: string) {
   const supabase = createAdminClient();
   const staleBefore = new Date(Date.now() - AUTO_SYNC_STALE_MS).toISOString();
 
-  const { data: connections } = await supabase
+  // With a person's own browser details (psu) only THEIR banks may be synced: the
+  // bank is told that this person is using the app right now. Without psu (the daily
+  // background run) everyone's banks are done, without those details.
+  let query = supabase
     .from("bank_connections")
     .select("id, last_synced_at")
     .eq("consent_status", "linked")
     .or(`last_synced_at.is.null,last_synced_at.lt.${staleBefore}`);
+  if (psu) {
+    if (!userId) return;
+    query = query.eq("user_id", userId);
+  }
+  const { data: connections } = await query;
 
   for (const connection of connections ?? []) {
     try {

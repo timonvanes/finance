@@ -525,6 +525,8 @@ const RECEIPT_BUCKET = "receipts";
 export async function uploadReceipt(reclaimId: string, formData: FormData) {
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return;
+  if (!(file.type.startsWith("image/") || file.type === "application/pdf")) throw new Error("Kies een foto of een pdf.");
+  if (file.size > 10 * 1024 * 1024) throw new Error("Het bestand is groter dan 10 MB.");
 
   const supabase = await createClient();
   const {
