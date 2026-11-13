@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { clampStartDay } from "@/lib/month";
 import { DASHBOARD_MODULES } from "@/lib/dashboard/modules";
+import { MAX_TABS, isNavKey } from "@/lib/nav";
 
 export async function setMonthStartDay(day: number) {
   const supabase = await createClient();
@@ -90,6 +91,23 @@ export async function setDashboardModuleVisible(key: string, visible: boolean) {
   const { error } = await supabase
     .from("user_settings")
     .upsert({ user_id: user.id, dashboard_hidden: [...hidden], updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) throw error;
+  revalidatePath("/", "layout");
+}
+
+export async function setNavTabs(keys: string[]) {
+  const picked = keys.filter(isNavKey);
+  if (picked.length === 0 || picked.length > MAX_TABS || new Set(picked).size !== picked.length) {
+    throw new Error(`Kies tussen 1 en ${MAX_TABS} onderdelen.`);
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd.");
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, nav_tabs: picked, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   if (error) throw error;
   revalidatePath("/", "layout");
 }

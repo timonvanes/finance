@@ -18,6 +18,11 @@ const GROUPS: {
         label: "Account",
         description: "Je e-mailadres en wachtwoord wijzigen",
       },
+      {
+        href: "/settings/menu",
+        label: "Menu",
+        description: "Kies wat onderin staat en wat onder Meer valt",
+      },
     ],
   },
   {

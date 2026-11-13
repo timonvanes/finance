@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { clampStartDay } from "@/lib/month";
+import { cleanTabs, type NavKey } from "@/lib/nav";
 
 // Cached per request: the dashboard asks for it from several places.
 export const getMonthStartDay = cache(async (): Promise<number> => {
@@ -20,6 +21,13 @@ export const getReturnsEnabled = cache(async (): Promise<boolean> => {
   const supabase = await createClient();
   const { data } = await supabase.from("user_settings").select("returns_enabled").maybeSingle();
   return data?.returns_enabled !== false;
+});
+
+// The places in the bottom bar. Empty or old values fall back to the standard choice.
+export const getNavTabs = cache(async (): Promise<NavKey[]> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("nav_tabs, returns_enabled").maybeSingle();
+  return cleanTabs(data?.nav_tabs, data?.returns_enabled !== false);
 });
 
 export const getInvestReminderDay = cache(async (): Promise<number | null> => {
