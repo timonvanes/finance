@@ -41,7 +41,6 @@ export default async function LoginPage({
           Inloggen
         </button>
       </form>
-      <p className="text-center text-xs text-white/40">Daarna vraagt de app om de code van je authenticator.</p>
     </AuthShell>
   );
 }
