@@ -347,6 +347,8 @@ export interface Scenario {
   b: HouseInputs;
   x: Extra;
   variants: Record<"stress" | "gunstig", VariantOverride>;
+  // How far stress and favourable lie from the basis, in percent (default 10 each).
+  spread?: { stress: number; gunstig: number };
 }
 
 // Where an assumption comes from, when it was last checked and when it is due again.

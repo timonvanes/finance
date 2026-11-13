@@ -1,6 +1,6 @@
 import type { HouseInputs } from "@/lib/house/calc";
 import { FIELDS, FIELD_BY_ID, VARIANT_FIELDS } from "./fields";
-import { computePlan, type PlanResult } from "./model";
+import { computePlan, payroll, type PlanResult } from "./model";
 import {
   defaultExtra,
   type AppData,
@@ -64,6 +64,63 @@ export function writeSalary(sc: Scenario, variant: Variant, who: "salaryYou" | "
   if (variant === "basis") return { ...sc, x: { ...sc.x, [who]: put(sc.x[who]) } };
   const ov = sc.variants[variant];
   return { ...sc, variants: { ...sc.variants, [variant]: { ...ov, [who]: put(ov[who]) } } };
+}
+
+// ------------------------------------------------------ spread around the basis
+
+// For each field that differs per variant: does a HIGHER value make things worse for
+// the buyer (+1) or a LOWER one (-1)? Stress goes the bad way, favourable the good way.
+const WORSE_WHEN: Record<string, 1 | -1> = {
+  priceGrowthPct: 1,
+  bidPct: 1,
+  salaryGrowthPct: -1,
+  contribGrowthPct: -1,
+  limitGrowthPct: -1,
+  "run.vveMonth": 1,
+  "cost.buyerAgent": 1,
+  reliefFactorPct: -1,
+};
+
+export const SPREAD_FIELDS = Object.keys(WORSE_WHEN);
+export const DEFAULT_SPREAD = { stress: 10, gunstig: 10 };
+
+const round = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
+
+// Fills a variant from the basis: every number that differs per variant becomes the
+// basis plus or minus a percentage, and so does the salary of every year. What the person
+// types afterwards replaces these, number by number.
+export function applySpread(sc: Scenario, variant: "stress" | "gunstig", pct: number, app: AppData): Scenario {
+  const basis = resolve(sc, "basis");
+  const bad = variant === "stress";
+  const fields: Record<string, number | string | boolean> = { ...sc.variants[variant].fields };
+  for (const id of SPREAD_FIELDS) {
+    const f = FIELD_BY_ID.get(id);
+    if (!f) continue;
+    const base = Number(f.get(basis.b, basis.x));
+    if (!Number.isFinite(base) || base === 0) continue; // nothing to scale: keep what is there
+    // worse = the way that hurts: up for +1 fields, down for -1 fields
+    const dir = (WORSE_WHEN[id] === 1 ? 1 : -1) * (bad ? 1 : -1);
+    let v = base * (1 + (dir * pct) / 100);
+    if (id === "reliefFactorPct") v = Math.min(100, Math.max(0, v));
+    fields[id] = round(v, f.unit === "€" ? 0 : 2);
+  }
+  // salary per year: lower is worse
+  const factor = 1 + ((bad ? -1 : 1) * pct) / 100;
+  const startYear = Number(basis.x.startDate.slice(0, 4));
+  const endYear = Number(basis.b.targetDate.slice(0, 4)) + 3;
+  const rows = payroll({ b: basis.b, x: basis.x, app }, startYear, endYear);
+  const salaryYou: Record<string, number> = {};
+  const salaryPartner: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.grossYou > 0) salaryYou[String(r.year)] = Math.round((r.grossYou / (1 + basis.x.fixedExtraPct / 100 + basis.x.bonusPct / 100)) * factor);
+    if (r.grossPartner > 0) salaryPartner[String(r.year)] = Math.round((r.grossPartner / (1 + basis.x.fixedExtraPct / 100 + basis.x.bonusPct / 100)) * factor);
+  }
+  return { ...sc, variants: { ...sc.variants, [variant]: { fields, salaryYou, salaryPartner } } };
+}
+
+// Back to the basis: no own numbers left in this variant.
+export function clearVariant(sc: Scenario, variant: "stress" | "gunstig"): Scenario {
+  return { ...sc, variants: { ...sc.variants, [variant]: { fields: {}, salaryYou: {}, salaryPartner: {} } } };
 }
 
 // ------------------------------------------------------------------- starters

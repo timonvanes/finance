@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Banner, Grid, Section } from "../ui";
 import { usePlan } from "../plan-provider";
 import { ContribEditor, EventsEditor, LawEditor, SalaryEditor } from "../plan-editors";
+import { VariantPanel } from "../variant-panel";
 import { missingInputs } from "@/lib/plan/completeness";
 import { FIELDS, type Group } from "@/lib/plan/fields";
 
@@ -66,6 +67,8 @@ export default function VariablesPage() {
           </>
         )}
       </Banner>
+
+      <VariantPanel />
 
       <nav className="-mx-4 overflow-x-auto px-4 pb-1">
         <ul className="flex gap-2">

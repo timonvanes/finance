@@ -5,7 +5,7 @@ import { savePlan } from "@/actions/plan";
 import type { HouseInputs } from "@/lib/house/calc";
 import { FIELD_BY_ID } from "@/lib/plan/fields";
 import { computePlan, type PlanResult } from "@/lib/plan/model";
-import { diffHistory, resolve, snapshotOf, writeField, writeSalary } from "@/lib/plan/scenarios";
+import { DEFAULT_SPREAD, applySpread, clearVariant, diffHistory, resolve, snapshotOf, writeField, writeSalary } from "@/lib/plan/scenarios";
 import type { AppData, AssumptionMeta, Extra, PlanDoc, Scenario, Variant } from "@/lib/plan/types";
 
 interface Ctx {
@@ -25,6 +25,11 @@ interface Ctx {
   patchX: (fn: (x: Extra) => Extra) => void;
   patchB: (fn: (b: HouseInputs) => HouseInputs) => void;
   setVariant: (v: Variant) => void;
+  // Change one number of a given variant (not necessarily the one on screen).
+  setVariantField: (v: Variant, id: string, value: number | string | boolean) => void;
+  setSpread: (v: "stress" | "gunstig", pct: number) => void;
+  fillFromSpread: (v: "stress" | "gunstig") => void;
+  resetVariant: (v: "stress" | "gunstig") => void;
   setActive: (id: string) => void;
   copyScenario: (name: string) => void;
   renameScenario: (name: string) => void;
@@ -93,6 +98,13 @@ export function PlanProvider({
   const patchB = (fn: (b: HouseInputs) => HouseInputs) => updateScenario((s) => ({ ...s, b: fn(s.b) }));
 
   const setVariant = (v: Variant) => update((d) => ({ ...d, variant: v }));
+  const setVariantField = (v: Variant, id: string, value: number | string | boolean) =>
+    updateScenario((s) => writeField(s, v, id, value));
+  const setSpread = (v: "stress" | "gunstig", pct: number) =>
+    updateScenario((s) => ({ ...s, spread: { ...(s.spread ?? DEFAULT_SPREAD), [v]: pct } }));
+  const fillFromSpread = (v: "stress" | "gunstig") =>
+    updateScenario((s) => applySpread(s, v, (s.spread ?? DEFAULT_SPREAD)[v], app));
+  const resetVariant = (v: "stress" | "gunstig") => updateScenario((s) => clearVariant(s, v));
   const setActive = (id: string) => update((d) => ({ ...d, activeId: id }));
   const copyScenario = (name: string) =>
     update((d) => {
@@ -162,6 +174,10 @@ export function PlanProvider({
         patchX,
         patchB,
         setVariant,
+        setVariantField,
+        setSpread,
+        fillFromSpread,
+        resetVariant,
         setActive,
         copyScenario,
         renameScenario,
