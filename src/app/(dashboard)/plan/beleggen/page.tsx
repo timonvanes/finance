@@ -1,12 +1,13 @@
 "use client";
 
 import { useDeferredValue, useMemo } from "react";
-import { Banner, Bar, Block, Grid, Legend, LineChart, List, Note, NumberBox, Row, Section, euro, pct } from "../ui";
+import { Banner, Bar, Block, Grid, Legend, LineChart, List, Note, Row, Section, euro, pct } from "../ui";
 import { usePlan } from "../plan-provider";
-import { compareStrategies, contributionFor } from "@/lib/plan/model";
+import { compareStrategies } from "@/lib/plan/model";
+import { ContribEditor } from "../plan-editors";
 
 export default function InvestPage() {
-  const { result: r, b, x, app, patchX } = usePlan();
+  const { result: r, b, x, app } = usePlan();
   const db = useDeferredValue(b);
   const dx = useDeferredValue(x);
   const strategies = useMemo(() => compareStrategies({ b: db, x: dx, app }, r), [db, dx, app, r]);
@@ -14,19 +15,11 @@ export default function InvestPage() {
   const pu = r.purchase;
   const need = pu.needTotal;
   const years = r.years.filter((y) => y.m >= 0);
-  const startYear = r.startYear;
-  const firstYears = Array.from({ length: Math.min(10, Math.max(1, pu.year - startYear + 1)) }, (_, i) => startYear + i);
   const total0 = b.startSavings + x.startBonds + b.startInvest;
   const monthly0 = b.monthlySave + x.monthlyBonds + b.monthlyInvest;
   const real = Math.pow(1 + x.inflationPct / 100, T / 12);
   const best = [...strategies].sort((a, c) => c.probEnough - a.probEnough)[0];
   const horizon = T / 12;
-
-  const setContrib = (year: number, k: "save" | "bonds" | "invest", n: number) =>
-    patchX((cur) => {
-      const base = contributionFor({ b, x: cur, app }, year);
-      return { ...cur, contrib: { ...cur.contrib, [String(year)]: { ...base, [k]: n } } };
-    });
 
   return (
     <div className="space-y-4">
@@ -105,40 +98,7 @@ export default function InvestPage() {
       </Block>
 
       <Block title="Inleg per jaar" sub="Wat je elk jaar per maand opzij zet. Pas een jaar aan om een verhoging of verlaging mee te nemen.">
-        <div className="-mx-2 overflow-x-auto">
-          <table className="w-full min-w-[460px] text-sm">
-            <thead>
-              <tr className="text-left text-xs text-gray-500">
-                <th className="px-2 py-2 font-medium">Jaar</th>
-                <th className="px-2 py-2 font-medium">Sparen</th>
-                <th className="px-2 py-2 font-medium">Obligaties</th>
-                <th className="px-2 py-2 font-medium">Beleggen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {firstYears.map((y) => {
-                const c = contributionFor({ b, x, app }, y);
-                const custom = Boolean(x.contrib[String(y)]);
-                return (
-                  <tr key={y} className="border-t border-gray-100">
-                    <td className="px-2 py-2 font-medium text-gray-900">{y}</td>
-                    {(["save", "bonds", "invest"] as const).map((k) => (
-                      <td key={k} className="px-1.5 py-1.5">
-                        <NumberBox value={Math.round(c[k])} onChange={(n) => setContrib(y, k, n)} className={custom ? "!border-teal-500 !bg-teal-50" : ""} />
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {Object.keys(x.contrib).length > 0 && (
-          <button type="button" onClick={() => patchX((cur) => ({ ...cur, contrib: {} }))} className="min-h-[44px] text-sm text-red-600 underline">
-            Aangepaste jaren wissen
-          </button>
-        )}
-        <Note>Groen is door jou aangepast. De rest volgt uit je huidige inleg en de stijging per jaar.</Note>
+        <ContribEditor />
       </Block>
 
       <Block title="Afbouwen voor de aankoop" sub="Een deel van het risico weghalen vlak voor je het geld nodig hebt.">

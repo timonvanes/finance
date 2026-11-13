@@ -1,13 +1,12 @@
 "use client";
 
-import { Banner, Block, Grid, Legend, LineChart, Note, NumberBox, SrcBadge, euro, pct } from "../ui";
+import { Banner, Block, Grid, Legend, LineChart, Note, euro } from "../ui";
 import { usePlan } from "../plan-provider";
+import { SalaryEditor } from "../plan-editors";
 
 export default function IncomePage() {
-  const { result: r, x, setSalary, clearSalaries } = usePlan();
+  const { result: r } = usePlan();
   const rows = r.pay.filter((p) => p.year <= r.purchase.year + 3);
-  const setYear = setSalary;
-  const edited = Object.keys(x.salaryYou).length + Object.keys(x.salaryPartner).length;
 
   return (
     <div className="space-y-4">
@@ -36,57 +35,7 @@ export default function IncomePage() {
       </Block>
 
       <Block title="Salaris per jaar" sub="Tik op een bedrag om het te veranderen. Een aangepast jaar is gemarkeerd.">
-        <div className="-mx-2 overflow-x-auto">
-          <table className="w-full min-w-[480px] text-sm">
-            <thead>
-              <tr className="text-left text-xs text-gray-500">
-                <th className="px-2 py-2 font-medium">Jaar</th>
-                <th className="px-2 py-2 font-medium">Jij, bruto</th>
-                {x.buyingTogether && <th className="px-2 py-2 font-medium">Partner, bruto</th>}
-                <th className="px-2 py-2 text-right font-medium">Netto/mnd</th>
-                <th className="px-2 py-2 text-right font-medium">Belasting</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.year} className={`border-t border-gray-100 ${p.year === r.purchase.year ? "bg-teal-50" : ""}`}>
-                  <td className="px-2 py-2 font-medium text-gray-900">{p.year}</td>
-                  <td className="px-2 py-1.5">
-                    <NumberBox
-                      value={Math.round(p.grossYou)}
-                      onChange={(n) => setYear("salaryYou", p.year, n)}
-                      className={p.fromInput.you ? "!border-teal-500 !bg-teal-50" : ""}
-                    />
-                  </td>
-                  {x.buyingTogether && (
-                    <td className="px-2 py-1.5">
-                      <NumberBox
-                        value={Math.round(p.grossPartner)}
-                        onChange={(n) => setYear("salaryPartner", p.year, n)}
-                        className={p.fromInput.partner ? "!border-teal-500 !bg-teal-50" : ""}
-                      />
-                    </td>
-                  )}
-                  <td className="px-2 py-2 text-right">{euro(p.netMonthly)}</td>
-                  <td className="px-2 py-2 text-right">{pct(p.avgRate * 100)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {edited > 0 && (
-          <button
-            type="button"
-            onClick={clearSalaries}
-            className="min-h-[44px] text-sm text-red-600 underline"
-          >
-            Alle aangepaste jaren wissen ({edited})
-          </button>
-        )}
-        <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-          <SrcBadge src="calc" /> bruto volgt uit {pct(x.salaryGrowthPct)} groei per jaar tot jij een bedrag invult.
-          <SrcBadge src="law" /> netto en belasting volgen uit de regels van 2026 (zie Belasting).
-        </p>
+        <SalaryEditor />
       </Block>
 
       <Block title="Bruto en netto" sub="Hoeveel van je salaris je overhoudt.">

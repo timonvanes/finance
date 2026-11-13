@@ -1,57 +1,8 @@
 "use client";
 
-import { Block, Grid, List, Note, NumberBox, Row, Section, euro, pct } from "../ui";
+import { Block, Grid, List, Note, Row, Section, euro, pct } from "../ui";
 import { usePlan } from "../plan-provider";
-import type { PlanEvent } from "@/lib/plan/types";
-
-function Events() {
-  const { x, patchX } = usePlan();
-  const set = (id: string, p: Partial<PlanEvent>) =>
-    patchX((cur) => ({ ...cur, events: cur.events.map((e) => (e.id === id ? { ...e, ...p } : e)) }));
-  return (
-    <div className="space-y-3">
-      {x.events.length === 0 && (
-        <Note>Nog geen gebeurtenissen. Denk aan een bruiloft, een auto, een schenking van je ouders, een bonus of erfenis.</Note>
-      )}
-      {x.events.map((e) => (
-        <div key={e.id} className="space-y-2 rounded-xl bg-gray-50 p-3">
-          <input
-            value={e.label}
-            onChange={(ev) => set(e.id, { label: ev.target.value })}
-            placeholder="Omschrijving, bijvoorbeeld schenking ouders"
-            className="min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base"
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <NumberBox value={e.amount} onChange={(n) => set(e.id, { amount: n })} unit="€" placeholder="+ erbij, − eruit" />
-            <NumberBox value={e.year} onChange={(n) => set(e.id, { year: Math.round(n) })} unit="jaar" />
-          </div>
-          <button
-            type="button"
-            onClick={() => patchX((cur) => ({ ...cur, events: cur.events.filter((v) => v.id !== e.id) }))}
-            className="min-h-[40px] text-sm text-red-600 underline"
-          >
-            Verwijderen
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        onClick={() =>
-          patchX((cur) => ({
-            ...cur,
-            events: [...cur.events, { id: crypto.randomUUID(), label: "", amount: 0, year: Number(cur.startDate.slice(0, 4)) + 1 }],
-          }))
-        }
-        className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-900 active:bg-gray-50"
-      >
-        + Gebeurtenis toevoegen
-      </button>
-      <Note>
-        Een positief bedrag komt in het midden van het jaar bij je spaargeld, een negatief bedrag gaat eraf. De schenkingsbelasting is hier niet in verwerkt.
-      </Note>
-    </div>
-  );
-}
+import { EventsEditor } from "../plan-editors";
 
 export default function HousePage() {
   const { result: r, x } = usePlan();
@@ -162,7 +113,7 @@ export default function HousePage() {
       </Block>
 
       <Block title="Gebeurtenissen tot de aankoop" sub="Eenmalige bedragen die je spaargeld raken.">
-        <Events />
+        <EventsEditor />
       </Block>
 
       <Section title="Personen en contract" hint="Voor de startersvrijstelling en hoe banken je inkomen tellen">

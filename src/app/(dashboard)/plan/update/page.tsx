@@ -6,6 +6,7 @@ import { usePlan } from "../plan-provider";
 import { monthsBetween } from "@/lib/plan/model";
 import { FIELD_BY_ID } from "@/lib/plan/fields";
 import type { CheckIn } from "@/lib/plan/types";
+import Link from "next/link";
 
 // "1.234,56" or "1,234.56" or "1234.56" to a number.
 function toNumber(raw: string): number | null {
@@ -272,6 +273,14 @@ export default function UpdatePage() {
       <Banner level="info" title="Eens per jaar bijwerken">
         Leg hier vast hoe het er echt voor staat: je salaris, je saldi en je schuld. Het plan vergelijkt dat met wat het verwachtte en rekent daarna vanaf je echte stand verder. Zo blijft het plan kloppen, ook als je situatie verandert.
       </Banner>
+
+      <Link href="/plan/bronnen" className="flex min-h-[56px] items-center justify-between rounded-2xl bg-white px-5 py-3 ring-1 ring-gray-200 active:bg-gray-50">
+        <span>
+          <span className="block text-base font-medium text-gray-900">Bronnen en regels</span>
+          <span className="block text-xs text-gray-500">Waar elk getal vandaan komt en wanneer het is gecontroleerd</span>
+        </span>
+        <span className="text-2xl text-gray-300">›</span>
+      </Link>
 
       <DuePanel />
       <DriftPanel />
