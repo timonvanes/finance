@@ -49,7 +49,7 @@ export function LockSection() {
       <div>
         <h2 className="text-base font-medium text-gray-900">App vergrendelen</h2>
         <p className="text-sm text-gray-500">
-          De app is dicht zodra je hem opnieuw opent. Even de app uit en weer terug vraagt niet opnieuw om de code. Je ontgrendelt met je pincode en blijft ingelogd.
+          De app is dicht elke keer dat je hem opent, ook als je hem alleen even verlaten hebt. Je ontgrendelt met je pincode en blijft ingelogd.
         </p>
       </div>
 

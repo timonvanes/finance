@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { forgotPin, verifyPin } from "@/actions/pin";
 import { confirmWithFaceId, hasLockCredential, subscribeLock } from "@/lib/app-lock-client";
 import { PinPad } from "./pin-pad";
 import { PinSetupFlow } from "./pin-flows";
 
-// The app is locked when it is opened. Leaving it for a moment (home screen, another app)
-// does not lock it again: only opening it afresh does, when the phone has closed it. It
-// opens with the 6-digit code (compulsory, chosen first) or, where switched on as an
+// The app is locked every time it is opened: afresh, and also when the person only left it
+// for a moment (home screen, another app) without closing it. It locks at the moment of
+// leaving, so the picture in the app switcher shows the lock screen and not the money.
+// It opens with the 6-digit code (compulsory, chosen first) or, where switched on as an
 // extra, with Face ID. The person stays logged in: the lock is only a check on the phone.
 export function AppLock({ hasPin, children }: { hasPin: boolean; children: ReactNode }) {
   const router = useRouter();
@@ -17,6 +18,24 @@ export function AppLock({ hasPin, children }: { hasPin: boolean; children: React
   const [faceBusy, setFaceBusy] = useState(false);
   // Face ID is an extra, chosen per device.
   const faceId = useSyncExternalStore(subscribeLock, hasLockCredential, () => false);
+
+  // Out of sight means locked, whatever the time away.
+  useEffect(() => {
+    if (!hasPin) return;
+    const onHide = () => {
+      if (document.visibilityState === "hidden") setLocked(true);
+    };
+    // A page the phone kept in memory and shows again.
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setLocked(true);
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pageshow", onShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pageshow", onShow);
+    };
+  }, [hasPin]);
 
   async function tryFaceId() {
     setFaceBusy(true);
