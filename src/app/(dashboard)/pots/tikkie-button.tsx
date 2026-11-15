@@ -32,10 +32,11 @@ export function TikkieButton({
         type="button"
         onClick={open}
         aria-label={label}
-        className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl bg-white text-teal-700 ring-1 ring-gray-200 active:bg-gray-50"
+        className="flex w-[5rem] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl bg-white text-teal-700 ring-1 ring-gray-200 active:bg-gray-50"
       >
         {icon}
         <span className="text-xs font-medium">Tikkie</span>
+        <span className="text-[0.7rem] text-gray-500">{euro(amount)}</span>
       </button>
     );
   }

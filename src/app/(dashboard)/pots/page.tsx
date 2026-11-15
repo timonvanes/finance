@@ -136,9 +136,11 @@ export default async function PotsPage() {
               const balance = balances.get(pot.id) ?? 0;
               const schedule = computeSchedule(pot, balance, new Date(), startDay, graceDays);
               const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
-              // What is still to be put in this period (the plan plus any shortfall, minus what is in).
+              // What the Tikkie is for: what is still to be put in this period (the plan plus any
+              // shortfall, minus what is in) or, when that is all in, the set monthly amount.
               const planNow = plans.get(pot.id);
-              const toPutIn = planNow ? Math.max(0, planNow + carryOf(pot.id) - depositedInPeriod(pot, 0, startDay)) : 0;
+              const stillToPutIn = planNow ? Math.max(0, planNow + carryOf(pot.id) - depositedInPeriod(pot, 0, startDay)) : 0;
+              const toPutIn = stillToPutIn > 0.005 ? stillToPutIn : (nextPeriodMonthly(pot, balance, startDay) ?? 0);
               return (
                 <li key={pot.id} className="flex items-stretch gap-2">
                   <Link
