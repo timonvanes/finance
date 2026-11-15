@@ -139,11 +139,11 @@ export default async function PotsPage() {
               const stillToPutIn = planNow ? Math.max(0, planNow + carryOf(pot.id) - depositedInPeriod(pot, 0, startDay)) : 0;
               const toPutIn = stillToPutIn > 0.005 ? stillToPutIn : (nextPeriodMonthly(pot, balance, startDay) ?? 0);
               return (
-                <li key={pot.id} className="flex items-stretch gap-2">
+                <li key={pot.id} className="relative">
                   <Link
                     href={`/pots/${pot.id}`}
                     prefetch
-                    className="block min-w-0 flex-1 space-y-2 rounded-2xl bg-white p-5 ring-1 ring-gray-200 active:bg-gray-50"
+                    className="block space-y-2 rounded-2xl bg-white p-5 ring-1 ring-gray-200 active:bg-gray-50"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
