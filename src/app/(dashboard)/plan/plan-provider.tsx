@@ -45,6 +45,10 @@ interface Ctx {
 
 const PlanContext = createContext<Ctx | null>(null);
 
+// What counts as "changed": the content of the plan. Which scenario and variant you look at is
+// only a choice of view, so switching between them never asks to save.
+const contentOf = (d: PlanDoc) => JSON.stringify({ ...d, activeId: "", variant: "basis" });
+
 export function usePlan() {
   const c = useContext(PlanContext);
   if (!c) throw new Error("usePlan buiten PlanProvider");
@@ -63,7 +67,7 @@ export function PlanProvider({
   children: ReactNode;
 }) {
   const [doc, setDoc] = useState(initialDoc);
-  const [savedJson, setSavedJson] = useState(() => (hasDoc ? JSON.stringify(initialDoc) : ""));
+  const [savedJson, setSavedJson] = useState(() => (hasDoc ? contentOf(initialDoc) : ""));
   const [message, setMessage] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
   const today = app.today;
@@ -75,8 +79,7 @@ export function PlanProvider({
   const result = useMemo(() => computePlan({ b: deferred.b, x: deferred.x, app }), [deferred, app]);
   const calculating = deferred !== resolved;
 
-  const json = JSON.stringify(doc);
-  const dirty = json !== savedJson;
+  const dirty = contentOf(doc) !== savedJson;
 
   const update = (fn: (d: PlanDoc) => PlanDoc) => {
     setDoc((d) => fn(d));
@@ -150,7 +153,7 @@ export function PlanProvider({
       if (r.error) setMessage(r.error);
       else {
         setDoc(next);
-        setSavedJson(JSON.stringify(next));
+        setSavedJson(contentOf(next));
         setMessage("Opgeslagen.");
       }
     });

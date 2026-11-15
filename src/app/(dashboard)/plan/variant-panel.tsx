@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { NumberBox, Note, card } from "./ui";
 import { fieldValue, usePlan } from "./plan-provider";
 import { DEFAULT_SPREAD, SPREAD_FIELDS, overrideOf } from "@/lib/plan/scenarios";
@@ -11,7 +10,6 @@ import { VARIANTS, type Variant } from "@/lib/plan/types";
 // and still change any number by hand.
 export function VariantPanel() {
   const { scenario, variant, setVariant, setVariantField, setSpread, fillFromSpread, resetVariant } = usePlan();
-  const [open, setOpen] = useState(false);
   const spread = scenario.spread ?? DEFAULT_SPREAD;
 
   const unitOf = (id: string) => {
@@ -22,7 +20,7 @@ export function VariantPanel() {
 
   return (
     <div className="space-y-3">
-      <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-4 bg-gray-50/95 px-4 py-2 backdrop-blur">
+      <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-4 space-y-2 bg-gray-50/95 px-4 py-2 backdrop-blur">
         <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-200 p-1">
           {VARIANTS.map((v) => (
             <button
@@ -35,59 +33,45 @@ export function VariantPanel() {
             </button>
           ))}
         </div>
-        <p className="mt-1 px-1 text-xs text-gray-500">
-          Je vult nu de variant <strong>{VARIANTS.find((v) => v.key === variant)?.label.toLowerCase()}</strong> in. Wat per variant kan verschillen staat hieronder.
-        </p>
-      </div>
-
-      <section className={`${card} space-y-3 p-5`}>
-        <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center justify-between text-left" aria-expanded={open}>
-          <span>
-            <span className="block text-base font-medium text-gray-900">Varianten invullen met een percentage</span>
-            <span className="block text-xs text-gray-500">
-              Stress {spread.stress}% slechter dan basis · gunstig {spread.gunstig}% beter
-            </span>
-          </span>
-          <span className={`text-2xl text-gray-300 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
-        </button>
-
-        {open && (
-          <div className="space-y-4 border-t border-gray-100 pt-4">
-            {(["stress", "gunstig"] as const).map((v) => (
-              <div key={v} className="space-y-2">
-                <p className="text-sm font-medium text-gray-900">{v === "stress" ? "Stress: slechter dan basis" : "Gunstig: beter dan basis"}</p>
-                <div className="grid grid-cols-2 items-end gap-3">
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-gray-600">Hoeveel procent</span>
-                    <NumberBox value={spread[v]} onChange={(n) => setSpread(v, Math.max(0, Math.min(90, n)))} unit="%" />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`De getallen van ${v === "stress" ? "stress" : "gunstig"} worden overschreven met de basis ${v === "stress" ? "slechter" : "beter"} met ${spread[v]}%, inclusief het salaris per jaar. Wat je zelf had ingevuld verdwijnt. Doorgaan?`)) fillFromSpread(v);
-                    }}
-                    className="min-h-[48px] rounded-xl bg-teal-700 px-3 text-sm font-medium text-white active:bg-teal-800"
-                  >
-                    Invullen
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Alle eigen getallen van ${v === "stress" ? "stress" : "gunstig"} wissen? De variant volgt dan weer de basis.`)) resetVariant(v);
-                  }}
-                  className="min-h-[40px] text-sm text-red-600 underline"
-                >
-                  Terug naar de basis
-                </button>
-              </div>
-            ))}
-            <Note>
-              Slechter en beter gaat per getal de goede kant op: een hogere prijsstijging en een hoger overbod zijn slechter, een lagere salarisgroei en lagere inleg ook. Daarna pas je elk getal gewoon zelf aan in de tabel hieronder.
-            </Note>
+        {variant === "basis" ? (
+          <p className="px-1 text-xs text-gray-500">
+            Je vult nu de basis in. Kies stress of gunstig om die met een percentage rond de basis in te vullen.
+          </p>
+        ) : (
+          <div className="space-y-1">
+            <div className="flex items-end gap-2">
+              <label className="min-w-0 flex-1">
+                <span className="mb-1 block text-xs text-gray-600">
+                  {variant === "stress" ? "Stress: hoeveel procent slechter dan basis" : "Gunstig: hoeveel procent beter dan basis"}
+                </span>
+                <NumberBox value={spread[variant]} onChange={(n) => setSpread(variant, Math.max(0, Math.min(90, n)))} unit="%" />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const label = variant === "stress" ? "stress" : "gunstig";
+                  if (window.confirm(`De getallen van ${label} worden overschreven met de basis ${variant === "stress" ? "slechter" : "beter"} met ${spread[variant]}%, inclusief het salaris per jaar. Wat je zelf had ingevuld verdwijnt. Doorgaan?`)) fillFromSpread(variant);
+                }}
+                className="min-h-[48px] shrink-0 rounded-xl bg-teal-700 px-4 text-sm font-medium text-white active:bg-teal-800"
+              >
+                Invullen
+              </button>
+            </div>
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs text-gray-500">Daarna pas je elk getal zelf aan in de tabel hieronder.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Alle eigen getallen van ${variant === "stress" ? "stress" : "gunstig"} wissen? De variant volgt dan weer de basis.`)) resetVariant(variant);
+                }}
+                className="min-h-[32px] shrink-0 text-xs text-red-600 underline"
+              >
+                Terug naar de basis
+              </button>
+            </div>
           </div>
         )}
-      </section>
+      </div>
 
       <section className={`${card} space-y-4 p-5`}>
         <div>

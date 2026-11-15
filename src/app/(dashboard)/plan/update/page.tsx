@@ -91,7 +91,7 @@ function DuePanel() {
   return (
     <Block title="Wat moet nu bijgewerkt worden?" sub="Aannames met een controledatum die voorbij is of binnen een maand komt.">
       {seasonal.map((t) => (
-        <p key={t} className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{t}</p>
+        <p key={t} className="text-sm text-gray-700">{t}</p>
       ))}
       {due.length === 0 ? (
         <p className="text-sm text-gray-600">Alle aannames zijn recent gecontroleerd.</p>

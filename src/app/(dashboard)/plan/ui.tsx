@@ -249,21 +249,14 @@ export function Note({ children }: { children: ReactNode }) {
   return <p className="text-xs leading-relaxed text-gray-500">{children}</p>;
 }
 
+// A notice in plain text, without colored boxes. "ok" ("everything is fine") says nothing
+// worth reading, so it is not shown at all.
 export function Banner({ level, title, children }: { level: "ok" | "info" | "warn" | "bad"; title: string; children: ReactNode }) {
-  const cls = {
-    ok: "border-green-200 bg-green-50 text-green-900",
-    info: "border-sky-200 bg-sky-50 text-sky-900",
-    warn: "border-amber-200 bg-amber-50 text-amber-900",
-    bad: "border-red-200 bg-red-50 text-red-900",
-  }[level];
-  const dot = { ok: "bg-green-600", info: "bg-sky-600", warn: "bg-amber-500", bad: "bg-red-600" }[level];
+  if (level === "ok") return null;
   return (
-    <div className={`rounded-xl border px-4 py-3 ${cls}`}>
-      <p className="flex items-start gap-2 text-sm font-medium">
-        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />
-        {title}
-      </p>
-      <p className="mt-1 pl-4 text-sm leading-relaxed opacity-90">{children}</p>
+    <div className="px-1">
+      <p className="text-sm font-medium text-gray-900">{title}</p>
+      <p className="mt-0.5 text-sm leading-relaxed text-gray-600">{children}</p>
     </div>
   );
 }

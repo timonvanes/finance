@@ -74,12 +74,12 @@ export default function PlanOverview() {
               <Stat label="Nodig per maand" value={euro(need.perMonth)} big how={`De kleinste inleg waarmee je op ${pu.date.slice(0, 7)} met ${x.confidencePct}% zekerheid ${euro(need.need)} hebt, in dezelfde verhouding als nu.`} />
               <Stat label="Nu ingepland" value={euro(need.current)} tone={need.extra > 0 ? "warn" : "good"} />
             </div>
-            <p className={`rounded-xl px-4 py-3 text-sm ${need.extra > 0 ? "bg-amber-50 text-amber-900" : "bg-green-50 text-green-800"}`}>
+            <p className="text-sm font-medium text-gray-900">
               {need.extra > 0 ? `Je moet ongeveer ${euro(need.extra)} per maand meer inleggen.` : "Je huidige inleg is genoeg."}
             </p>
           </>
         ) : (
-          <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="text-sm text-gray-700">
             Alleen met meer inleggen lukt dit niet. Kijk naar een lagere prijs, een later jaar of een hoger inkomen. Onder Analyse, Scenario&apos;s zie je wat je wel kunt kopen.
           </p>
         )}
