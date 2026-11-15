@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { checkBunqPayments, createBunqPaymentLink } from "@/actions/bunq";
 import { updatePaymentRequestNote } from "@/actions/payment-requests";
 import { updateReclaimNote } from "@/actions/reclaims";
+import { TIKKIE_MAX_DESCRIPTION, tikkieDescription } from "@/lib/tikkie";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -68,14 +69,17 @@ export function RequestShare({
   // description is what you typed, with the reference code in brackets.
   function openTikkie() {
     void saveNote();
-    const base = (desc.trim() || description).trim();
-    const text = referenceCode ? `${base} (${referenceCode})` : base;
+    const text = tikkieDescription((desc.trim() || description).trim(), referenceCode);
     const params = new URLSearchParams();
     const cents = Math.round(amount * 100);
     if (cents > 0) params.set("totalAmountInCents", String(cents));
     params.set("description", text);
     window.location.href = `tikkie://payment_request?${params.toString().replace(/\+/g, "%20")}`;
   }
+
+  // What Tikkie will show: it takes at most 35 characters, so a longer text is cut.
+  const tikkieText = tikkieDescription((desc.trim() || description).trim(), referenceCode);
+  const tikkieCut = tikkieText !== `${(desc.trim() || description).trim()}${referenceCode ? ` (${referenceCode})` : ""}`;
 
   async function makeLink() {
     setBusy(true);
@@ -148,6 +152,11 @@ export function RequestShare({
         placeholder="Omschrijving voor het bericht"
         className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base disabled:bg-gray-50 disabled:text-gray-500"
       />
+      {tikkieCut && !bunqUrl && (
+        <p className="px-1 text-xs text-gray-500">
+          Tikkie neemt maximaal {TIKKIE_MAX_DESCRIPTION} tekens over. In Tikkie komt: <span className="font-medium">{tikkieText}</span>
+        </p>
+      )}
       <div className="flex gap-2">
         {bunqEnabled ? (
           <button

@@ -117,6 +117,11 @@ const GROUPS: {
         description: "Tikkie of bunq-betaallink bij een terugvordering",
         value: ({ bunqLinks }) => (bunqLinks ? "Tikkie + bunq" : "Tikkie"),
       },
+      {
+        href: "/tikkie-test",
+        label: "Tikkie testen",
+        description: "Tikkie-links en omschrijvingen proberen op je telefoon",
+      },
     ],
   },
 ];

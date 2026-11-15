@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { TIKKIE_MAX_DESCRIPTION, tikkieDescription } from "@/lib/tikkie";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -24,7 +25,7 @@ export function TikkieDeposit({ suggested }: { suggested: number }) {
     setError(null);
     const params = new URLSearchParams();
     params.set("totalAmountInCents", String(cents));
-    params.set("description", description.trim() || "Sparen potjes");
+    params.set("description", tikkieDescription(description.trim() || "Sparen potjes"));
     window.location.href = `tikkie://payment_request?${params.toString().replace(/\+/g, "%20")}`;
   }
 
@@ -49,7 +50,7 @@ export function TikkieDeposit({ suggested }: { suggested: number }) {
       </label>
       <label className="block space-y-1">
         <span className="text-sm font-medium text-gray-700">Omschrijving</span>
-        <input value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-[48px] w-full rounded-xl border border-gray-300 px-3 text-base" />
+        <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={TIKKIE_MAX_DESCRIPTION} className="min-h-[48px] w-full rounded-xl border border-gray-300 px-3 text-base" />
       </label>
       <button type="button" onClick={open} className="min-h-[52px] w-full rounded-xl bg-teal-700 text-base font-medium text-white active:bg-teal-800">
         Open Tikkie
