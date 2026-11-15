@@ -22,6 +22,19 @@ export async function getRecentExpenseTransactions() {
   return data;
 }
 
+// One transaction by id, for when the wizard is opened for a transaction that is not among
+// the 50 most recent expenses (an older one). Without it the wizard would not know it.
+export async function getTransactionForReclaim(transactionId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(transactionId)) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("visible_transactions")
+    .select("id, booking_date, amount, counterparty_name, counterparty_iban, raw_description")
+    .eq("id", transactionId)
+    .maybeSingle();
+  return data;
+}
+
 // Transactions flagged from the transactions list as "still needs to be
 // split into reclaim(s)" — the queue shown at the top of this page.
 export async function getQueuedTransactions() {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getQueuedTransactions, getRecentExpenseTransactions } from "@/actions/reclaims";
+import { getQueuedTransactions, getRecentExpenseTransactions, getTransactionForReclaim } from "@/actions/reclaims";
 import { getPeopleWithGroups } from "@/actions/people";
 import { getWbwListChoices } from "@/actions/wbw-push";
 import { Wizard } from "./wizard";
@@ -17,10 +17,12 @@ export default async function NieuwPage({
     getWbwListChoices(),
   ]);
 
-  const transactions = [
-    ...queued,
-    ...recent.filter((t) => !queued.some((q) => q.id === t.id)),
-  ].map((t) => ({
+  const listed = [...queued, ...recent.filter((t) => !queued.some((q) => q.id === t.id))];
+  // A transaction opened from elsewhere may be older than the 50 most recent: add it, so it
+  // is found (and has its amount) instead of showing 0 euro.
+  const requested =
+    transactionId && !listed.some((t) => t.id === transactionId) ? await getTransactionForReclaim(transactionId) : null;
+  const transactions = [...(requested ? [requested] : []), ...listed].map((t) => ({
     id: t.id,
     booking_date: t.booking_date,
     amount: t.amount,
@@ -49,7 +51,7 @@ export default async function NieuwPage({
       <Wizard
         transactions={transactions}
         people={people}
-        initialTransactionId={transactionId}
+        initialTransactionId={transactionId && transactions.some((t) => t.id === transactionId) ? transactionId : undefined}
         wbwLists={wbw.lists}
         wbwConfigured={wbw.configured}
       />
