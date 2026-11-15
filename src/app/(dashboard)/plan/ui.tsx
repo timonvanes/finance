@@ -32,6 +32,28 @@ const parseInput = (s: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// Amounts are shown and typed with a dot between the thousands (10000 becomes 10.000) and a
+// comma for the cents. The dots are only for reading: they are taken out again when the number is used.
+const groupThousands = (digits: string) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+const fmtMoney = (n: number) => {
+  if (!Number.isFinite(n)) return "";
+  const [int, dec] = String(Math.abs(n)).split(".");
+  return `${n < 0 ? "-" : ""}${groupThousands(int)}${dec ? `,${dec}` : ""}`;
+};
+const formatMoneyTyping = (raw: string) => {
+  const neg = raw.trim().startsWith("-");
+  const cleaned = raw.replace(/[^\d,]/g, "");
+  const [int, ...rest] = cleaned.split(",");
+  const digits = int.replace(/^0+(?=\d)/, "");
+  return `${neg ? "-" : ""}${groupThousands(digits)}${cleaned.includes(",") ? `,${rest.join("")}` : ""}`;
+};
+const parseMoney = (s: string): number | null => {
+  const t = s.trim().replace(/\./g, "").replace(",", ".");
+  if (t === "" || t === "-") return 0;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+
 const inputCls =
   "box-border min-h-[48px] w-full min-w-0 max-w-full appearance-none rounded-xl border border-gray-300 bg-white px-3 text-base";
 
@@ -41,25 +63,31 @@ export function NumberBox({
   unit,
   placeholder,
   className,
+  money,
 }: {
   value: number;
   onChange: (n: number) => void;
   unit?: string;
   placeholder?: string;
   className?: string;
+  // An amount in euros: shown with dots between the thousands. On by default with the unit "€".
+  money?: boolean;
 }) {
   const [text, setText] = useState<string | null>(null);
+  const grouped = money ?? unit === "€";
+  const show = (n: number) => (grouped ? fmtMoney(n) : fmtInput(n));
   return (
     <div className="relative">
       <input
         inputMode="decimal"
-        value={text ?? (value === 0 && placeholder ? "" : fmtInput(value))}
+        value={text ?? (value === 0 && placeholder ? "" : show(value))}
         placeholder={placeholder}
-        onFocus={() => setText(value === 0 ? "" : fmtInput(value))}
+        onFocus={() => setText(value === 0 ? "" : show(value))}
         onBlur={() => setText(null)}
         onChange={(e) => {
-          setText(e.target.value);
-          const n = parseInput(e.target.value);
+          const typed = grouped ? formatMoneyTyping(e.target.value) : e.target.value;
+          setText(typed);
+          const n = grouped ? parseMoney(typed) : parseInput(typed);
           if (n !== null) onChange(n);
         }}
         className={`${inputCls} ${unit ? "pr-9" : ""} ${className ?? ""}`}

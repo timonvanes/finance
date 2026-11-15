@@ -32,6 +32,7 @@ export function SalaryEditor() {
                 <td className="px-2 py-2 font-medium text-gray-900">{p.year}</td>
                 <td className="px-2 py-1.5">
                   <NumberBox
+                    money
                     value={Math.round(p.grossYou)}
                     onChange={(n) => setSalary("salaryYou", p.year, n)}
                     className={p.fromInput.you ? "!border-teal-500 !bg-teal-50" : ""}
@@ -40,6 +41,7 @@ export function SalaryEditor() {
                 <td className={`px-2 py-1.5 ${x.buyingTogether ? "" : "opacity-40 grayscale"}`}>
                   <div inert={!x.buyingTogether}>
                     <NumberBox
+                      money
                       value={x.buyingTogether ? Math.round(p.grossPartner) : 0}
                       onChange={(n) => setSalary("salaryPartner", p.year, n)}
                       className={x.buyingTogether && p.fromInput.partner ? "!border-teal-500 !bg-teal-50" : ""}
@@ -100,7 +102,7 @@ export function ContribEditor() {
                   <td className="px-2 py-2 font-medium text-gray-900">{y}</td>
                   {(["save", "bonds", "invest"] as const).map((k) => (
                     <td key={k} className="px-1.5 py-1.5">
-                      <NumberBox value={Math.round(c[k])} onChange={(n) => setContrib(y, k, n)} className={custom ? "!border-teal-500 !bg-teal-50" : ""} />
+                      <NumberBox money value={Math.round(c[k])} onChange={(n) => setContrib(y, k, n)} className={custom ? "!border-teal-500 !bg-teal-50" : ""} />
                     </td>
                   ))}
                 </tr>
