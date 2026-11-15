@@ -55,7 +55,11 @@ export interface PayRow {
   netPartner: NetResult | null;
   gross: number;
   net: number;
+  // A regular month, without the holiday allowance: that is paid once a year, so it cannot pay the
+  // monthly costs. The monthly calculations use this one.
   netMonthly: number;
+  // The holiday allowance after tax, which arrives once a year.
+  netHoliday: number;
   tax: number;
   avgRate: number;
   marginalRate: number;
@@ -94,8 +98,8 @@ export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[
   const holiday = x.holidayPct / 100;
   const extraShare = 1 + holiday + x.fixedExtraPct / 100 + x.bonusPct / 100;
   // Lease car: the addition is taxed as income, but it is not cash.
-  const taxedYear = (salary: number, pensionPct: number, y: number) => {
-    const withExtra = salary * extraShare;
+  const taxedYear = (salary: number, pensionPct: number, y: number, share = extraShare) => {
+    const withExtra = salary * share;
     const lease = salary > 0 ? x.leaseTaxableYear : 0;
     const r = netYear(withExtra + lease, pensionPct, y, opt);
     return lease > 0 ? { ...r, gross: withExtra, net: r.net - lease, avgRate: withExtra > 0 ? r.tax / withExtra : 0 } : r;
@@ -109,6 +113,10 @@ export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[
     const netPartner = withPartner ? taxedYear(pv.v, x.partnerPensionPct, y) : null;
     const gross = netYou.gross + (netPartner?.gross ?? 0);
     const net = netYou.net + (netPartner?.net ?? 0);
+    // The same year without the holiday allowance gives a regular month; the rest is the holiday pay.
+    const regYou = taxedYear(yv.v, x.pensionPct, y, extraShare - holiday);
+    const regPartner = withPartner ? taxedYear(pv.v, x.partnerPensionPct, y, extraShare - holiday) : null;
+    const netRegular = regYou.net + (regPartner?.net ?? 0);
     const tax = netYou.tax + (netPartner?.tax ?? 0);
     rows.push({
       year: y,
@@ -118,7 +126,8 @@ export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[
       netPartner,
       gross,
       net,
-      netMonthly: net / 12,
+      netMonthly: netRegular / 12,
+      netHoliday: Math.max(0, net - netRegular),
       tax,
       avgRate: gross > 0 ? tax / gross : 0,
       marginalRate: netYou.marginalRate,

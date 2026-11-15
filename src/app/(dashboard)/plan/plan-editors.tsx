@@ -16,13 +16,14 @@ export function SalaryEditor() {
   return (
     <div className="space-y-3">
       <div className="-mx-2 overflow-x-auto">
-        <table className="w-full min-w-[480px] text-sm">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="text-left text-xs text-gray-500">
               <th className="px-2 py-2 font-medium">Jaar</th>
               <th className="px-2 py-2 font-medium">Jij, bruto*</th>
               <th className={`px-2 py-2 font-medium ${x.buyingTogether ? "" : "opacity-40"}`}>Partner, bruto*</th>
-              <th className="px-2 py-2 text-right font-medium">Netto/mnd</th>
+              <th className="px-2 py-2 text-right font-medium">Netto/mnd**</th>
+              <th className="px-2 py-2 text-right font-medium">Vakantiegeld netto</th>
               <th className="px-2 py-2 text-right font-medium">Belasting</th>
             </tr>
           </thead>
@@ -49,6 +50,7 @@ export function SalaryEditor() {
                   </div>
                 </td>
                 <td className="px-2 py-2 text-right">{euro(p.netMonthly)}</td>
+                <td className="px-2 py-2 text-right">{euro(p.netHoliday)}</td>
                 <td className="px-2 py-2 text-right">{pct(p.avgRate * 100)}</td>
               </tr>
             ))}
@@ -61,7 +63,7 @@ export function SalaryEditor() {
         </button>
       )}
       <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-        * zonder vakantiegeld, dat telt het plan er zelf bij ({pct(x.holidayPct)}).
+        * zonder vakantiegeld, dat telt het plan er zelf bij ({pct(x.holidayPct)}). ** een gewone maand zonder vakantiegeld: dat komt één keer per jaar binnen (de kolom ernaast), dus je kunt het niet elke maand uitgeven of sparen.
         <SrcBadge src="calc" /> bruto volgt uit {pct(x.salaryGrowthPct)} groei per jaar tot jij een bedrag invult (groen).
         <SrcBadge src="law" /> netto en belasting volgen uit de regels van 2026.
       </p>
