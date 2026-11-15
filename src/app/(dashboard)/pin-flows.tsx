@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { changePin, setupPin, verifyPin } from "@/actions/pin";
+import { changePin, setupPin, verifyPin, type PinResult } from "@/actions/pin";
 import { weakPinReason } from "@/lib/pin-rules";
 import { PinPad } from "./pin-pad";
 
@@ -40,6 +40,39 @@ export function PinSetupFlow({ onDone }: { onDone: () => void }) {
         }
         const result = await setupPin(pin);
         if (result.error) return result.error;
+        onDone();
+        return null;
+      }}
+    />
+  );
+}
+
+// Asks for the current code before something that needs it (like switching the lock off).
+export function PinConfirmFlow({
+  title,
+  hint,
+  confirm,
+  onDone,
+  onCancel,
+}: {
+  title: string;
+  hint?: string;
+  confirm: (pin: string) => Promise<PinResult>;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <PinPad
+      title={title}
+      hint={hint}
+      onCancel={onCancel}
+      onComplete={async (pin) => {
+        const result = await confirm(pin);
+        if (result.signedOut) {
+          window.location.assign("/login");
+          return null;
+        }
+        if (!result.ok) return result.error ?? "Onjuiste pincode.";
         onDone();
         return null;
       }}

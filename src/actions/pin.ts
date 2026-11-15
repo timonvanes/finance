@@ -1,10 +1,12 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashPin, pinMatches } from "@/lib/app-pin";
 import { PIN, weakPinReason } from "@/lib/pin-rules";
+import { LOCK_OFF_COOKIE } from "@/lib/lock-cookie";
 
 // The 6-digit code that unlocks the app. It is compulsory; Face ID is an extra on top.
 // The code lives on the server as a hash, and every guess is counted here, so it cannot
@@ -94,6 +96,23 @@ export async function changePin(current: string, next: string): Promise<PinResul
   const admin = createAdminClient();
   const { error } = await admin.from("app_pins").update({ pin_hash: hashPin(next), updated_at: new Date().toISOString() }).eq("user_id", userId);
   if (error) return { error: "Opslaan van de pincode mislukte. Probeer het opnieuw." };
+  return { ok: true };
+}
+
+// The lock can be switched off on this device. The cookie is set here, on the server, and
+// only after the code was right, so a phone left unlocked cannot switch it off. (The name
+// lives in src/lib/lock-cookie.ts, because a server actions file can only export functions.)
+export async function disableLock(pin: string): Promise<PinResult> {
+  const checked = await verifyPin(pin);
+  if (!checked.ok) return checked;
+  (await cookies()).set(LOCK_OFF_COOKIE, "1", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
+  return { ok: true };
+}
+
+// Switching it on again needs nothing: it only makes the app safer. Without a code yet, the
+// app asks for one first.
+export async function enableLock(): Promise<PinResult> {
+  (await cookies()).delete(LOCK_OFF_COOKIE);
   return { ok: true };
 }
 

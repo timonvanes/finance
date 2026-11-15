@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { LOCK_OFF_COOKIE } from "@/lib/lock-cookie";
 import { createClient } from "@/lib/supabase/server";
 import { listMfaFactors } from "@/actions/mfa";
 import { AccountForms } from "./account-forms";
@@ -13,6 +15,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   } = await supabase.auth.getUser();
 
   const factors = await listMfaFactors();
+  const lockOff = (await cookies()).get(LOCK_OFF_COOKIE)?.value === "1";
 
   return (
     <div className="space-y-5">
@@ -38,7 +41,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         </p>
       )}
 
-      <LockSection />
+      <LockSection lockOff={lockOff} />
 
       <MfaSection initial={factors} />
 

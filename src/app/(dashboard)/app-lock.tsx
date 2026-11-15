@@ -12,16 +12,18 @@ import { PinSetupFlow } from "./pin-flows";
 // leaving, so the picture in the app switcher shows the lock screen and not the money.
 // It opens with the 6-digit code (compulsory, chosen first) or, where switched on as an
 // extra, with Face ID. The person stays logged in: the lock is only a check on the phone.
-export function AppLock({ hasPin, children }: { hasPin: boolean; children: ReactNode }) {
+export function AppLock({ hasPin, lockOff, children }: { hasPin: boolean; lockOff: boolean; children: ReactNode }) {
+  // Switched off on this device: the app opens straight away and asks for no code.
+  const active = !lockOff;
   const router = useRouter();
-  const [locked, setLocked] = useState(hasPin);
+  const [locked, setLocked] = useState(active && hasPin);
   const [faceBusy, setFaceBusy] = useState(false);
   // Face ID is an extra, chosen per device.
   const faceId = useSyncExternalStore(subscribeLock, hasLockCredential, () => false);
 
   // Out of sight means locked, whatever the time away.
   useEffect(() => {
-    if (!hasPin) return;
+    if (!hasPin || !active) return;
     const onHide = () => {
       if (document.visibilityState === "hidden") setLocked(true);
     };
@@ -35,7 +37,7 @@ export function AppLock({ hasPin, children }: { hasPin: boolean; children: React
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pageshow", onShow);
     };
-  }, [hasPin]);
+  }, [hasPin, active]);
 
   async function tryFaceId() {
     setFaceBusy(true);
@@ -49,11 +51,11 @@ export function AppLock({ hasPin, children }: { hasPin: boolean; children: React
 
   return (
     <>
-      <div inert={locked || !hasPin} aria-hidden={locked || !hasPin}>
+      <div inert={active && (locked || !hasPin)} aria-hidden={active && (locked || !hasPin)}>
         {children}
       </div>
-      {!hasPin && <PinSetupFlow onDone={() => router.refresh()} />}
-      {hasPin && locked && (
+      {active && !hasPin && <PinSetupFlow onDone={() => router.refresh()} />}
+      {active && hasPin && locked && (
         <PinPad
           title="Finance"
           hint="Voer je pincode in"
