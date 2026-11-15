@@ -29,20 +29,28 @@ export function TikkieTest() {
       : []),
   ];
 
-  function build(scheme: "app" | "web", extra: Extra[]) {
+  function build(scheme: "app" | "web", extra: Extra[], text?: string) {
     const params = new URLSearchParams();
     params.set("totalAmountInCents", "100");
-    params.set("description", "Test " + account);
+    params.set("description", text ?? "Test " + account);
     for (const e of extra) if (e.key.trim()) params.set(e.key.trim(), e.value);
     const query = params.toString().replace(/\+/g, "%20");
     return scheme === "app" ? `tikkie://payment_request?${query}` : `https://tikkie.me/payment_request?${query}`;
   }
 
-  function open(scheme: "app" | "web", extra: Extra[]) {
-    const url = build(scheme, extra);
+  function open(scheme: "app" | "web", extra: Extra[], text?: string) {
+    const url = build(scheme, extra, text);
     setLast(url);
-    window.location.href = url;
+    window.location.assign(url);
   }
+
+  // A description of an exact length, to find the limit of Tikkie's description field.
+  const lengthText = (n: number) => {
+    const head = `${n} tekens: `;
+    const filler = "abcdefghij".repeat(Math.ceil(n / 10));
+    return (head + filler).slice(0, n);
+  };
+  const lengths = [30, 45, 50, 60, 75, 100, 150];
 
   const input = "min-h-[48px] w-full rounded-xl border border-gray-300 px-3 text-base";
 
@@ -79,6 +87,20 @@ export function TikkieTest() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
+        <h2 className="text-base font-medium text-gray-900">Lengte van de omschrijving</h2>
+        <p className="text-sm text-gray-600">
+          Tikkie heeft een maximum voor de omschrijving. Kijk bij welke lengte Tikkie de tekst nog laat staan, afkapt of weglaat.
+        </p>
+        <div className="grid grid-cols-4 gap-2">
+          {lengths.map((n) => (
+            <button key={n} type="button" onClick={() => open("app", [], lengthText(n))} className="min-h-[48px] rounded-xl bg-teal-700 text-sm font-medium text-white active:bg-teal-800">
+              {n}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
