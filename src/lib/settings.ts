@@ -55,3 +55,19 @@ export const getCalendarToken = cache(async (): Promise<string | null> => {
   const { data } = await supabase.from("user_settings").select("calendar_token").maybeSingle();
   return data?.calendar_token ?? null;
 });
+
+// What the person has set up at the banks for the pots (standing order to the savings bank
+// and the automatic saving per pot). The app cannot read it from the banks, so it keeps what
+// the person confirmed, to point out when a plan has changed since.
+export interface BankOrders {
+  total: number;
+  pots: Record<string, { name: string; amount: number }>;
+}
+
+export const getBankOrders = cache(async (): Promise<BankOrders | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("user_settings").select("bank_orders").maybeSingle();
+  const raw = data?.bank_orders as BankOrders | null | undefined;
+  if (!raw || typeof raw.total !== "number" || typeof raw.pots !== "object" || raw.pots === null) return null;
+  return raw;
+});

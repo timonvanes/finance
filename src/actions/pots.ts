@@ -424,3 +424,28 @@ export async function autoDetectPots() {
   if (created > 0) await matchPotTransfers(supabase, ids, user.id);
   return { created };
 }
+
+// "Set like this at the bank": the person confirms the standing order to the savings bank and
+// the automatic saving per pot, so the app can say when a plan has changed since.
+export async function saveBankOrders(total: number, pots: { id: string; name: string; amount: number }[]) {
+  if (!Number.isFinite(total) || total < 0 || total > 1_000_000) return { error: "Ongeldig bedrag." };
+  const clean: Record<string, { name: string; amount: number }> = {};
+  for (const p of pots) {
+    if (!/^[0-9a-f-]{36}$/i.test(p.id) || !Number.isFinite(p.amount) || p.amount < 0 || p.amount > 1_000_000) return { error: "Ongeldig bedrag." };
+    clean[p.id] = { name: String(p.name).slice(0, 80), amount: Math.round(p.amount * 100) / 100 };
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Niet ingelogd." };
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      { user_id: user.id, bank_orders: { total: Math.round(total * 100) / 100, pots: clean }, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+  if (error) return { error: "Opslaan mislukte. Probeer het opnieuw." };
+  revalidatePath("/pots");
+  return {};
+}

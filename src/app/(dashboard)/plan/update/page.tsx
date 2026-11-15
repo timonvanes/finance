@@ -293,11 +293,11 @@ export default function UpdatePage() {
           </label>
           <div />
           <label className="block">
-            <span className="mb-1 block text-sm text-gray-600">Jouw bruto jaarsalaris</span>
+            <span className="mb-1 block text-sm text-gray-600">Jouw bruto jaarsalaris (zonder vakantiegeld)</span>
             <NumberBox value={grossYou} onChange={setGrossYou} unit="€" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-sm text-gray-600">Partner, bruto per jaar</span>
+            <span className="mb-1 block text-sm text-gray-600">Partner, bruto per jaar (zonder vakantiegeld)</span>
             <NumberBox value={grossPartner} onChange={setGrossPartner} unit="€" />
           </label>
           <label className="block">

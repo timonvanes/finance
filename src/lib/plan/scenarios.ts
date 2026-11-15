@@ -112,8 +112,8 @@ export function applySpread(sc: Scenario, variant: "stress" | "gunstig", pct: nu
   const salaryYou: Record<string, number> = {};
   const salaryPartner: Record<string, number> = {};
   for (const r of rows) {
-    if (r.grossYou > 0) salaryYou[String(r.year)] = Math.round((r.grossYou / (1 + basis.x.fixedExtraPct / 100 + basis.x.bonusPct / 100)) * factor);
-    if (r.grossPartner > 0) salaryPartner[String(r.year)] = Math.round((r.grossPartner / (1 + basis.x.fixedExtraPct / 100 + basis.x.bonusPct / 100)) * factor);
+    if (r.baseYou > 0) salaryYou[String(r.year)] = Math.round(r.baseYou * factor);
+    if (r.basePartner > 0) salaryPartner[String(r.year)] = Math.round(r.basePartner * factor);
   }
   return { ...sc, variants: { ...sc.variants, [variant]: { fields, salaryYou, salaryPartner } } };
 }

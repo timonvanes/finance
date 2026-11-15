@@ -61,6 +61,9 @@ export interface PayRow {
   marginalRate: number;
   bracketRate: number;
   fromInput: { you: boolean; partner: boolean };
+  // the salaries as they are entered: without holiday allowance, extra pay or bonus
+  baseYou: number;
+  basePartner: number;
   // what a bank counts: salary plus fixed extra pay, without bonus
   countedYou: number;
   countedPartner: number;
@@ -87,7 +90,9 @@ export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[
   const pStart = x.partnerStartYear > 0 ? Math.max(fromYear, x.partnerStartYear) : fromYear;
   const partner = salaryPath(b.partnerIncomeGrossYear, x.partnerGrowthPct, x.salaryPartner, pStart, Math.max(toYear, pStart));
   const opt = { indexPct: x.taxIndexPct };
-  const extraShare = 1 + x.fixedExtraPct / 100 + x.bonusPct / 100;
+  // The salaries are entered without holiday allowance; the plan adds it (and any fixed extra pay and bonus).
+  const holiday = x.holidayPct / 100;
+  const extraShare = 1 + holiday + x.fixedExtraPct / 100 + x.bonusPct / 100;
   // Lease car: the addition is taxed as income, but it is not cash.
   const taxedYear = (salary: number, pensionPct: number, y: number) => {
     const withExtra = salary * extraShare;
@@ -119,8 +124,10 @@ export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[
       marginalRate: netYou.marginalRate,
       bracketRate: Math.max(netYou.bracketRate, netPartner?.bracketRate ?? 0),
       fromInput: { you: yv.fromInput, partner: pv.fromInput },
-      countedYou: yv.v * (1 + x.fixedExtraPct / 100),
-      countedPartner: withPartner ? pv.v * (1 + x.fixedExtraPct / 100) : 0,
+      baseYou: yv.v,
+      basePartner: withPartner ? pv.v : 0,
+      countedYou: yv.v * (1 + holiday + x.fixedExtraPct / 100),
+      countedPartner: withPartner ? pv.v * (1 + holiday + x.fixedExtraPct / 100) : 0,
       bonus: (yv.v + (withPartner ? pv.v : 0)) * (x.bonusPct / 100),
     });
   }

@@ -23,6 +23,7 @@ export default function IncomePage() {
             "partnerGrowthPct",
             "pensionPct",
             "partnerPensionPct",
+            "holidayPct",
             "taxIndexPct",
             "fixedExtraPct",
             "bonusPct",

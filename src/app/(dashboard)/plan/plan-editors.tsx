@@ -20,8 +20,8 @@ export function SalaryEditor() {
           <thead>
             <tr className="text-left text-xs text-gray-500">
               <th className="px-2 py-2 font-medium">Jaar</th>
-              <th className="px-2 py-2 font-medium">Jij, bruto</th>
-              <th className={`px-2 py-2 font-medium ${x.buyingTogether ? "" : "opacity-40"}`}>Partner, bruto</th>
+              <th className="px-2 py-2 font-medium">Jij, bruto*</th>
+              <th className={`px-2 py-2 font-medium ${x.buyingTogether ? "" : "opacity-40"}`}>Partner, bruto*</th>
               <th className="px-2 py-2 text-right font-medium">Netto/mnd</th>
               <th className="px-2 py-2 text-right font-medium">Belasting</th>
             </tr>
@@ -33,7 +33,7 @@ export function SalaryEditor() {
                 <td className="px-2 py-1.5">
                   <NumberBox
                     money
-                    value={Math.round(p.grossYou)}
+                    value={Math.round(p.baseYou)}
                     onChange={(n) => setSalary("salaryYou", p.year, n)}
                     className={p.fromInput.you ? "!border-teal-500 !bg-teal-50" : ""}
                   />
@@ -42,7 +42,7 @@ export function SalaryEditor() {
                   <div inert={!x.buyingTogether}>
                     <NumberBox
                       money
-                      value={x.buyingTogether ? Math.round(p.grossPartner) : 0}
+                      value={x.buyingTogether ? Math.round(p.basePartner) : 0}
                       onChange={(n) => setSalary("salaryPartner", p.year, n)}
                       className={x.buyingTogether && p.fromInput.partner ? "!border-teal-500 !bg-teal-50" : ""}
                     />
@@ -61,6 +61,7 @@ export function SalaryEditor() {
         </button>
       )}
       <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+        * zonder vakantiegeld, dat telt het plan er zelf bij ({pct(x.holidayPct)}).
         <SrcBadge src="calc" /> bruto volgt uit {pct(x.salaryGrowthPct)} groei per jaar tot jij een bedrag invult (groen).
         <SrcBadge src="law" /> netto en belasting volgen uit de regels van 2026.
       </p>

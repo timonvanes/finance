@@ -264,7 +264,7 @@ export default function ScenariosPage() {
       <Block title="Welk inkomen en welke inleg passen bij welke woning?" sub={`${scenario.name}, basisvariant, kopen in ${targetYear}`}>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="mb-1 block text-sm text-gray-600">Bruto inkomen in {targetYear}</span>
+            <span className="mb-1 block text-sm text-gray-600">Bruto inkomen in {targetYear} (zonder vakantiegeld)</span>
             <NumberBox value={calcIncome} onChange={setCalcIncome} unit="€" />
           </label>
           <label className="block">

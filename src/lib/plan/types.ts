@@ -114,6 +114,7 @@ export interface Extra {
   partnerMonthlyInvest: number;
 
   // pay on top of the salary
+  holidayPct: number; // holiday allowance, % of the gross salary (the salaries are entered without it)
   fixedExtraPct: number; // 13th month and other fixed pay, % of the gross salary (the bank counts it)
   bonusPct: number; // variable bonus, % of the gross salary (the bank does not count it)
   leaseTaxableYear: number; // addition for a lease car, taxed as income
@@ -226,6 +227,7 @@ export function defaultExtra(today: string): Extra {
     partnerStartInvest: 0,
     partnerMonthlySave: 0,
     partnerMonthlyInvest: 0,
+    holidayPct: 8,
     fixedExtraPct: 0,
     bonusPct: 0,
     leaseTaxableYear: 0,
