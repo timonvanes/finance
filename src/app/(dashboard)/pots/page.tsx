@@ -3,6 +3,7 @@ import { getPots, getSavingsInbox } from "@/actions/pots";
 import { computePotBalance } from "@/lib/pots/balance";
 import { computeSchedule, depositedInPeriod, nextPeriodMonthly, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./catch-up-card";
+import { TikkieDeposit } from "./tikkie-deposit";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { InfoButton } from "../info-button";
 import { PlanRow } from "./plan-row";
@@ -92,6 +93,8 @@ export default async function PotsPage() {
           <p className="mt-1 text-sm text-gray-500">{euro(plannedBaseTotal)} per maand gepland</p>
         )}
       </div>
+
+      <TikkieDeposit suggested={Math.ceil(plannedBaseTotal)} />
 
       {catchUpItems.length > 0 && <CatchUpCard items={catchUpItems} />}
 
