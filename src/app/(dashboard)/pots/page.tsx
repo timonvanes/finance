@@ -4,6 +4,7 @@ import { computePotBalance } from "@/lib/pots/balance";
 import { computeSchedule, depositedInPeriod, nextPeriodMonthly, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { CatchUpCard } from "./catch-up-card";
 import { TikkieDeposit } from "./tikkie-deposit";
+import { TikkieButton } from "./tikkie-button";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { InfoButton } from "../info-button";
 import { PlanRow } from "./plan-row";
@@ -135,12 +136,15 @@ export default async function PotsPage() {
               const balance = balances.get(pot.id) ?? 0;
               const schedule = computeSchedule(pot, balance, new Date(), startDay, graceDays);
               const pct = pot.target_amount ? Math.min(100, (balance / pot.target_amount) * 100) : null;
+              // What is still to be put in this period (the plan plus any shortfall, minus what is in).
+              const planNow = plans.get(pot.id);
+              const toPutIn = planNow ? Math.max(0, planNow + carryOf(pot.id) - depositedInPeriod(pot, 0, startDay)) : 0;
               return (
-                <li key={pot.id}>
+                <li key={pot.id} className="flex items-stretch gap-2">
                   <Link
                     href={`/pots/${pot.id}`}
                     prefetch
-                    className="block space-y-2 rounded-2xl bg-white p-5 ring-1 ring-gray-200 active:bg-gray-50"
+                    className="block min-w-0 flex-1 space-y-2 rounded-2xl bg-white p-5 ring-1 ring-gray-200 active:bg-gray-50"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -174,6 +178,7 @@ export default async function PotsPage() {
                       </p>
                     )}
                   </Link>
+                  {toPutIn > 0.005 && <TikkieButton amount={toPutIn} potName={pot.name} variant="card" />}
                 </li>
               );
             })}

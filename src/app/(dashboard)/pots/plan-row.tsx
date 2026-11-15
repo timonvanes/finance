@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { depositPlanned } from "@/actions/pots";
+import { TikkieButton } from "./tikkie-button";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -60,6 +61,7 @@ export function PlanRow({
       {!done && (
         <p className="text-sm text-gray-500">Wordt vanzelf afgevinkt zodra de overboeking binnenkomt.</p>
       )}
+      {!done && <TikkieButton amount={missing} potName={name} />}
       {!done && (
         <button
           type="button"

@@ -56,7 +56,7 @@ export function TikkieDeposit({ suggested }: { suggested: number }) {
         Open Tikkie
       </button>
       <ol className="list-decimal space-y-1 pl-5 text-xs text-gray-500">
-        <li>Kies in Tikkie onderaan bij "Rekening" de rekening Rabo (één tik), maak het verzoek aan en kopieer de link.</li>
+        <li>Kies in Tikkie onderaan bij &quot;Rekening&quot; de rekening Rabo (één tik), maak het verzoek aan en kopieer de link.</li>
         <li>Open de link en kies bij het betalen je andere bank (bijvoorbeeld ING).</li>
         <li>Keur het goed in je bank-app. Het geld komt op de rekening Rabo.</li>
       </ol>

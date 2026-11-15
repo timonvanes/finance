@@ -150,9 +150,11 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
             />
           </div>
           <div className="space-y-3 border-t border-gray-100 pt-6">
-            <h3 className="text-lg font-semibold text-gray-900">Stortingsdag</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Stortingsdag en melding</h3>
             <p className="text-sm text-gray-500">
-              De dag van de maand waarop je in dit potje stort. Het schema (&quot;op schema&quot;) rekent hiermee.
+              De dag van de maand waarop je in dit potje stort. Het schema (&quot;op schema&quot;) rekent hiermee. Op deze dag
+              krijg je ook een melding om de Tikkie te doen, met het bedrag dat er nog in moet. De meldingen zet je uit bij
+              de meldingsinstellingen.
             </p>
             <ScheduleDayForm potId={pot.id} day={pot.schedule_day ?? null} startDay={startDay} />
           </div>

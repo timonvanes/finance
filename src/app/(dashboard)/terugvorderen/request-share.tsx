@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { checkBunqPayments, createBunqPaymentLink } from "@/actions/bunq";
 import { updatePaymentRequestNote } from "@/actions/payment-requests";
 import { updateReclaimNote } from "@/actions/reclaims";
-import { TIKKIE_MAX_DESCRIPTION, tikkieDescription } from "@/lib/tikkie";
+import { TIKKIE_MAX_DESCRIPTION, tikkieDescription, tikkieRoom } from "@/lib/tikkie";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -37,7 +37,9 @@ export function RequestShare({
   const [busy, setBusy] = useState(false);
   // What you typed is kept (as the note) so it is still there next time;
   // the transaction description is only the starting point.
-  const [desc, setDesc] = useState(note?.trim() || description);
+  // Tikkie takes 35 characters; the reference code goes behind the text, so that much less fits.
+  const room = tikkieRoom(referenceCode);
+  const [desc, setDesc] = useState((note?.trim() || description).slice(0, room));
   const [savedNote, setSavedNote] = useState(note?.trim() ?? "");
   const [bunqUrl, setBunqUrl] = useState<string | null>(
     bunqLink && Math.abs(bunqLink.amount - amount) < 0.005 ? bunqLink.url : null
@@ -76,10 +78,6 @@ export function RequestShare({
     params.set("description", text);
     window.location.href = `tikkie://payment_request?${params.toString().replace(/\+/g, "%20")}`;
   }
-
-  // What Tikkie will show: it takes at most 35 characters, so a longer text is cut.
-  const tikkieText = tikkieDescription((desc.trim() || description).trim(), referenceCode);
-  const tikkieCut = tikkieText !== `${(desc.trim() || description).trim()}${referenceCode ? ` (${referenceCode})` : ""}`;
 
   async function makeLink() {
     setBusy(true);
@@ -146,15 +144,17 @@ export function RequestShare({
     <div className="space-y-2">
       <input
         value={desc}
-        onChange={(e) => setDesc(e.target.value)}
+        onChange={(e) => setDesc(e.target.value.slice(0, room))}
+        maxLength={room}
         onBlur={saveNote}
         disabled={Boolean(bunqUrl)}
         placeholder="Omschrijving voor het bericht"
         className="min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3 text-base disabled:bg-gray-50 disabled:text-gray-500"
       />
-      {tikkieCut && !bunqUrl && (
-        <p className="px-1 text-xs text-gray-500">
-          Tikkie neemt maximaal {TIKKIE_MAX_DESCRIPTION} tekens over. In Tikkie komt: <span className="font-medium">{tikkieText}</span>
+      {!bunqUrl && (
+        <p className={`px-1 text-xs ${desc.length >= room ? "text-amber-700" : "text-gray-500"}`}>
+          {desc.length}/{room} tekens. Tikkie neemt maximaal {TIKKIE_MAX_DESCRIPTION} tekens
+          {referenceCode ? `, de referentiecode (${referenceCode}) komt erachter` : ""}.
         </p>
       )}
       <div className="flex gap-2">

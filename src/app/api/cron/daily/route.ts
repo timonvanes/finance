@@ -4,6 +4,8 @@ import { autoSyncStaleConnections } from "@/actions/bank-connections";
 import { ensureBunqCallback, isBunqConfigured } from "@/lib/bunq/client";
 import { processBunqForUser } from "@/lib/bunq/process";
 import { sendPush } from "@/lib/push/send";
+import { computePotBalance } from "@/lib/pots/balance";
+import { depositedInPeriod, periodMonthly, planCatchUp } from "@/lib/pots/insights";
 import { clampStartDay } from "@/lib/month";
 import { fetchWbwBalancesTimed, isWbwConfigured } from "@/lib/wbw/client";
 import { wbwLoginFor } from "@/lib/wbw/session";
@@ -116,6 +118,43 @@ export async function GET(request: NextRequest) {
     report.investReminders = sentInvest;
   } catch (e) {
     report.investReminders = e instanceof Error ? e.message : "failed";
+  }
+
+  // The Tikkie for the pots: on the deposit day of a pot (by default the start of the person's
+  // month) a reminder with what is still to be put in.
+  try {
+    const dayOfMonth = Number(todayAmsterdam().slice(8, 10));
+    const { data: potRows } = await admin
+      .from("pots")
+      .select(
+        "user_id, id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, schedule_day, schedule_start, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
+      )
+      .or("monthly_amount.not.is.null,monthly_auto.eq.true");
+    const { data: dayRows } = await admin.from("user_settings").select("user_id, month_start_day");
+    const startDays = new Map((dayRows ?? []).map((r) => [r.user_id as string, clampStartDay(r.month_start_day ?? 1)]));
+    const euroText = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+    const lines = new Map<string, string[]>();
+    for (const pot of potRows ?? []) {
+      const startDay = startDays.get(pot.user_id as string) ?? 1;
+      if ((pot.schedule_day ?? startDay) !== dayOfMonth) continue;
+      const balance = computePotBalance(pot);
+      const planned = periodMonthly(pot, balance, startDay);
+      if (!planned) continue;
+      const carry = Math.ceil(planCatchUp(pot, startDay).shortfall ?? 0);
+      const remaining = planned + carry - depositedInPeriod(pot, 0, startDay);
+      if (remaining <= 0.005) continue;
+      lines.set(pot.user_id as string, [...(lines.get(pot.user_id as string) ?? []), `${pot.name} ${euroText(remaining)}`]);
+    }
+    for (const [userId, items] of lines) {
+      await sendPush(userId, "pot_tikkie", {
+        title: "Tikkie voor je potjes",
+        body: `Tijd om te storten: ${items.join(", ")}. Tik in de app op het Tikkie-icoontje.`,
+        url: "/pots",
+      });
+    }
+    report.potReminders = lines.size;
+  } catch (e) {
+    report.potReminders = e instanceof Error ? e.message : "failed";
   }
 
   // The financial plan: assumptions whose check date has passed. Once a month, on
