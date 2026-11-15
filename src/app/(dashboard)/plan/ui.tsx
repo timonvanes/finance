@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { FIELD_BY_ID, VARIANT_FIELDS, whyText } from "@/lib/plan/fields";
+import { PARTNER_FIELDS, FIELD_BY_ID, VARIANT_FIELDS, whyText } from "@/lib/plan/fields";
 import { SOURCE_LABEL, VARIANTS, type Source } from "@/lib/plan/types";
 import { fieldValue, usePlan } from "./plan-provider";
 
@@ -75,6 +75,8 @@ export function F({ id }: { id: string }) {
   const f = FIELD_BY_ID.get(id);
   const [open, setOpen] = useState(false);
   if (!f) return null;
+  // Buying alone: the partner's fields do not count, so they are greyed out and cannot be filled in.
+  const off = PARTNER_FIELDS.has(id) && !x.buyingTogether;
   const v = f.get(b, x);
   const appVal = f.appValue?.(app);
   const differs = appVal !== undefined && typeof v === "number" && Math.abs(appVal - v) > 0.5;
@@ -113,14 +115,17 @@ export function F({ id }: { id: string }) {
   }
 
   return (
-    <div className="min-w-0">
+    <div className={`min-w-0 ${off ? "opacity-40" : ""}`}>
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-sm text-gray-600">{f.label}</span>
         <button type="button" onClick={() => setOpen(!open)} className="shrink-0" aria-expanded={open} aria-label="Waar komt dit vandaan?">
           <SrcBadge src={f.src} />
         </button>
       </div>
-      {control}
+      <div inert={off} className={off ? "grayscale" : ""}>
+        {control}
+      </div>
+      {off && <p className="mt-1 text-[11px] text-gray-500">Telt niet mee: je koopt alleen.</p>}
       {open && <p className="mt-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">{whyText(f, app)}</p>}
       {VARIANT_FIELDS.has(id) && (
         <p className="mt-1 text-[11px] text-gray-500">

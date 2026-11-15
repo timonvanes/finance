@@ -21,7 +21,7 @@ export function SalaryEditor() {
             <tr className="text-left text-xs text-gray-500">
               <th className="px-2 py-2 font-medium">Jaar</th>
               <th className="px-2 py-2 font-medium">Jij, bruto</th>
-              {x.buyingTogether && <th className="px-2 py-2 font-medium">Partner, bruto</th>}
+              <th className={`px-2 py-2 font-medium ${x.buyingTogether ? "" : "opacity-40"}`}>Partner, bruto</th>
               <th className="px-2 py-2 text-right font-medium">Netto/mnd</th>
               <th className="px-2 py-2 text-right font-medium">Belasting</th>
             </tr>
@@ -37,15 +37,15 @@ export function SalaryEditor() {
                     className={p.fromInput.you ? "!border-teal-500 !bg-teal-50" : ""}
                   />
                 </td>
-                {x.buyingTogether && (
-                  <td className="px-2 py-1.5">
+                <td className={`px-2 py-1.5 ${x.buyingTogether ? "" : "opacity-40 grayscale"}`}>
+                  <div inert={!x.buyingTogether}>
                     <NumberBox
-                      value={Math.round(p.grossPartner)}
+                      value={x.buyingTogether ? Math.round(p.grossPartner) : 0}
                       onChange={(n) => setSalary("salaryPartner", p.year, n)}
-                      className={p.fromInput.partner ? "!border-teal-500 !bg-teal-50" : ""}
+                      className={x.buyingTogether && p.fromInput.partner ? "!border-teal-500 !bg-teal-50" : ""}
                     />
-                  </td>
-                )}
+                  </div>
+                </td>
                 <td className="px-2 py-2 text-right">{euro(p.netMonthly)}</td>
                 <td className="px-2 py-2 text-right">{pct(p.avgRate * 100)}</td>
               </tr>

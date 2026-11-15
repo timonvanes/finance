@@ -17,6 +17,21 @@ export type Group =
   | "Sparen en beleggen"
   | "Box 3";
 
+// The fields about the partner. They do not count (and are greyed out) when buying alone.
+export const PARTNER_FIELDS = new Set([
+  "partnerBirthYear",
+  "sharePctYou",
+  "contractPartner",
+  "partnerIncomeGrossYear",
+  "partnerGrowthPct",
+  "partnerPensionPct",
+  "partnerStartYear",
+  "partnerStartSavings",
+  "partnerStartInvest",
+  "partnerMonthlySave",
+  "partnerMonthlyInvest",
+]);
+
 export interface FieldDef {
   id: string;
   group: Group;
