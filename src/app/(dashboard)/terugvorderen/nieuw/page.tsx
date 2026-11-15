@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getQueuedTransactions, getRecentExpenseTransactions, getTransactionForReclaim } from "@/actions/reclaims";
-import { getPeopleWithGroups } from "@/actions/people";
+import { getActiveGuests, getPeopleWithGroups } from "@/actions/people";
 import { getWbwListChoices } from "@/actions/wbw-push";
 import { Wizard } from "./wizard";
 
@@ -10,10 +10,11 @@ export default async function NieuwPage({
   searchParams: Promise<{ transactionId?: string }>;
 }) {
   const { transactionId } = await searchParams;
-  const [recent, queued, peopleRaw, wbw] = await Promise.all([
+  const [recent, queued, peopleRaw, activeGuests, wbw] = await Promise.all([
     getRecentExpenseTransactions(),
     getQueuedTransactions(),
     getPeopleWithGroups(),
+    getActiveGuests(),
     getWbwListChoices(),
   ]);
 
@@ -31,10 +32,14 @@ export default async function NieuwPage({
     counterparty_iban: t.counterparty_iban ?? null,
   }));
 
-  const people = peopleRaw.map((p) => {
-    const group = Array.isArray(p.person_groups) ? p.person_groups[0] : p.person_groups;
-    return { id: p.id, name: p.name, isSelf: p.is_self as boolean, groupName: (group?.name ?? null) as string | null };
-  });
+  const people = [
+    ...peopleRaw.map((p) => {
+      const group = Array.isArray(p.person_groups) ? p.person_groups[0] : p.person_groups;
+      return { id: p.id, name: p.name, isSelf: p.is_self as boolean, groupName: (group?.name ?? null) as string | null };
+    }),
+    // Guests with an open reclaim can be chosen again, under "Gast".
+    ...activeGuests.map((g) => ({ id: g.id as string, name: g.name as string, isSelf: false, groupName: "Gast" as string | null })),
+  ];
 
   return (
     <div className="space-y-5">

@@ -24,6 +24,18 @@ export async function getPeopleWithGroups() {
   return data;
 }
 
+// Guests who still owe something (a reclaim of theirs is open). Other guests stay out of the
+// lists, but these can be picked again for a new reclaim, like anyone else.
+export async function getActiveGuests() {
+  const supabase = await createClient();
+  const { data: open } = await supabase.from("reclaims").select("person_id").eq("status", "requested");
+  const ids = [...new Set((open ?? []).map((r) => r.person_id as string))];
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from("people").select("id, name").eq("is_guest", true).in("id", ids).order("name");
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getPersonGroups() {
   const supabase = await createClient();
   const { data, error } = await supabase
