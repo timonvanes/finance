@@ -17,8 +17,11 @@ function namesCorrelate(
   const haystack = `${counterpartyName ?? ""} ${rawDescription ?? ""}`.toLowerCase();
   if (!haystack.trim()) return false;
 
-  const nameParts = person.split(/\s+/).filter((part) => part.length >= 3);
-  return nameParts.some((part) => haystack.includes(part));
+  // Whole words only: "hello" must not count as found inside "hellotest" (a shop's refund
+  // once matched a guest called "Hello Test" that way).
+  const words = new Set(haystack.split(/[^\p{L}\p{N}]+/u).filter(Boolean));
+  const nameParts = person.split(/[^\p{L}\p{N}]+/u).filter((part) => part.length >= 3);
+  return nameParts.some((part) => words.has(part));
 }
 
 async function settleReclaim(
