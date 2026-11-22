@@ -902,9 +902,8 @@ function buildInsights(p: PlanInput, r: PlanResult, wealthT: number): Insight[] 
   if (pu.surplus < 0 && pu.netIncomeMonthly > 0) {
     add("bad", "Maandelijks tekort na de aankoop", `Netto inkomen min woonlasten min je gebruikelijke uitgaven geeft ${eur(pu.surplus)} per maand. Dat is onhoudbaar zonder dat je iets aanpast.`);
   }
-  if (x.rentNow > 0 && pu.woonlast > 0) {
-    const diff = pu.housingVsRent - x.rentNow * growth(x.inflationPct, T);
-    add("info", `Wonen gaat ${diff >= 0 ? "meer" : "minder"} kosten dan huren`, `Netto woonlast (zonder energie) ${eur(pu.housingVsRent)} per maand, tegenover ${eur(x.rentNow * growth(x.inflationPct, T))} huur (met inflatie). Het verschil is ${eur(Math.abs(diff))} per maand. Een deel van wat je betaalt is aflossing: ${eur(pu.mortgage.principalYear / 12)} per maand bouwt eigen vermogen op.`);
+  if (pu.woonlast > 0) {
+    add("info", "Een deel van je woonlast is aflossing", `Van je netto woonlast is ${eur(pu.mortgage.principalYear / 12)} per maand aflossing. Dat is geen kost maar eigen vermogen dat je opbouwt.`);
   }
 
   // 5. taxes

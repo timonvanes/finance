@@ -16,7 +16,6 @@ export function missingInputs(b: HouseInputs, x: Extra): Missing[] {
     ["targetPrice", b.targetPrice > 0],
     ["incomeGrossYear", b.incomeGrossYear > 0 || Object.keys(x.salaryYou).length > 0],
     ["birthYear", x.birthYear > 1900 && x.birthYear < 2015],
-    ["rentNow", x.rentNow > 0],
     ["otherSpendingMonth", x.otherSpendingMonth > 0],
     ["monthlySave", b.monthlySave + b.monthlyInvest + x.monthlyBonds > 0],
   ];

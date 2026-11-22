@@ -122,7 +122,6 @@ export interface Extra {
   leaseTaxableYear: number; // addition for a lease car, taxed as income
 
   // living
-  rentNow: number;
   otherSpendingMonth: number;
   emergencyMonths: number; // emergency fund while saving, kept apart from the house money
   fixedCostsMonth: number; // monthly fixed costs the emergency fund is based on
@@ -235,7 +234,6 @@ export function defaultExtra(today: string): Extra {
     fixedExtraPct: 0,
     bonusPct: 0,
     leaseTaxableYear: 0,
-    rentNow: 0,
     otherSpendingMonth: 0,
     emergencyMonths: 0,
     fixedCostsMonth: 0,

@@ -163,7 +163,6 @@ function scenarioA(app: AppData): Scenario {
   x.limitGrowthPct = 3;
   x.running = { ...x.running, energyMonth: 150, vveMonth: 270 };
   x.costs = { ...x.costs, buyerAgent: 0 };
-  x.rentNow = 1000;
   x.otherSpendingMonth = Math.max(0, Math.round(app.avgSpentExSaving));
   x.emergencyMonths = 5;
   x.fixedCostsMonth = 1500;
@@ -307,7 +306,6 @@ function seedMeta(): Record<string, AssumptionMeta> {
     emergencyMonths: m("Eigen keuze: 4 tot 6 maanden vaste lasten", undefined, NEXT),
     fixedCostsMonth: m("Eigen aanname: circa € 1.500 per maand", undefined, NEXT, "Vul in na drie maanden salaris."),
     contribGrowthPct: m("Eigen aanname, gekoppeld aan de salarisvarianten", undefined, NEXT, "Stress 0%, basis 5%, gunstig 8%."),
-    rentNow: m("Opgave van Timon: € 750 nu, verwacht € 1.000", undefined, NEXT),
     birthYear: m("Opgave van Timon", undefined, "2030-01-01"),
     targetDate: m("Eigen wens: rond je 30e kopen", undefined, NEXT),
     targetPrice: m("Startpunt, geen voorspelling. Gemiddeld Amsterdam appartement € 595.105, Utrecht € 453.332 (Q1 2026)", "https://www.hypotheker.nl/actueel/huizenprijzen-amsterdam", NEXT),

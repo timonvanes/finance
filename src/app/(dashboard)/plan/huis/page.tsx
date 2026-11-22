@@ -102,15 +102,9 @@ export default function HousePage() {
         />
       </Block>
 
-      <Block title="Nu en straks" sub="Je huidige kosten tegenover straks.">
-        <Grid ids={["rentNow", "otherSpendingMonth"]} />
-        {x.rentNow > 0 ? (
-          <Note>
-            Netto woonlast zonder energie: {euro(pu.housingVsRent)} per maand, tegenover {euro(x.rentNow)} huur nu. In de woonlast zit {euro(pu.mortgage.principalYear / 12)} aflossing per maand, die je als eigen vermogen houdt.
-          </Note>
-        ) : (
-          <Note>Vul je huidige woonkosten in om te zien wat de koop per maand scheelt.</Note>
-        )}
+      <Block title="Nu en straks" sub="Wat je nu uitgeeft, zonder huur en sparen.">
+        <Grid ids={["otherSpendingMonth"]} />
+        <Note>In de woonlast zit {euro(pu.mortgage.principalYear / 12)} aflossing per maand, die je als eigen vermogen houdt.</Note>
       </Block>
 
       <Block title="Gebeurtenissen tot de aankoop" sub="Eenmalige bedragen die je spaargeld raken.">

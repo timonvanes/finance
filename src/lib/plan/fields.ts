@@ -128,7 +128,6 @@ export const FIELDS: FieldDef[] = [
   ),
 
   // ---------------------------------------------------------------- woonlasten
-  { id: "rentNow", group: "Woonlasten", label: "Je huidige huur per maand", kind: "num", unit: "€", src: "app", why: (a) => `Wat je huurt, inclusief servicekosten, zonder energie. De app neemt het gemiddelde van de laatste ${a.months.length} perioden uit de categorie Huur (${a.months.map((m) => m.rent.toLocaleString("nl-NL", { maximumFractionDigits: 0 })).join(", ")}). Zet je huurbetaling in die categorie, dan klopt dit vanzelf. Het plan vergelijkt je toekomstige woonlast hiermee.`, appValue: (a) => a.avgRent, ...E("rentNow") },
   { id: "otherSpendingMonth", group: "Woonlasten", label: "Je uitgaven per maand, zonder huur en sparen", kind: "num", unit: "€", src: "app", why: (a) => `Gemiddelde van de laatste ${a.months.length} perioden uit je transacties (${a.months.map((m) => m.label).join(", ")}): uitgaven min wat je spaarde en min de categorie Huur. Kosten voor energie, water en inrichting uit de categorie Wonen staan er nog in.`, appValue: (a) => a.avgSpentExSaving, ...E("otherSpendingMonth") },
   { id: "run.maintenancePct", group: "Woonlasten", label: "Onderhoud per jaar (% van de prijs)", kind: "num", unit: "%", step: 0.1, src: "assume", why: "Vuistregel: 1% van de woningwaarde per jaar. Oudere woningen vragen meer, nieuwbouw minder.", ...EN("running", "maintenancePct") },
   { id: "run.vveCoversMaintenance", group: "Woonlasten", label: "VvE-bijdrage telt mee als onderhoud", kind: "bool", src: "user", why: "Aan: de VvE-bijdrage gaat van het onderhoud af, want de VvE betaalt het onderhoud van gevel, dak en trappenhuis. Je telt dan alleen het deel van het onderhoud dat boven de VvE-bijdrage uitkomt (nooit minder dan nul). De VvE-bijdrage zelf blijft gewoon in je woonlasten staan. Zonder VvE-bijdrage verandert er niets.", ...EN("running", "vveCoversMaintenance") },
@@ -228,7 +227,6 @@ const byContribution = (text: string): Growth => ({ kind: "variable", via: "cont
 
 export const GROWTH: Record<string, Growth> = {
   // with the inflation
-  rentNow: { kind: "inflation" },
   renovation: { kind: "inflation" },
   otherSpendingMonth: { kind: "inflation" },
   "run.waterYear": { kind: "inflation" },
