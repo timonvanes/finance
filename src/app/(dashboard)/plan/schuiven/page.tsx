@@ -96,7 +96,6 @@ function Sandboxes() {
   );
 
   const targetYear = Number(scenario.b.targetDate.slice(0, 4));
-  const thisYear = Number(app.today.slice(0, 4));
   const changed = JSON.stringify(s) !== JSON.stringify(base);
 
   const keep = () => {
@@ -133,10 +132,6 @@ function Sandboxes() {
         <Slider label="Bruto salaris per jaar (zonder vakantiegeld)" value={s.salary} was={base.salary} min={20000} max={120000} step={1000} format={(n) => euro(n)} onChange={(n) => set("salary", n)} />
         <Slider label="Salarisgroei per jaar" value={s.salaryGrowth} was={base.salaryGrowth} min={0} max={8} step={0.5} format={(n) => `${nl(n)}%`} onChange={(n) => set("salaryGrowth", n)} />
         <Slider label="Salaris partner (0 = alleen kopen)" value={s.partnerGross} was={base.partnerGross} min={0} max={100000} step={2500} format={(n) => (n > 0 ? euro(n) : "alleen")} onChange={(n) => set("partnerGross", n)} />
-        <Slider label="Jij begint met salaris in" value={s.workStart || thisYear} was={base.workStart || thisYear} min={thisYear} max={thisYear + 10} step={1} format={(n) => (n <= thisYear ? "werkt al" : String(n))} onChange={(n) => set("workStart", n <= thisYear ? 0 : n)} />
-        {s.partnerGross > 0 && (
-          <Slider label="Partner begint met salaris in" value={s.partnerStart || thisYear} was={base.partnerStart || thisYear} min={thisYear} max={thisYear + 10} step={1} format={(n) => (n <= thisYear ? "werkt al" : String(n))} onChange={(n) => set("partnerStart", n <= thisYear ? 0 : n)} />
-        )}
         <Slider label="Hypotheekrente" value={s.rate} was={base.rate} min={2} max={7} step={0.1} format={(n) => `${nl(n)}%`} onChange={(n) => set("rate", n)} />
         <Slider label="Buffer na aankoop" value={s.buffer} was={base.buffer} min={0} max={12} step={1} format={(n) => `${n} mnd`} onChange={(n) => set("buffer", n)} />
         <Slider label="Verbouwing" value={s.renovation} was={base.renovation} min={0} max={60000} step={2500} format={(n) => euro(n)} onChange={(n) => set("renovation", n)} />

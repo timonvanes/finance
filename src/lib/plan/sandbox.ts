@@ -10,8 +10,6 @@ export interface Sandbox {
   salary: number; // gross salary per year now (without holiday allowance); later years move along
   salaryGrowth: number; // salary growth per year, %
   partnerGross: number; // partner's gross salary (0 = buying alone)
-  workStart: number; // your first year with a salary (0 = already working)
-  partnerStart: number; // the partner's first year with a salary (0 = already working)
   rate: number; // mortgage rate, %
   buffer: number; // months of buffer after the purchase
   renovation: number;
@@ -26,8 +24,6 @@ export function sandboxOf(sc: Scenario): Sandbox {
     salary: sc.b.incomeGrossYear,
     salaryGrowth: sc.x.salaryGrowthPct,
     partnerGross: sc.x.buyingTogether ? sc.b.partnerIncomeGrossYear : 0,
-    workStart: sc.x.workStartYear,
-    partnerStart: sc.x.partnerStartYear,
     rate: sc.b.rate,
     buffer: sc.x.bufferMonths,
     renovation: sc.x.renovation,
@@ -54,8 +50,6 @@ export function applySandbox(base: Scenario, s: Sandbox): Scenario {
   sc.x.priceGrowthPct = s.priceGrowth;
   sc.x.bidPct = s.bid;
   sc.x.bufferMonths = s.buffer;
-  sc.x.workStartYear = s.workStart;
-  sc.x.partnerStartYear = s.partnerStart;
   sc.x.renovation = s.renovation;
 
   // salaries: scaled, and grown by the extra growth from the first year on
@@ -97,8 +91,6 @@ export function describeSandbox(base: Scenario, s: Sandbox): string {
   if (s.salary !== was.salary) parts.push(`salaris € ${eur(s.salary)}`);
   if (s.salaryGrowth !== was.salaryGrowth) parts.push(`salarisgroei ${s.salaryGrowth}%`);
   if (s.partnerGross !== was.partnerGross) parts.push(s.partnerGross > 0 ? `samen, partner € ${eur(s.partnerGross)}` : "alleen");
-  if (s.workStart !== was.workStart) parts.push(s.workStart ? `jij begint in ${s.workStart}` : "jij werkt al");
-  if (s.partnerStart !== was.partnerStart && s.partnerGross > 0) parts.push(s.partnerStart ? `partner begint in ${s.partnerStart}` : "partner werkt al");
   if (s.rate !== was.rate) parts.push(`rente ${s.rate}%`);
   if (s.buffer !== was.buffer) parts.push(`buffer ${s.buffer} mnd`);
   if (s.renovation !== was.renovation) parts.push(`verbouwing € ${eur(s.renovation)}`);
