@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CORRECTION_NOTE } from "@/lib/pots/balance";
 
 // Money put into pots (and taken out again) shows up as spending in this
 // category: deposits count as spent, withdrawals take it back off.
@@ -20,13 +21,15 @@ export async function savingsEntriesInRange(
 ): Promise<SavingsEntry[]> {
   const { data } = await supabase
     .from("pot_entries")
-    .select("id, amount, entry_date, pots(name, opening_balance_date)")
+    .select("id, amount, entry_date, note, pots(name, opening_balance_date)")
     .gte("entry_date", from)
     .lt("entry_date", to)
     .order("entry_date", { ascending: false });
 
   const entries: SavingsEntry[] = [];
   for (const e of data ?? []) {
+    // A change of value after a balance check (a portfolio import, say) is not money put aside.
+    if (e.note === CORRECTION_NOTE) continue;
     const pot = Array.isArray(e.pots) ? e.pots[0] : e.pots;
     if (pot?.opening_balance_date && e.entry_date < pot.opening_balance_date) continue;
     const amount = Number(e.amount);
