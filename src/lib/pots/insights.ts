@@ -426,7 +426,9 @@ export function planAmounts(potIn: PotForInsights, balanceIn: number, startDay: 
 export function nextPeriodMonthly(potIn: PotForInsights, balanceIn: number, startDay: number): number | null {
   const { pot, balance } = planView(potIn, balanceIn);
   const next = periodRange(0, startDay).endDate;
-  return effectiveMonthly(pot, balance, next, startDay);
+  // Ahead of the schedule (say after a higher value) the plan asks nothing, but the usual monthly
+  // amount stays: it is still set aside from the next salary and still in the Tikkie.
+  return effectiveMonthly(pot, balance, next, startDay) ?? regularMonthly(pot, balance, startDay);
 }
 
 export function periodMonthly(potIn: PotForInsights, balanceIn: number, startDay: number): number | null {
