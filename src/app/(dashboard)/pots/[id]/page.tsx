@@ -43,8 +43,9 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
         .map((e) => ({ id: e.id, potName: pot.name, amount: Math.abs(e.amount), date: e.entry_date, note: e.note }))
     : [];
   // The starts of your last 14 months, to pick the beginning of the plan from.
-  const startMonths = Array.from({ length: 14 }, (_, i) => {
-    const r = periodRange(i, startDay);
+  // The coming 12 months and the last 14: a plan can also begin later.
+  const startMonths = Array.from({ length: 26 }, (_, i) => {
+    const r = periodRange(i - 12, startDay);
     return {
       date: r.start,
       // A month is named after the month it ends in: the one that starts on 23

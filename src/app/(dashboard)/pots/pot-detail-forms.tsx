@@ -316,7 +316,7 @@ export function ScheduleStartForm({
   potId: string;
   start: string | null;
   createdOn: string;
-  // Starts of your recent months, newest first: { date: "2026-09-23", label: "september 2026" }.
+  // Starts of the coming and recent months, the latest first: { date: "2026-09-23", label: "september 2026" }.
   months: { date: string; label: string }[];
 }) {
   const known = start != null && months.some((m) => m.date === start);
