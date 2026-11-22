@@ -145,7 +145,7 @@ export default async function PotsPage() {
                     prefetch
                     className="block space-y-2 rounded-2xl bg-white p-5 ring-1 ring-gray-200 active:bg-gray-50"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className={`flex items-start justify-between gap-3 ${toPutIn > 0.005 ? "pr-11" : ""}`}>
                       <div className="min-w-0">
                         <p className="truncate text-lg font-medium text-gray-900">{pot.name}</p>
                         {pot.target_amount && (

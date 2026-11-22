@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { tikkieUrl } from "@/lib/tikkie";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -18,23 +19,19 @@ export function TikkieButton({
   function open() {
     window.location.assign(tikkieUrl(amount, `Sparen ${potName}`));
   }
+  const size = variant === "card" ? 28 : 20;
   const label = `Tikkie voor ${potName}: ${euro(amount)}`;
-  const icon = (
-    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M14.5 9.2c-.6-.8-1.5-1.2-2.6-1.2-1.6 0-2.7.9-2.7 2.2 0 1.2.8 1.8 2.5 2.2 1.7.4 2.6 1 2.6 2.3 0 1.2-1.1 2.1-2.7 2.1-1.2 0-2.2-.5-2.8-1.3M8.4 11.7h4.6M8.4 13.4h4.2" />
-    </svg>
-  );
+  const icon = <Image src="/icons/tikkie.png" alt="" width={size} height={size} unoptimized className="rounded-[22%]" />;
 
   if (variant === "card") {
-    // In the corner of the pot's frame: small, in the teal of the app, no amount (it is in the label).
+    // In the top corner of the pot's frame, next to the balance (not over the progress bar): just the Tikkie logo.
     return (
       <button
         type="button"
         onClick={open}
         aria-label={label}
         title={label}
-        className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-teal-50 text-teal-700 ring-1 ring-teal-200 active:bg-teal-100"
+        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-xl active:opacity-70"
       >
         {icon}
       </button>
@@ -45,7 +42,7 @@ export function TikkieButton({
       type="button"
       onClick={open}
       aria-label={label}
-      className="flex h-8 items-center gap-1 rounded-full bg-teal-50 px-2.5 text-xs font-medium text-teal-800 ring-1 ring-teal-200 active:bg-teal-100"
+      className="flex h-9 items-center gap-2 rounded-full bg-gray-50 px-3 text-sm font-medium text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
     >
       {icon}
       Tikkie {euro(amount)}
