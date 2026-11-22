@@ -950,7 +950,7 @@ function buildInsights(p: PlanInput, r: PlanResult, wealthT: number): Insight[] 
     add("warn", "Je plant meer in dan je de afgelopen maanden deed", `Het plan gaat uit van ${eur(saveNow)} per maand. Je hebt de laatste maanden gemiddeld ${eur(app.avgSaved)} opzij gezet.`);
   }
   if (app.avgIncome > 0 && app.avgSpentExSaving > 0) {
-    const free = app.avgIncome - app.avgSpentExSaving;
+    const free = app.avgIncome - app.avgSpentExSaving - (app.avgRent ?? 0);
     if (saveNow > free + 50) {
       add("warn", "De geplande inleg past niet in wat je overhoudt", `Gemiddeld bleef er de laatste maanden ${eur(free)} per maand over vóór sparen, en je plant ${eur(saveNow)} in.`);
     }

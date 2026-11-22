@@ -317,9 +317,12 @@ export interface AppData {
   monthlyInvest: number;
   potNames: { saving: string[]; investing: string[] };
   // the last full months of real money in and out
-  months: { label: string; income: number; spent: number; saved: number }[];
+  months: { label: string; income: number; spent: number; saved: number; rent: number }[];
   avgIncome: number;
+  // spending without saving and without rent (the category "Huur")
   avgSpentExSaving: number;
+  // what the category "Huur" cost per period
+  avgRent: number;
   avgSaved: number;
   study: StudyLoanData;
   today: string;

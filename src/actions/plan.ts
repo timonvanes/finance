@@ -63,12 +63,15 @@ export async function getPlanData() {
     [1, 2, 3].map(async (ago) => {
       const [summary, spend] = await Promise.all([getDashboardSummary(ago), getMonthlySpendByCategory(ago)]);
       const saved = spend.find((c) => c.name === SAVINGS_CATEGORY)?.total ?? 0;
+      // Rent is a category of its own: the plan compares it with the cost of owning.
+      const rent = spend.filter((c) => c.name.trim().toLowerCase() === "huur").reduce((s, c) => s + c.total, 0);
       const label = periodRange(ago, startDay).labelDate;
       return {
         label: MONTH_NAMES[label.getMonth()],
         income: summary.monthIncome,
-        spent: Math.max(0, summary.monthExpense - saved),
+        spent: Math.max(0, summary.monthExpense - saved - rent),
         saved,
+        rent,
       };
     })
   );
@@ -114,6 +117,7 @@ export async function getPlanData() {
     months,
     avgIncome: Math.round(avg((m) => m.income)),
     avgSpentExSaving: Math.round(avg((m) => m.spent)),
+    avgRent: Math.round(avg((m) => m.rent)),
     avgSaved: Math.round(avg((m) => m.saved)),
     study,
     today,
