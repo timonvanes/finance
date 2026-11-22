@@ -40,7 +40,7 @@ export default function ScenariosPage() {
   const [busyCalc, setBusyCalc] = useState(false);
 
   const targetYear = Number(scenario.b.targetDate.slice(0, 4));
-  const inputFor = (v: Variant) => ({ ...resolve(scenario, v), app });
+  const inputFor = (v: Variant) => ({ ...resolve(scenario, v, app), app });
 
   const runAll = () => {
     setBusyAll(true);
@@ -148,7 +148,7 @@ export default function ScenariosPage() {
         )}
       </Block>
 
-      <Block title="Hoeveel moet ik sparen?" sub={`${scenario.name}: de inleg per maand die nodig is om in ${targetYear} met ${resolve(scenario, "basis").x.confidencePct}% zekerheid te halen wat je nodig hebt.`}>
+      <Block title="Hoeveel moet ik sparen?" sub={`${scenario.name}: de inleg per maand die nodig is om in ${targetYear} met ${resolve(scenario, "basis", app).x.confidencePct}% zekerheid te halen wat je nodig hebt.`}>
         <button type="button" onClick={runNeed} disabled={busyNeed} className={btn}>
           {busyNeed ? "Bezig…" : need ? "Opnieuw berekenen" : "Bereken benodigde inleg"}
         </button>

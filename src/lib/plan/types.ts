@@ -72,6 +72,7 @@ export interface Running {
 
 export interface Extra {
   startDate: string; // the date the starting balances refer to
+  followPots: boolean; // balances, monthly deposits and the start date follow the pots that count (live)
 
   // people
   birthYear: number;
@@ -198,6 +199,7 @@ export function defaultExtra(today: string): Extra {
   const year = Number(today.slice(0, 4));
   return {
     startDate: today,
+    followPots: true,
     birthYear: year - 27,
     partnerBirthYear: year - 27,
     buyingTogether: false,
@@ -318,6 +320,8 @@ export interface AppData {
   monthlySave: number;
   monthlyInvest: number;
   potNames: { saving: string[]; investing: string[] };
+  // all pots, and whether each counts for the plan
+  pots: { id: string; name: string; kind: string; balance: number; monthly: number; included: boolean }[];
   // the last full months of real money in and out
   months: { label: string; income: number; spent: number; saved: number; rent: number }[];
   avgIncome: number;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { PARTNER_FIELDS, FIELD_BY_ID, GROWTH, VARIANT_FIELDS, whyText, type Growth } from "@/lib/plan/fields";
+import { PARTNER_FIELDS, FIELD_BY_ID, FOLLOWED_BY_POTS, GROWTH, VARIANT_FIELDS, whyText, type Growth } from "@/lib/plan/fields";
 import { SOURCE_LABEL, VARIANTS, type Source } from "@/lib/plan/types";
 import { fieldValue, usePlan } from "./plan-provider";
 
@@ -142,6 +142,8 @@ export function F({ id }: { id: string }) {
   if (!f) return null;
   // Buying alone: the partner's fields do not count, so they are greyed out and cannot be filled in.
   const off = PARTNER_FIELDS.has(id) && !x.buyingTogether;
+  // With "Volg mijn potjes" on, these numbers come from the pots and cannot be typed over.
+  const followed = x.followPots && FOLLOWED_BY_POTS.has(id);
   const v = f.get(b, x);
   const appVal = f.appValue?.(app);
   const differs = appVal !== undefined && typeof v === "number" && Math.abs(appVal - v) > 0.5;
@@ -189,10 +191,11 @@ export function F({ id }: { id: string }) {
           <SrcBadge src={f.src} />
         </button>
       </div>
-      <div inert={off} className={off ? "grayscale" : ""}>
+      <div inert={off || followed} className={off ? "grayscale" : followed ? "opacity-70" : ""}>
         {control}
       </div>
       {off && <p className="mt-1 text-[11px] text-gray-500">Telt niet mee: je koopt alleen.</p>}
+      {followed && <p className="mt-1 text-[11px] text-gray-500">Volgt je potjes. Zet &quot;Volg mijn potjes automatisch&quot; uit om het zelf in te vullen.</p>}
       {open && (
         <div className="mt-1.5 space-y-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
           <p>{whyText(f, app)}</p>

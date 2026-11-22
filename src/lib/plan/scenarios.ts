@@ -23,7 +23,9 @@ export function overrideOf(sc: Scenario, variant: Variant): VariantOverride {
 }
 
 // The inputs the model calculates with: the scenario, with the variant on top.
-export function resolve(sc: Scenario, variant: Variant): { b: HouseInputs; x: Extra } {
+// With the app data given and "follow my pots" on, the starting balances, the monthly deposits and
+// the start date are the live ones of the pots that count.
+export function resolve(sc: Scenario, variant: Variant, app?: AppData): { b: HouseInputs; x: Extra } {
   let b = sc.b;
   let x = sc.x;
   if (variant !== "basis") {
@@ -37,6 +39,10 @@ export function resolve(sc: Scenario, variant: Variant): { b: HouseInputs; x: Ex
       salaryYou: { ...x.salaryYou, ...ov.salaryYou },
       salaryPartner: { ...x.salaryPartner, ...ov.salaryPartner },
     };
+  }
+  if (app && x.followPots) {
+    b = { ...b, startSavings: app.savingsNow, startInvest: app.investNow, monthlySave: app.monthlySave, monthlyInvest: app.monthlyInvest };
+    x = { ...x, startDate: app.today };
   }
   return { b, x };
 }
@@ -350,7 +356,7 @@ export const VARIANT_KEYS: Variant[] = ["stress", "basis", "gunstig"];
 export function computeVariants(sc: Scenario, app: AppData, paths = 300): Record<Variant, PlanResult> {
   const out = {} as Record<Variant, PlanResult>;
   for (const v of VARIANT_KEYS) {
-    const { b, x } = resolve(sc, v);
+    const { b, x } = resolve(sc, v, app);
     out[v] = computePlan({ b, x, app }, paths);
   }
   return out;

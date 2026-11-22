@@ -19,7 +19,7 @@ export default function PlanOverview() {
   // follow the scenario, not every key press.
   const settled = useDeferredValue(scenario);
   const variants = useMemo(() => computeVariants(settled, app, 200), [settled, app]);
-  const need = useMemo(() => requiredMonthly({ ...resolve(settled, variant), app }, 200), [settled, variant, app]);
+  const need = useMemo(() => requiredMonthly({ ...resolve(settled, variant, app), app }, 200), [settled, variant, app]);
 
   const pu = r.purchase;
   const T = r.targetMonth;

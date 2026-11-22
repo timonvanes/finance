@@ -162,6 +162,7 @@ export const FIELDS: FieldDef[] = [
   { id: "studyOriginal", group: "Studielening", label: "Oorspronkelijke schuld (0 = uit je schulden)", kind: "num", unit: "€", src: "app", why: (a) => `Som van de delen van je studieschuld op hun peildatum (${a.study.hasLoan ? "nu €" + Math.round(a.study.originalDebt).toLocaleString("nl-NL") : "geen studielening"}). Vul zelf in als je het oorspronkelijke bedrag kent.`, ...E("studyOriginal") },
 
   // ------------------------------------------------------ sparen en beleggen
+  { id: "followPots", group: "Sparen en beleggen", label: "Volg mijn potjes automatisch", kind: "bool", src: "app", why: "Aan: het plan begint altijd vandaag en neemt het actuele saldo en het maandbedrag van je spaar- en beleggingspotjes over. Wat je er al in hebt gestopt telt dus meteen mee, en het bedrag dat je nog per maand moet sparen past zich aan. Alleen potjes die meetellen worden gebruikt (zie hieronder). Obligaties staan niet in een potje en vul je zelf in. Uit: je vult de saldi en de inleg zelf in.", ...E("followPots") },
   { id: "startSavings", group: "Sparen en beleggen", label: "Nu gespaard", kind: "num", unit: "€", src: "app", why: (a) => `Som van je spaarpotjes (${a.potNames.saving.join(", ") || "geen"}). Daarna kun je het aanpassen, of een jaarlijkse update doen.`, appValue: (a) => a.savingsNow, ...B("startSavings") },
   { id: "startBonds", group: "Sparen en beleggen", label: "Nu in obligaties", kind: "num", unit: "€", src: "user", why: "Waarde van je obligaties of obligatiefondsen. Niet uit je potjes: vul het zelf in.", ...E("startBonds") },
   { id: "startInvest", group: "Sparen en beleggen", label: "Nu in aandelen of beleggingen", kind: "num", unit: "€", src: "app", why: (a) => `Som van je beleggingspotjes (${a.potNames.investing.join(", ") || "geen"}).`, appValue: (a) => a.investNow, ...B("startInvest") },
@@ -255,6 +256,9 @@ export const GROWTH: Record<string, Growth> = {
   partnerMonthlySave: byContribution("Dit bedrag stijgt elk jaar mee met de stijging van je inleg."),
   partnerMonthlyInvest: byContribution("Dit bedrag stijgt elk jaar mee met de stijging van je inleg."),
 };
+
+// The numbers that follow the pots when "Volg mijn potjes" is on.
+export const FOLLOWED_BY_POTS = new Set(["startSavings", "startInvest", "monthlySave", "monthlyInvest"]);
 
 export const FIELD_BY_ID = new Map(FIELDS.map((f) => [f.id, f]));
 

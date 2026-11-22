@@ -7,6 +7,7 @@ import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { periodRange } from "@/lib/month";
 import { InfoButton } from "../../info-button";
 import { GoalSpendCard } from "../goal-spend-card";
+import { PlanToggle } from "../plan-toggle";
 import { EntryList, MonthlyPlanForm, ScheduleDayForm, ScheduleStartForm, SettingsForms } from "../pot-detail-forms";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
@@ -125,6 +126,14 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
         <h2 className="px-1 text-lg font-semibold text-gray-900">Geschiedenis ({entries.length})</h2>
         <EntryList entries={entries} />
       </section>
+
+      <div className="flex items-center justify-between gap-4 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
+        <div>
+          <p className="text-base font-medium text-gray-900">Telt mee voor je huisplan</p>
+          <p className="text-sm text-gray-500">Zet uit als dit potje voor iets anders is, zoals een vakantie.</p>
+        </div>
+        <PlanToggle potId={pot.id} initial={pot.in_house_plan !== false} />
+      </div>
 
       <details className="rounded-2xl bg-white ring-1 ring-gray-200">
         <summary className="flex min-h-[56px] cursor-pointer items-center px-5 text-base font-medium text-gray-700">

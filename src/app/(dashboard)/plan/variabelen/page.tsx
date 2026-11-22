@@ -6,6 +6,7 @@ import { Banner, Grid, GrowthLegend, Section } from "../ui";
 import { usePlan } from "../plan-provider";
 import { ContribEditor, EventsEditor, LawEditor, SalaryEditor } from "../plan-editors";
 import { VariantPanel } from "../variant-panel";
+import { PotPicker } from "../pot-picker";
 import { missingInputs } from "@/lib/plan/completeness";
 import { FIELDS, type Group } from "@/lib/plan/fields";
 
@@ -38,6 +39,7 @@ const BLOCKS: Block[] = [
     hint: "Wat je hebt, wat je inlegt en wat het oplevert",
     group: "Sparen en beleggen",
     extra: [
+      { title: "Welke potjes tellen mee", node: <PotPicker /> },
       { title: "Inleg per jaar", node: <ContribEditor /> },
       { title: "Eenmalige gebeurtenissen", node: <EventsEditor /> },
     ],

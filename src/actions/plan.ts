@@ -44,9 +44,14 @@ export async function getPlanData() {
   let monthlyInvest = 0;
   const saving: string[] = [];
   const investing: string[] = [];
+  const potList: AppData["pots"] = [];
   for (const p of pots) {
     const balance = computePotBalance(p);
     const monthly = nextPeriodMonthly(p, balance, startDay) ?? 0;
+    const included = p.in_house_plan !== false;
+    potList.push({ id: p.id, name: p.name, kind: p.kind, balance: Math.round(balance), monthly: Math.round(monthly), included });
+    // A pot that is switched off (a holiday, say) does not count for the plan.
+    if (!included) continue;
     if (p.kind === "investment") {
       investNow += balance;
       monthlyInvest += monthly;
@@ -114,6 +119,7 @@ export async function getPlanData() {
     monthlySave: Math.round(monthlySave),
     monthlyInvest: Math.round(monthlyInvest),
     potNames: { saving, investing },
+    pots: potList,
     months,
     avgIncome: Math.round(avg((m) => m.income)),
     avgSpentExSaving: Math.round(avg((m) => m.spent)),

@@ -5,6 +5,7 @@ import { Banner, Bar, Block, Grid, Legend, LineChart, List, Note, Row, Section, 
 import { usePlan } from "../plan-provider";
 import { compareStrategies } from "@/lib/plan/model";
 import { ContribEditor } from "../plan-editors";
+import { PotPicker } from "../pot-picker";
 
 export default function InvestPage() {
   const { result: r, b, x, app } = usePlan();
@@ -35,7 +36,11 @@ export default function InvestPage() {
           <Row label="Totaal" value={euro(total0)} strong />
           <Row label="Inleg per maand" value={euro(monthly0)} sub={`${euro(b.monthlySave)} sparen · ${euro(x.monthlyBonds)} obligaties · ${euro(b.monthlyInvest)} beleggen`} />
         </List>
-        <Grid ids={["startSavings", "startBonds", "startInvest", "monthlySave", "monthlyBonds", "monthlyInvest", "contribStartYear", "contribGrowthPct", "emergencyMonths", "fixedCostsMonth"]} />
+        <Grid ids={["followPots", "startSavings", "startBonds", "startInvest", "monthlySave", "monthlyBonds", "monthlyInvest", "contribStartYear", "contribGrowthPct", "emergencyMonths", "fixedCostsMonth"]} />
+        <div className="space-y-2 border-t border-gray-100 pt-4">
+          <p className="text-sm font-medium text-gray-900">Welke potjes tellen mee</p>
+          <PotPicker />
+        </div>
       </Block>
 
       <Block title={`Welke verdeling haalt ${euro(need)} in ${pu.year}?`} sub="Zelfde totaalbedrag en inleg, verschillende verdeling. De kans is het aandeel van de simulaties waarin je het haalt.">

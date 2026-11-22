@@ -14,7 +14,7 @@ export async function getPots() {
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, schedule_day, schedule_start, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
+      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, in_house_plan, schedule_day, schedule_start, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -425,27 +425,11 @@ export async function autoDetectPots() {
   return { created };
 }
 
-// "Set like this at the bank": the person confirms the standing order to the savings bank and
-// the automatic saving per pot, so the app can say when a plan has changed since.
-export async function saveBankOrders(total: number, pots: { id: string; name: string; amount: number }[]) {
-  if (!Number.isFinite(total) || total < 0 || total > 1_000_000) return { error: "Ongeldig bedrag." };
-  const clean: Record<string, { name: string; amount: number }> = {};
-  for (const p of pots) {
-    if (!/^[0-9a-f-]{36}$/i.test(p.id) || !Number.isFinite(p.amount) || p.amount < 0 || p.amount > 1_000_000) return { error: "Ongeldig bedrag." };
-    clean[p.id] = { name: String(p.name).slice(0, 80), amount: Math.round(p.amount * 100) / 100 };
-  }
+// Does this pot count for the financial plan (the house deposit)? A holiday pot does not.
+export async function setPotInHousePlan(potId: string, included: boolean) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Niet ingelogd." };
-  const { error } = await supabase
-    .from("user_settings")
-    .upsert(
-      { user_id: user.id, bank_orders: { total: Math.round(total * 100) / 100, pots: clean }, updated_at: new Date().toISOString() },
-      { onConflict: "user_id" }
-    );
-  if (error) return { error: "Opslaan mislukte. Probeer het opnieuw." };
-  revalidatePath("/pots");
+  const { error } = await supabase.from("pots").update({ in_house_plan: included }).eq("id", potId);
+  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+  revalidatePath("/", "layout");
   return {};
 }

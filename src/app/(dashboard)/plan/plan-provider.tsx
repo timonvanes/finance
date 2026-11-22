@@ -74,7 +74,7 @@ export function PlanProvider({
 
   const scenario = doc.scenarios.find((s) => s.id === doc.activeId) ?? doc.scenarios[0];
   const variant = doc.variant;
-  const resolved = useMemo(() => resolve(scenario, variant), [scenario, variant]);
+  const resolved = useMemo(() => resolve(scenario, variant, app), [scenario, variant, app]);
   const deferred = useDeferredValue(resolved);
   const result = useMemo(() => computePlan({ b: deferred.b, x: deferred.x, app }), [deferred, app]);
   const calculating = deferred !== resolved;
