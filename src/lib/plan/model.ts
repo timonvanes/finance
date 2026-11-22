@@ -963,6 +963,13 @@ function buildInsights(p: PlanInput, r: PlanResult, wealthT: number): Insight[] 
   if (x.bidPct > 0) {
     add("info", `Overbieden kost je ${eur(pu.bid)}`, `Bij ${x.bidPct.toString().replace(".", ",")}% boven de vraagprijs betaal je ${eur(pu.paid)} in plaats van ${eur(pu.price)}. De bank leent op de taxatiewaarde, dus dit bedrag komt uit je eigen geld. Het is niet af te trekken van je hypotheek.`);
   }
+  // The deposit: 10% of the price, within days of signing, unless a bank guarantee is given instead.
+  const deposit = pu.paid * 0.1;
+  if (wealthT >= deposit) {
+    add("info", `Waarborgsom: ${eur(deposit)} als je geen bankgarantie gebruikt`, `Een verkoper kan 10% van de koopsom (${eur(pu.paid)}) als waarborgsom vragen, binnen een paar dagen na het tekenen. Dat geld moet dan op een spaarrekening staan, niet vastzitten in beleggingen. Met een bankgarantie (nu ${eur(x.costs.bankGuarantee * growth(x.inflationPct, T))} aan kosten meegeteld) hoeft dat niet, maar niet elke verkoper accepteert die.`);
+  } else {
+    add("warn", `Waarborgsom van ${eur(deposit)} is te veel op het moment van tekenen`, `Een verkoper kan 10% van de koopsom (${eur(pu.paid)}) als waarborgsom vragen, binnen een paar dagen na het tekenen. Met ${conf}% zekerheid heb je dan ${eur(wealthT)}. Reken op een bankgarantie of zorg dat dit bedrag op een spaarrekening staat.`);
+  }
   if (x.reliefFactorPct < 100) {
     add("info", `Hypotheekrenteaftrek staat op ${x.reliefFactorPct}%`, `Je rekent met ${x.reliefFactorPct}% van de huidige aftrek. Dat scheelt je ${eur(pu.mortgage.relief.benefit / Math.max(0.0001, x.reliefFactorPct / 100) - pu.mortgage.relief.benefit)} per jaar vergeleken met de regels van vandaag.`);
   }
