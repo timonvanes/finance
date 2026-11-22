@@ -61,6 +61,7 @@ export interface Costs {
 
 export interface Running {
   maintenancePct: number; // % of the price per year
+  vveCoversMaintenance: boolean; // the VvE contribution counts as part of the maintenance
   ozbPct: number; // % of the WOZ value per year
   waterYear: number; // waterschap, sewer and waste per year
   insuranceMonth: number;
@@ -184,6 +185,7 @@ export const DEFAULT_COSTS: Costs = {
 
 export const DEFAULT_RUNNING: Running = {
   maintenancePct: 1,
+  vveCoversMaintenance: false,
   ozbPct: 0.1,
   waterYear: 650,
   insuranceMonth: 40,

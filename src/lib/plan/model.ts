@@ -290,12 +290,13 @@ export function runningAt(p: PlanInput, m: number, priceNominal: number): Runnin
   const infl = growth(x.inflationPct, m);
   const r = x.running;
   const woz = (priceNominal * x.wozPct) / 100;
-  const maintenance = (priceNominal * r.maintenancePct) / 100 / 12;
+  const vve = r.vveMonth * infl;
+  // With the switch on, the VvE contribution counts as maintenance: only what is above it is left.
+  const maintenance = Math.max(0, (priceNominal * r.maintenancePct) / 100 / 12 - (r.vveCoversMaintenance ? vve : 0));
   const ozb = (woz * r.ozbPct) / 100 / 12;
   const water = (r.waterYear * infl) / 12;
   const insurance = r.insuranceMonth * infl;
   const energy = r.energyMonth * infl;
-  const vve = r.vveMonth * infl;
   const groundRent = r.groundRentMonth * infl;
   return { maintenance, ozb, water, insurance, energy, vve, groundRent, total: maintenance + ozb + water + insurance + energy + vve + groundRent };
 }

@@ -79,7 +79,7 @@ export default function HousePage() {
 
       <Block title="Woonlasten per maand na de aankoop" sub="Wat het huis kost, naast de hypotheek.">
         <List>
-          <Row label="Onderhoud" value={euro(pu.running.maintenance)} how={`${pct(x.running.maintenancePct)} van de prijs per jaar, gedeeld door 12.`} />
+          <Row label="Onderhoud" value={euro(pu.running.maintenance)} how={`${pct(x.running.maintenancePct)} van de prijs per jaar, gedeeld door 12${x.running.vveCoversMaintenance && x.running.vveMonth > 0 ? ", min de VvE-bijdrage" : ""}.`} />
           <Row label="OZB" value={euro(pu.running.ozb)} how={`${pct(x.running.ozbPct, 2)} van de WOZ-waarde per jaar.`} />
           <Row label="Waterschap, riool en afval" value={euro(pu.running.water)} />
           <Row label="Verzekeringen" value={euro(pu.running.insurance)} />
@@ -91,6 +91,7 @@ export default function HousePage() {
         <Grid
           ids={[
             "run.maintenancePct",
+            "run.vveCoversMaintenance",
             "run.ozbPct",
             "run.waterYear",
             "run.insuranceMonth",
