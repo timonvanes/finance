@@ -455,7 +455,7 @@ export default async function DashboardPage({
           )}
           {overBudgets.length > 0 && (
             <Link
-              href="/settings/budgets"
+              href="/#budgetten"
               className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl bg-red-50 px-5 py-3 text-base text-red-700 ring-1 ring-red-100 active:bg-red-100"
             >
               <span>
@@ -537,7 +537,7 @@ export default async function DashboardPage({
       )}
 
       {show("budgets") && isCurrentMonth && (budgetStatus.length > 0 || unbudgeted.length > 0) && (
-        <section className="space-y-2">
+        <section id="budgetten" className="scroll-mt-4 space-y-2">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold text-gray-900">Budgetten</h2>
             <Link href="/settings/budgets" className="flex min-h-[44px] items-center text-sm text-teal-700">

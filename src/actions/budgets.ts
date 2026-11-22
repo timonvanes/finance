@@ -208,6 +208,26 @@ export async function getSpendingAnomaly(): Promise<SpendingAnomaly | null> {
     perMonth.set(key, (perMonth.get(key) ?? 0) + netExpenseAmount(tx.id, tx.amount, adjustments));
   }
 
+  // Count the same things as the total on the overview: money put into pots (net of what came out)
+  // and what housemates fronted through WieBetaaltWat count as spent too. Otherwise this warning
+  // shows a lower amount than the one right above it.
+  const [savings, frontedRows] = await Promise.all([
+    savingsEntriesInRange(supabase, lookbackStart, periodRange(0, startDay).end),
+    getWbwFrontedRows(),
+  ]);
+  const fronted = Array.from({ length: ANOMALY_LOOKBACK_MONTHS + 1 }, (_, i) => {
+    const start = periodRange(i, startDay).start;
+    return { key: periodKey(start, startDay), amount: frontedRows.filter((r) => r.period_start === start).reduce((sum, r) => sum + r.amount, 0) };
+  });
+  for (const e of savings) {
+    if (dayIndexInPeriod(e.date, startDay) > currentDayIndex) continue;
+    const key = periodKey(e.date, startDay);
+    perMonth.set(key, (perMonth.get(key) ?? 0) + e.amount);
+  }
+  for (const f of fronted) {
+    if (f.amount > 0) perMonth.set(f.key, (perMonth.get(f.key) ?? 0) + f.amount);
+  }
+
   const monthToDateSpend = perMonth.get(currentMonthKey) ?? 0;
   perMonth.delete(currentMonthKey);
 
