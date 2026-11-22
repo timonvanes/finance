@@ -83,6 +83,18 @@ function Sandboxes() {
     });
   }, [deferred, scenario, app]);
 
+  // What the scenario gives as it stands, to put next to the new figures.
+  const nowResults = useMemo(
+    () =>
+      Object.fromEntries(
+        VARIANT_KEYS.map((v) => {
+          const input = { ...resolve(scenario, v, app), app };
+          return [v, requiredPct(input, 80)];
+        })
+      ) as Record<Variant, ReturnType<typeof requiredPct>>,
+    [scenario, app]
+  );
+
   const targetYear = Number(scenario.b.targetDate.slice(0, 4));
   const changed = JSON.stringify(s) !== JSON.stringify(base);
 
@@ -105,6 +117,7 @@ function Sandboxes() {
               <p className={`text-base font-semibold ${need.feasible ? (need.pct <= 20 ? "text-green-700" : need.pct <= 40 ? "text-amber-700" : "text-red-600") : "text-red-600"}`}>{need.feasible ? `${nl(need.pct)}%` : "onhaalbaar"}</p>
               <p className="text-xs text-gray-700">{need.feasible ? `${euro(need.firstMonthly)} p/m` : "meer dan je loon"}</p>
               <p className="text-[11px] text-gray-400">nodig {euro(r.purchase.needTotal)}</p>
+              <p className="text-[11px] text-gray-400">nu {nowResults[v].feasible ? `${nl(nowResults[v].pct)}%` : "onhaalbaar"}</p>
             </div>
           ))}
         </div>
@@ -116,8 +129,8 @@ function Sandboxes() {
         <Slider label="Prijs woning (nu)" value={s.price} was={base.price} min={150000} max={800000} step={5000} format={(n) => euro(n)} onChange={(n) => set("price", n)} />
         <Slider label="Prijsstijging per jaar" value={s.priceGrowth} was={base.priceGrowth} min={0} max={8} step={0.5} format={(n) => `${nl(n)}%`} onChange={(n) => set("priceGrowth", n)} />
         <Slider label="Overbieden" value={s.bid} was={base.bid} min={0} max={12} step={0.5} format={(n) => `${nl(n)}%`} onChange={(n) => set("bid", n)} />
-        <Slider label="Salaris t.o.v. nu" value={s.salaryPct} was={0} min={-30} max={60} step={5} format={(n) => `${n > 0 ? "+" : ""}${n}%`} onChange={(n) => set("salaryPct", n)} />
-        <Slider label="Extra salarisgroei per jaar" value={s.extraGrowth} was={0} min={-2} max={6} step={0.5} format={(n) => `${n > 0 ? "+" : ""}${nl(n)} pt`} onChange={(n) => set("extraGrowth", n)} />
+        <Slider label="Bruto salaris per jaar (zonder vakantiegeld)" value={s.salary} was={base.salary} min={20000} max={120000} step={1000} format={(n) => euro(n)} onChange={(n) => set("salary", n)} />
+        <Slider label="Salarisgroei per jaar" value={s.salaryGrowth} was={base.salaryGrowth} min={0} max={8} step={0.5} format={(n) => `${nl(n)}%`} onChange={(n) => set("salaryGrowth", n)} />
         <Slider label="Salaris partner (0 = alleen kopen)" value={s.partnerGross} was={base.partnerGross} min={0} max={100000} step={2500} format={(n) => (n > 0 ? euro(n) : "alleen")} onChange={(n) => set("partnerGross", n)} />
         <Slider label="Hypotheekrente" value={s.rate} was={base.rate} min={2} max={7} step={0.1} format={(n) => `${nl(n)}%`} onChange={(n) => set("rate", n)} />
         <Slider label="Buffer na aankoop" value={s.buffer} was={base.buffer} min={0} max={12} step={1} format={(n) => `${n} mnd`} onChange={(n) => set("buffer", n)} />
