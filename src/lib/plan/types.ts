@@ -329,6 +329,9 @@ export interface AppData {
   avgIncome: number;
   // spending without saving and without rent (the category "Huur")
   avgSpentExSaving: number;
+  // the cheapest and the dearest of those months (the same spending)
+  spentLow: number;
+  spentHigh: number;
   // what the category "Huur" cost per period
   avgRent: number;
   avgSaved: number;

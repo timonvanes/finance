@@ -40,6 +40,12 @@ export function resolve(sc: Scenario, variant: Variant, app?: AppData): { b: Hou
       salaryPartner: { ...x.salaryPartner, ...ov.salaryPartner },
     };
   }
+  // Spending differs per month: stress rates it at the dearest recent month, gunstig at the cheapest,
+  // as a factor on the usual figure (unless that variant has a figure of its own).
+  if (app && variant !== "basis" && app.avgSpentExSaving > 0 && !("otherSpendingMonth" in sc.variants[variant].fields)) {
+    const f = (variant === "stress" ? app.spentHigh : app.spentLow) / app.avgSpentExSaving;
+    if (Number.isFinite(f) && f > 0) x = { ...x, otherSpendingMonth: x.otherSpendingMonth * f };
+  }
   if (app && x.followPots) {
     b = { ...b, startSavings: app.savingsNow, startInvest: app.investNow, monthlySave: app.monthlySave, monthlyInvest: app.monthlyInvest };
     x = { ...x, startDate: app.today };
