@@ -1,8 +1,8 @@
 "use client";
 
-import { Block, Note, Section, SrcBadge } from "../ui";
+import { Block, GrowthIcon, GrowthLegend, Note, Section, SrcBadge } from "../ui";
 import { usePlan } from "../plan-provider";
-import { FIELDS, whyText, type FieldDef, type Group } from "@/lib/plan/fields";
+import { FIELDS, GROWTH, whyText, type FieldDef, type Group } from "@/lib/plan/fields";
 import { LAW_ITEMS, LAW_YEAR } from "@/lib/plan/tax";
 import { SOURCE_LABEL, type Source } from "@/lib/plan/types";
 
@@ -100,6 +100,7 @@ export default function SourcesPage() {
           <li className="flex gap-2"><SrcBadge src="assume" /><span>Aanname: een schatting van de toekomst of van iets wat je niet vooraf weet (rente, rendement, prijsstijging, kosten).</span></li>
           <li className="flex gap-2"><SrcBadge src="calc" /><span>Berekend: het plan rekent het uit. Tik erop voor de berekening.</span></li>
         </ul>
+        <GrowthLegend />
         <p className="text-xs text-gray-500">
           {counts.map((c) => `${c.n} ${SOURCE_LABEL[c.s].toLowerCase()}`).join(" · ")}
         </p>
@@ -129,7 +130,10 @@ export default function SourcesPage() {
                   <span className="text-sm font-medium text-gray-900">{f.label}</span>
                   <span className="shrink-0 text-sm font-semibold text-gray-900">{show(f)}</span>
                 </div>
-                <SrcBadge src={f.src} />
+                <div className="flex items-center gap-1">
+                  {GROWTH[f.id] && <GrowthIcon kind={GROWTH[f.id].kind} />}
+                  <SrcBadge src={f.src} />
+                </div>
                 <p className="text-xs leading-relaxed text-gray-600">{whyText(f, app)}</p>
                 <MetaLine id={f.id} />
               </li>

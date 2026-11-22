@@ -215,6 +215,46 @@ export const VARIANT_FIELDS = new Set([
   "box3ExemptStress",
 ]);
 
+// What a number grows with until the purchase: the inflation, or another variable of the plan
+// (`via` is the field that holds that growth). The screens show an icon for it and a legend.
+export type Growth = { kind: "inflation" } | { kind: "variable"; via: string; text: string };
+
+const byPrice = (text: string): Growth => ({ kind: "variable", via: "priceGrowthPct", text });
+const bySalary = (text: string): Growth => ({ kind: "variable", via: "salaryGrowthPct", text });
+const byPartnerSalary = (text: string): Growth => ({ kind: "variable", via: "partnerGrowthPct", text });
+const byContribution = (text: string): Growth => ({ kind: "variable", via: "contribGrowthPct", text });
+
+export const GROWTH: Record<string, Growth> = {
+  // with the inflation
+  rentNow: { kind: "inflation" },
+  renovation: { kind: "inflation" },
+  otherSpendingMonth: { kind: "inflation" },
+  "run.waterYear": { kind: "inflation" },
+  "run.insuranceMonth": { kind: "inflation" },
+  "run.energyMonth": { kind: "inflation" },
+  "run.vveMonth": { kind: "inflation" },
+  "run.groundRentMonth": { kind: "inflation" },
+  ...Object.fromEntries(FIELDS.filter((f) => f.id.startsWith("cost.")).map((f) => [f.id, { kind: "inflation" } as Growth])),
+  // with another variable
+  targetPrice: byPrice("Dit bedrag stijgt elk jaar mee met de prijsstijging van woningen."),
+  wozPct: byPrice("De WOZ-waarde volgt de prijs, dus het bedrag stijgt mee met de prijsstijging van woningen."),
+  bidPct: byPrice("Het overbod is een percentage van de vraagprijs, dus het bedrag stijgt mee met de prijsstijging van woningen."),
+  "run.maintenancePct": byPrice("Een percentage van de prijs, dus het bedrag stijgt mee met de prijsstijging van woningen."),
+  "run.ozbPct": byPrice("Een percentage van de WOZ-waarde, die met de prijs meestijgt."),
+  incomeGrossYear: bySalary("Dit salaris stijgt elk jaar mee met de salarisgroei."),
+  partnerIncomeGrossYear: byPartnerSalary("Dit salaris stijgt elk jaar mee met de salarisgroei van je partner."),
+  pensionPct: bySalary("Een percentage van je salaris, dus het bedrag stijgt mee met je salarisgroei."),
+  partnerPensionPct: byPartnerSalary("Een percentage van haar salaris, dus het bedrag stijgt mee met haar salarisgroei."),
+  holidayPct: bySalary("Een percentage van je salaris, dus het bedrag stijgt mee met je salarisgroei."),
+  fixedExtraPct: bySalary("Een percentage van je salaris, dus het bedrag stijgt mee met je salarisgroei."),
+  bonusPct: bySalary("Een percentage van je salaris, dus het bedrag stijgt mee met je salarisgroei."),
+  monthlySave: byContribution("Dit bedrag stijgt elk jaar mee met de stijging van je inleg."),
+  monthlyBonds: byContribution("Dit bedrag stijgt elk jaar mee met de stijging van je inleg."),
+  monthlyInvest: byContribution("Dit bedrag stijgt elk jaar mee met de stijging van je inleg."),
+  partnerMonthlySave: byContribution("Dit bedrag stijgt elk jaar mee met de stijging van je inleg."),
+  partnerMonthlyInvest: byContribution("Dit bedrag stijgt elk jaar mee met de stijging van je inleg."),
+};
+
 export const FIELD_BY_ID = new Map(FIELDS.map((f) => [f.id, f]));
 
 export function whyText(f: FieldDef, a: AppData) {

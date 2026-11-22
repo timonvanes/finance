@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Banner, Grid, Section } from "../ui";
+import { Banner, Grid, GrowthLegend, Section } from "../ui";
 import { usePlan } from "../plan-provider";
 import { ContribEditor, EventsEditor, LawEditor, SalaryEditor } from "../plan-editors";
 import { VariantPanel } from "../variant-panel";
@@ -67,6 +67,8 @@ export default function VariablesPage() {
           </>
         )}
       </Banner>
+
+      <GrowthLegend />
 
       <VariantPanel />
 

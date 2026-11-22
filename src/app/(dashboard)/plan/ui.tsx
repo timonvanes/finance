@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { PARTNER_FIELDS, FIELD_BY_ID, VARIANT_FIELDS, whyText } from "@/lib/plan/fields";
+import { PARTNER_FIELDS, FIELD_BY_ID, GROWTH, VARIANT_FIELDS, whyText, type Growth } from "@/lib/plan/fields";
 import { SOURCE_LABEL, VARIANTS, type Source } from "@/lib/plan/types";
 import { fieldValue, usePlan } from "./plan-provider";
 
@@ -20,6 +20,43 @@ const SRC_STYLE: Record<Source, string> = {
 
 export function SrcBadge({ src }: { src: Source }) {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${SRC_STYLE[src]}`}>{SOURCE_LABEL[src]}</span>;
+}
+
+// A small icon for numbers that grow until the purchase: with the inflation (arrow up) or with
+// another variable of the plan (chain link). The legend explains both.
+export function GrowthIcon({ kind }: { kind: Growth["kind"] }) {
+  const inflation = kind === "inflation";
+  return (
+    <span
+      role="img"
+      aria-label={inflation ? "Stijgt mee met de inflatie" : "Stijgt mee met een andere variabele"}
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${inflation ? "bg-amber-100 text-amber-800" : "bg-violet-100 text-violet-800"}`}
+    >
+      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {inflation ? (
+          <>
+            <path d="M2 12l4-4 3 3 5-6" />
+            <path d="M10 5h4v4" />
+          </>
+        ) : (
+          <>
+            <path d="M6.5 9.5l3-3" />
+            <path d="M7 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1" />
+            <path d="M9 11.5l-1 1A2.5 2.5 0 014.5 9l1-1" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
+export function GrowthLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl bg-white px-3 py-2 text-xs text-gray-600 ring-1 ring-gray-200">
+      <span className="flex items-center gap-1.5"><GrowthIcon kind="inflation" /> Stijgt mee met de inflatie</span>
+      <span className="flex items-center gap-1.5"><GrowthIcon kind="variable" /> Stijgt mee met een andere variabele</span>
+    </div>
+  );
 }
 
 // ------------------------------------------------------------------- inputs
@@ -109,6 +146,7 @@ export function F({ id }: { id: string }) {
   const appVal = f.appValue?.(app);
   const differs = appVal !== undefined && typeof v === "number" && Math.abs(appVal - v) > 0.5;
   const unit = f.unit === "€" ? "€" : f.unit === "%" ? "%" : f.unit === "jaar" ? "jr" : f.unit === "mnd" ? "mnd" : undefined;
+  const growth = GROWTH[id];
 
   let control: ReactNode;
   if (f.kind === "bool") {
@@ -146,7 +184,8 @@ export function F({ id }: { id: string }) {
     <div className={`min-w-0 ${off ? "opacity-40" : ""}`}>
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-sm text-gray-600">{f.label}</span>
-        <button type="button" onClick={() => setOpen(!open)} className="shrink-0" aria-expanded={open} aria-label="Waar komt dit vandaan?">
+        <button type="button" onClick={() => setOpen(!open)} className="flex shrink-0 items-center gap-1" aria-expanded={open} aria-label="Waar komt dit vandaan?">
+          {growth && <GrowthIcon kind={growth.kind} />}
           <SrcBadge src={f.src} />
         </button>
       </div>
@@ -154,7 +193,21 @@ export function F({ id }: { id: string }) {
         {control}
       </div>
       {off && <p className="mt-1 text-[11px] text-gray-500">Telt niet mee: je koopt alleen.</p>}
-      {open && <p className="mt-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">{whyText(f, app)}</p>}
+      {open && (
+        <div className="mt-1.5 space-y-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
+          <p>{whyText(f, app)}</p>
+          {growth && (
+            <p className="flex items-start gap-1.5">
+              <GrowthIcon kind={growth.kind} />
+              <span>
+                {growth.kind === "inflation"
+                  ? `Stijgt mee met de inflatie (nu ${pct(x.inflationPct)} per jaar), tot het moment van aankoop.`
+                  : `${growth.text} Nu ${pct(Number(FIELD_BY_ID.get(growth.via)?.get(b, x) ?? 0))} per jaar.`}
+              </span>
+            </p>
+          )}
+        </div>
+      )}
       {VARIANT_FIELDS.has(id) && (
         <p className="mt-1 text-[11px] text-gray-500">
           {VARIANTS.map((vv, i) => {
