@@ -1,5 +1,5 @@
 import { isoDate, periodRange, periodStartFor } from "@/lib/month";
-import { computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
+import { CORRECTION_NOTE, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 
 export interface PotForInsights {
   created_at?: string;
@@ -21,6 +21,7 @@ export interface PotForInsights {
 export interface PotEntryForInsights {
   amount: number;
   entry_date: string;
+  note?: string | null;
   // Withdrawals: "yes" = spent on the goal (the goal was lowered by it, whole or
   // `goal_spend_amount`), "no" = not for the goal, null = not answered yet.
   goal_spend?: string | null;
@@ -30,6 +31,16 @@ export interface PotEntryForInsights {
 const counted = (pot: PotForInsights) =>
   pot.pot_entries.filter((e) => e.entry_date >= pot.opening_balance_date);
 
+// The monthly plan is about money you put in. A correction after a balance check (a changed
+// value, say of shares) is not a deposit and does not change what you are asked to put in, so the
+// plan is worked out without it: the same pot, minus the corrections, and the balance without them.
+function planView(pot: PotForInsights, balance: number): { pot: PotForInsights; balance: number } {
+  const isCorrection = (e: PotEntryForInsights) => e.note === CORRECTION_NOTE;
+  const corrections = counted(pot).filter(isCorrection).reduce((sum, e) => sum + e.amount, 0);
+  if (corrections === 0 && !pot.pot_entries.some(isCorrection)) return { pot, balance };
+  return { pot: { ...pot, pot_entries: pot.pot_entries.filter((e) => !isCorrection(e)) }, balance: balance - corrections };
+}
+
 // What was spent on the goal itself; that lowered the target, so the plan is
 // measured against the original target and the money counts as still "saved".
 const goalSpentOf = (entries: PotEntryForInsights[]) =>
@@ -38,7 +49,8 @@ const goalSpentOf = (entries: PotEntryForInsights[]) =>
     .reduce((sum, e) => sum + Number(e.goal_spend_amount ?? Math.abs(e.amount)), 0);
 
 // What was put into the pot (deposits only) during one budget period.
-export function depositedInPeriod(pot: PotForInsights, monthsAgo: number, startDay: number): number {
+export function depositedInPeriod(potIn: PotForInsights, monthsAgo: number, startDay: number): number {
+  const pot = planView(potIn, 0).pot;
   const { start, end } = periodRange(monthsAgo, startDay);
   return counted(pot)
     .filter((e) => e.amount > 0 && e.entry_date >= start && e.entry_date < end)
@@ -332,7 +344,8 @@ export interface PendingPeriod {
 // excluded) against everything deposited since. What is short is carried to
 // the next period. Undecided short periods are listed so the user can choose
 // "meenemen" or "overslaan"; until then they count as carried over.
-export function planCatchUp(pot: PotForInsights, startDay: number, now = new Date()) {
+export function planCatchUp(potIn: PotForInsights, startDay: number, now = new Date()) {
+  const pot = planView(potIn, 0).pot;
   const monthly = pot.monthly_amount && !pot.monthly_auto ? Number(pot.monthly_amount) : 0;
   if (!monthly || !pot.plan_start_date) return { shortfall: 0, pending: [] as PendingPeriod[] };
 
@@ -389,7 +402,8 @@ export function planCatchUp(pot: PotForInsights, startDay: number, now = new Dat
 //  - autoAmount / autoBreakdown: what the automatic plan asks, for the running
 //    period, or for the first one when the plan only begins later;
 //  - startsOn: the first day of the plan when it begins in a later period.
-export function planAmounts(pot: PotForInsights, balance: number, startDay: number) {
+export function planAmounts(potIn: PotForInsights, balanceIn: number, startDay: number) {
+  const { pot, balance } = planView(potIn, balanceIn);
   const range = periodRange(0, startDay);
   const baseBalance = balance - netInPeriod(pot, 0, startDay);
   const startsLater = !!pot.schedule_start && pot.schedule_start.slice(0, 10) >= range.end;
@@ -409,14 +423,32 @@ export function planAmounts(pot: PotForInsights, balance: number, startDay: numb
 // current one ends), measured from where the pot stands now. This is what to set
 // aside from the next salary: what was already put in during the current period,
 // including money put back, is not asked a second time.
-export function nextPeriodMonthly(pot: PotForInsights, balance: number, startDay: number): number | null {
+export function nextPeriodMonthly(potIn: PotForInsights, balanceIn: number, startDay: number): number | null {
+  const { pot, balance } = planView(potIn, balanceIn);
   const next = periodRange(0, startDay).endDate;
   return effectiveMonthly(pot, balance, next, startDay);
 }
 
-export function periodMonthly(pot: PotForInsights, balance: number, startDay: number): number | null {
+export function periodMonthly(potIn: PotForInsights, balanceIn: number, startDay: number): number | null {
+  const { pot, balance } = planView(potIn, balanceIn);
   const range = periodRange(0, startDay);
   // A plan that only begins in a later period asks nothing of this one.
   if (pot.schedule_start && pot.schedule_start.slice(0, 10) >= range.end) return null;
   return effectiveMonthly(pot, balance - netInPeriod(pot, 0, startDay), range.startDate, startDay);
+}
+
+// The usual monthly amount of the plan, whether or not this period still asks for it: the fixed
+// amount, or the regular installment of the automatic plan. Null when there is no plan or the
+// goal is reached. It keeps the Tikkie button there when a pot is ahead of its schedule.
+export function regularMonthly(potIn: PotForInsights, balanceIn: number, startDay: number): number | null {
+  const { pot, balance } = planView(potIn, balanceIn);
+  if (pot.target_amount && balance >= pot.target_amount) return null;
+  if (pot.monthly_auto && pot.target_amount && pot.target_date) {
+    const next = periodRange(0, startDay).endDate;
+    const n = scheduleNeed(pot, balance, next, startDay);
+    if (n) return Math.ceil(n.regular - 0.005) || null;
+    const required = computeRequiredMonthlyDeposit(balance, pot.target_amount, pot.target_date, next);
+    return required && required > 0 ? Math.ceil(required) : null;
+  }
+  return pot.monthly_amount ? Number(pot.monthly_amount) : null;
 }

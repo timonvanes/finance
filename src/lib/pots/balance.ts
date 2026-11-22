@@ -1,3 +1,6 @@
+// The note of the entry a balance check writes when the real balance differs from the app.
+export const CORRECTION_NOTE = "Correctie na saldocontrole";
+
 // Entries dated before the opening balance date are excluded from the
 // total — they're presumed already reflected in that starting amount (this
 // also protects against a herkenningstekst rematch pulling in old

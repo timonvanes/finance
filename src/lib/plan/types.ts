@@ -321,7 +321,7 @@ export interface AppData {
   monthlyInvest: number;
   potNames: { saving: string[]; investing: string[] };
   // all pots, and whether each counts for the plan
-  pots: { id: string; name: string; kind: string; balance: number; monthly: number; included: boolean }[];
+  pots: { id: string; name: string; kind: string; balance: number; monthly: number; included: boolean; valueDue: boolean }[];
   // the last full months of real money in and out
   months: { label: string; income: number; spent: number; saved: number; rent: number }[];
   avgIncome: number;

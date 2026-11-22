@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { getPots, getSavingsInbox } from "@/actions/pots";
-import { computePotBalance } from "@/lib/pots/balance";
-import { computeSchedule, depositedInPeriod, nextPeriodMonthly, periodMonthly, planCatchUp } from "@/lib/pots/insights";
+import { getLastChecks, getPots, getSavingsInbox } from "@/actions/pots";
+import { valueCheckStatus } from "@/lib/pots/value-check";
+import { todayAmsterdam } from "@/lib/wbw/record";
+import { CORRECTION_NOTE, computePotBalance } from "@/lib/pots/balance";
+import { computeSchedule, depositedInPeriod, nextPeriodMonthly, periodMonthly, planCatchUp, regularMonthly } from "@/lib/pots/insights";
 import { CatchUpCard } from "./catch-up-card";
 import { TikkieButton } from "./tikkie-button";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
@@ -14,12 +16,15 @@ import { GoalSpendCard } from "./goal-spend-card";
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
 export default async function PotsPage() {
-  const [pots, inbox, startDay, graceDays] = await Promise.all([
+  const [pots, inbox, startDay, graceDays, lastChecks] = await Promise.all([
     getPots(),
     getSavingsInbox(),
     getMonthStartDay(),
     getPotGraceDays(),
+    getLastChecks(),
   ]);
+  const today = todayAmsterdam();
+  const valueDue = pots.filter((p) => valueCheckStatus(p.value_check_months, lastChecks.get(p.id)?.checkedAt ?? null, today).due);
 
   const balances = new Map(pots.map((p) => [p.id, computePotBalance(p)]));
   const totalBalance = [...balances.values()].reduce((s, b) => s + b, 0);
@@ -52,7 +57,7 @@ export default async function PotsPage() {
   const pendingSpend = pots.flatMap((p) =>
     p.target_amount
       ? p.pot_entries
-          .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= p.opening_balance_date)
+          .filter((e) => e.amount < 0 && !e.goal_spend && e.note !== CORRECTION_NOTE && e.entry_date >= p.opening_balance_date)
           .map((e) => ({ id: e.id, potName: p.name, amount: Math.abs(e.amount), date: e.entry_date, note: e.note }))
       : []
   );
@@ -93,6 +98,21 @@ export default async function PotsPage() {
           <p className="mt-1 text-sm text-gray-500">{euro(plannedBaseTotal)} per maand gepland</p>
         )}
       </div>
+
+      {valueDue.length > 0 && (
+        <section className="space-y-2 rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200">
+          <h2 className="text-base font-semibold text-amber-900">Waarde bijwerken</h2>
+          <ul className="space-y-1">
+            {valueDue.map((p) => (
+              <li key={p.id}>
+                <Link href={`/pots/${p.id}`} className="text-sm text-amber-900 underline">
+                  {p.name}: importeer je portefeuille opnieuw
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {catchUpItems.length > 0 && <CatchUpCard items={catchUpItems} />}
 
@@ -137,7 +157,7 @@ export default async function PotsPage() {
               // shortfall, minus what is in) or, when that is all in, the set monthly amount.
               const planNow = plans.get(pot.id);
               const stillToPutIn = planNow ? Math.max(0, planNow + carryOf(pot.id) - depositedInPeriod(pot, 0, startDay)) : 0;
-              const toPutIn = stillToPutIn > 0.005 ? stillToPutIn : (nextPeriodMonthly(pot, balance, startDay) ?? 0);
+              const toPutIn = stillToPutIn > 0.005 ? stillToPutIn : (nextPeriodMonthly(pot, balance, startDay) ?? regularMonthly(pot, balance, startDay) ?? 0);
               return (
                 <li key={pot.id} className="relative">
                   <Link

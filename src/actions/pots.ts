@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { matchPotTransfers, rematchPotHistory } from "@/lib/pots/matching";
 import { ensurePotsForSavingsIds } from "@/lib/pots/detect";
-import { computePotBalance } from "@/lib/pots/balance";
+import { CORRECTION_NOTE, computePotBalance } from "@/lib/pots/balance";
 import { effectiveMonthly, nextPeriodMonthly } from "@/lib/pots/insights";
 import { getMonthStartDay } from "@/lib/settings";
 import { isoDate, periodStartFor } from "@/lib/month";
@@ -14,7 +14,7 @@ export async function getPots() {
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, in_house_plan, schedule_day, schedule_start, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
+      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, in_house_plan, value_check_months, schedule_day, schedule_start, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -317,7 +317,7 @@ export async function checkPotBalance(potId: string, actual: number, correct: bo
     const { error: entryError } = await supabase.from("pot_entries").insert({
       pot_id: potId,
       amount: Math.round(difference * 100) / 100,
-      note: "Correctie na saldocontrole",
+      note: CORRECTION_NOTE,
     });
     if (entryError) throw entryError;
   }
@@ -430,6 +430,25 @@ export async function setPotInHousePlan(potId: string, included: boolean) {
   const supabase = await createClient();
   const { error } = await supabase.from("pots").update({ in_house_plan: included }).eq("id", potId);
   if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+  revalidatePath("/", "layout");
+  return {};
+}
+
+// How often the value of this pot has to be updated by hand (3, 6 or 12 months; null = never).
+export async function setPotValueCheckMonths(potId: string, months: number | null) {
+  if (months !== null && ![3, 6, 12].includes(months)) return { error: "Kies kwartaal, half jaar of jaar." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("pots").update({ value_check_months: months }).eq("id", potId);
+  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+  revalidatePath("/", "layout");
+  return {};
+}
+
+// Sets the value of a pot to what the broker says (an import of the portfolio): the difference
+// is booked as a correction, not as a deposit, and the check is remembered for the reminder.
+export async function updatePotValue(potId: string, value: number) {
+  if (!Number.isFinite(value) || value < 0 || value > 100_000_000) return { error: "Ongeldig bedrag." };
+  await checkPotBalance(potId, Math.round(value * 100) / 100, true);
   revalidatePath("/", "layout");
   return {};
 }

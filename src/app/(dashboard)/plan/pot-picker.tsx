@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { PlanToggle } from "../pots/plan-toggle";
 import { euro } from "./ui";
 import { usePlan } from "./plan-provider";
@@ -21,6 +22,11 @@ export function PotPicker() {
                 {p.kind === "investment" ? "Beleggen" : "Sparen"} · {euro(p.balance)}
                 {p.monthly > 0 ? ` · ${euro(p.monthly)} per maand` : ""}
               </p>
+              {p.valueDue && (
+                <Link href={`/pots/${p.id}`} className="text-xs font-medium text-amber-700 underline">
+                  Waarde bijwerken met een export
+                </Link>
+              )}
             </div>
             <PlanToggle potId={p.id} initial={p.included} compact />
           </li>

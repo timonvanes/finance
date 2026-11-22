@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getDebts } from "@/actions/debts";
 import { getHousePlanData } from "@/actions/house";
 import { getDashboardSummary, getMonthlySpendByCategory } from "@/actions/dashboard";
-import { getPots } from "@/actions/pots";
+import { getLastChecks, getPots } from "@/actions/pots";
+import { valueCheckStatus } from "@/lib/pots/value-check";
 import { computePotBalance } from "@/lib/pots/balance";
 import { nextPeriodMonthly } from "@/lib/pots/insights";
 import { SAVINGS_CATEGORY } from "@/lib/pots/savings-category";
@@ -30,11 +31,12 @@ export async function getPlanData() {
   const today = todayAmsterdam();
   const startDay = await getMonthStartDay();
 
-  const [house, pots, debts, planRow] = await Promise.all([
+  const [house, pots, debts, planRow, lastChecks] = await Promise.all([
     getHousePlanData(),
     getPots(),
     getDebts(),
     supabase.from("house_plans").select("extra, doc").maybeSingle(),
+    getLastChecks(),
   ]);
 
   // pots: savings and investing apart
@@ -49,7 +51,7 @@ export async function getPlanData() {
     const balance = computePotBalance(p);
     const monthly = nextPeriodMonthly(p, balance, startDay) ?? 0;
     const included = p.in_house_plan !== false;
-    potList.push({ id: p.id, name: p.name, kind: p.kind, balance: Math.round(balance), monthly: Math.round(monthly), included });
+    potList.push({ id: p.id, name: p.name, kind: p.kind, balance: Math.round(balance), monthly: Math.round(monthly), included, valueDue: valueCheckStatus(p.value_check_months, lastChecks.get(p.id)?.checkedAt ?? null, today).due });
     // A pot that is switched off (a holiday, say) does not count for the plan.
     if (!included) continue;
     if (p.kind === "investment") {

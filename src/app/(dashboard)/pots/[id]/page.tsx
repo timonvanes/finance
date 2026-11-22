@@ -1,24 +1,29 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPots } from "@/actions/pots";
-import { computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
+import { getLastChecks, getPots } from "@/actions/pots";
+import { valueCheckStatus } from "@/lib/pots/value-check";
+import { todayAmsterdam } from "@/lib/wbw/record";
+import { CORRECTION_NOTE, computePotBalance, computeRequiredMonthlyDeposit } from "@/lib/pots/balance";
 import { computeSchedule, depositedInPeriod, monthlyPace, planAmounts, projectedFinish } from "@/lib/pots/insights";
 import { getMonthStartDay, getPotGraceDays } from "@/lib/settings";
 import { periodRange } from "@/lib/month";
 import { InfoButton } from "../../info-button";
 import { GoalSpendCard } from "../goal-spend-card";
 import { PlanToggle } from "../plan-toggle";
+import { ShareImport } from "../share-import";
 import { EntryList, MonthlyPlanForm, ScheduleDayForm, ScheduleStartForm, SettingsForms } from "../pot-detail-forms";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
 export default async function PotPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [pots, startDay, graceDays] = await Promise.all([getPots(), getMonthStartDay(), getPotGraceDays()]);
+  const [pots, startDay, graceDays, lastChecks] = await Promise.all([getPots(), getMonthStartDay(), getPotGraceDays(), getLastChecks()]);
   const pot = pots.find((p) => p.id === id);
   if (!pot) notFound();
 
   const balance = computePotBalance(pot);
+  const lastCheck = lastChecks.get(pot.id)?.checkedAt ?? null;
+  const valueCheck = valueCheckStatus(pot.value_check_months, lastCheck, todayAmsterdam());
   const schedule = computeSchedule(pot, balance, new Date(), startDay, graceDays);
   const required = computeRequiredMonthlyDeposit(balance, pot.target_amount, pot.target_date);
   const paceRaw = monthlyPace(pot, balance, startDay, graceDays);
@@ -34,7 +39,7 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
   const neededMonthly = plan.autoBreakdown?.regular ?? (required != null && required > 0 ? Math.ceil(required - 0.005) : null);
   const pending = pot.target_amount
     ? pot.pot_entries
-        .filter((e) => e.amount < 0 && !e.goal_spend && e.entry_date >= pot.opening_balance_date)
+        .filter((e) => e.amount < 0 && !e.goal_spend && e.note !== CORRECTION_NOTE && e.entry_date >= pot.opening_balance_date)
         .map((e) => ({ id: e.id, potName: pot.name, amount: Math.abs(e.amount), date: e.entry_date, note: e.note }))
     : [];
   // The starts of your last 14 months, to pick the beginning of the plan from.
@@ -126,6 +131,17 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
         <h2 className="px-1 text-lg font-semibold text-gray-900">Geschiedenis ({entries.length})</h2>
         <EntryList entries={entries} />
       </section>
+
+      {pot.kind === "investment" && (
+        <ShareImport
+          potId={pot.id}
+          balance={balance}
+          everyMonths={pot.value_check_months ?? null}
+          lastChecked={lastCheck}
+          nextDue={valueCheck.next}
+          due={valueCheck.due}
+        />
+      )}
 
       <div className="flex items-center justify-between gap-4 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
         <div>
