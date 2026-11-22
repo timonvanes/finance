@@ -108,6 +108,8 @@ export interface Extra {
   bidPct: number; // overbidding, % of the asking price. The bank lends on the valuation, so this comes from own money
   reliefFactorPct: number; // how much of today's mortgage interest relief is left (policy may change)
 
+  workStartYear: number; // first year with your own salary (0 = already working)
+
   // partner
   partnerStartYear: number; // first year with a salary (0 = already working)
   partnerStartSavings: number;
@@ -227,6 +229,7 @@ export function defaultExtra(today: string): Extra {
     limitGrowthPct: 3,
     bidPct: 0,
     reliefFactorPct: 100,
+    workStartYear: 0,
     partnerStartYear: 0,
     partnerStartSavings: 0,
     partnerStartInvest: 0,

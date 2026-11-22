@@ -89,7 +89,9 @@ function salaryPath(base: number, growthPct: number, explicit: Record<string, nu
 
 export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[] {
   const { b, x } = p;
-  const you = salaryPath(b.incomeGrossYear, x.salaryGrowthPct, x.salaryYou, fromYear, toYear);
+  // Your own first year with a salary: before it there is no pay. The salary entered is that of the first year.
+  const yStart = x.workStartYear > 0 ? Math.max(fromYear, x.workStartYear) : fromYear;
+  const you = salaryPath(b.incomeGrossYear, x.salaryGrowthPct, x.salaryYou, yStart, Math.max(toYear, yStart));
   // The partner starts to earn in her own first year; the salary entered is that of the first year.
   const pStart = x.partnerStartYear > 0 ? Math.max(fromYear, x.partnerStartYear) : fromYear;
   const partner = salaryPath(b.partnerIncomeGrossYear, x.partnerGrowthPct, x.salaryPartner, pStart, Math.max(toYear, pStart));
@@ -106,7 +108,7 @@ export function payroll(p: PlanInput, fromYear: number, toYear: number): PayRow[
   };
   const rows: PayRow[] = [];
   for (let y = fromYear; y <= toYear; y++) {
-    const yv = you.get(y)!;
+    const yv = y >= yStart ? you.get(y)! : { v: 0, fromInput: false };
     const pv = y >= pStart ? partner.get(y)! : { v: 0, fromInput: false };
     const netYou = taxedYear(yv.v, x.pensionPct, y);
     const withPartner = x.buyingTogether && pv.v > 0;
@@ -980,6 +982,16 @@ function buildInsights(p: PlanInput, r: PlanResult, wealthT: number): Insight[] 
     const free = app.avgIncome - app.avgSpentExSaving - (app.avgRent ?? 0);
     if (saveNow > free + 50) {
       add("warn", "De geplande inleg past niet in wat je overhoudt", `Gemiddeld bleef er de laatste maanden ${eur(free)} per maand over vóór sparen, en je plant ${eur(saveNow)} in.`);
+    }
+  }
+
+  if (x.workStartYear > 0) {
+    if (pu.year <= x.workStartYear) {
+      add("bad", "Je koopt voordat je salaris begint", `Je salaris begint in ${x.workStartYear}, de aankoop staat in ${pu.year}. Zonder inkomen leent een bank niets. Kies een latere datum.`);
+    } else if (pu.year - x.workStartYear < 2) {
+      add("warn", "Je baan is dan nog heel nieuw", `Je begint in ${x.workStartYear} en koopt in ${pu.year}. Banken kijken naar je contract: met een vast contract kan het meestal meteen, bij een tijdelijk contract is een werkgeversverklaring nodig. Check dat bij een adviseur.`);
+    } else {
+      add("info", `Je salaris telt mee vanaf ${x.workStartYear}`, "Voor die tijd rekent het plan met geen inkomen en dus ook geen inleg uit je salaris.");
     }
   }
 
