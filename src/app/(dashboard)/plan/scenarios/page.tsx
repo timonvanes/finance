@@ -5,7 +5,7 @@ import { Banner, Block, List, Note, NumberBox, Row, euro } from "../ui";
 import { usePlan } from "../plan-provider";
 import { computePlan, type PlanResult } from "@/lib/plan/model";
 import { computeVariants, resolve, VARIANT_KEYS } from "@/lib/plan/scenarios";
-import { maxPriceInYear, requiredMonthly, type MaxPrice, type RequiredMonthly } from "@/lib/plan/solve";
+import { maxPriceInYear, requiredMonthly, requiredPct, type MaxPrice, type RequiredMonthly, type RequiredPct } from "@/lib/plan/solve";
 import { VARIANTS, type Variant } from "@/lib/plan/types";
 
 // Lets the screen paint "bezig" before a heavy calculation starts.
@@ -24,10 +24,11 @@ function Verdict({ r }: { r: PlanResult }) {
 }
 
 export default function ScenariosPage() {
-  const { doc, scenario, app, today } = usePlan();
+  const { doc, scenario, app, today, setField } = usePlan();
   const [all, setAll] = useState<Record<string, Record<Variant, PlanResult>> | null>(null);
   const [busyAll, setBusyAll] = useState(false);
   const [need, setNeed] = useState<Record<Variant, RequiredMonthly> | null>(null);
+  const [pcts, setPcts] = useState<Record<Variant, RequiredPct> | null>(null);
   const [busyNeed, setBusyNeed] = useState(false);
   const [maxes, setMaxes] = useState<{ year: number; v: Record<Variant, MaxPrice | null> }[] | null>(null);
   const [busyMax, setBusyMax] = useState(false);
@@ -56,8 +57,13 @@ export default function ScenariosPage() {
     setBusyNeed(true);
     later(() => {
       const out = {} as Record<Variant, RequiredMonthly>;
-      for (const v of VARIANT_KEYS) out[v] = requiredMonthly(inputFor(v));
+      const outPct = {} as Record<Variant, RequiredPct>;
+      for (const v of VARIANT_KEYS) {
+        out[v] = requiredMonthly(inputFor(v));
+        outPct[v] = requiredPct(inputFor(v), 200);
+      }
       setNeed(out);
+      setPcts(outPct);
       setBusyNeed(false);
     });
   };
@@ -191,6 +197,26 @@ export default function ScenariosPage() {
                       </td>
                     ))}
                   </tr>
+                  {pcts && (
+                    <>
+                      <tr className="border-t border-gray-100">
+                        <td className="px-2 py-2 text-gray-600">Nodig als % van je netto loon</td>
+                        {VARIANT_KEYS.map((v) => (
+                          <td key={v} className="px-2 py-2 text-right font-semibold text-gray-900">
+                            {pcts[v].feasible ? `${pcts[v].pct.toLocaleString("nl-NL", { maximumFractionDigits: 1 })}%` : "te veel"}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-t border-gray-100">
+                        <td className="px-2 py-2 text-gray-600">Dat is per maand (eerste jaar)</td>
+                        {VARIANT_KEYS.map((v) => (
+                          <td key={v} className="px-2 py-2 text-right">
+                            {pcts[v].feasible ? euro(pcts[v].firstMonthly) : "–"}
+                          </td>
+                        ))}
+                      </tr>
+                    </>
+                  )}
                   <tr className="border-t border-gray-100">
                     <td className="px-2 py-2 text-gray-600">Nodig in totaal</td>
                     {VARIANT_KEYS.map((v) => (
@@ -202,6 +228,30 @@ export default function ScenariosPage() {
                 </tbody>
               </table>
             </div>
+            {pcts && (
+              <div className="space-y-2 rounded-xl bg-gray-50 p-3">
+                <p className="text-sm font-medium text-gray-900">Kies het percentage dat je aanhoudt</p>
+                <p className="text-xs text-gray-500">Het plan rekent dan elk jaar met dat deel van je netto loon. Het bedrag groeit mee met je salaris. Het sluitstuk van je plan.</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {VARIANTS.map((v) => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      disabled={!pcts[v.key].feasible}
+                      onClick={() => {
+                        setField("contribMode", "pct");
+                        setField("contribPct", pcts[v.key].pct);
+                      }}
+                      className="min-h-[48px] rounded-xl border border-teal-700 bg-white px-2 text-sm font-medium text-teal-800 active:bg-teal-50 disabled:opacity-40"
+                    >
+                      {v.label}
+                      <span className="block text-xs font-normal">{pcts[v.key].feasible ? `${pcts[v.key].pct.toLocaleString("nl-NL", { maximumFractionDigits: 1 })}%` : "niet haalbaar"}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">Daarna kun je het percentage nog aanpassen bij Sparen en beleggen. Vergeet niet op te slaan.</p>
+              </div>
+            )}
             <Note>
               De inleg is het totaal per maand van sparen, obligaties en beleggen samen, in dezelfde verhouding als nu, vanaf het eerste jaar dat er geld in gaat. In het basispad groeit de inleg daarna mee met de ingestelde stijging per jaar. Een hoger inkomen werkt zwaarder dan een hogere inleg: daarom kan de uitkomst bij stress onhaalbaar zijn.
             </Note>

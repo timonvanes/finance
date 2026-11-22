@@ -158,6 +158,8 @@ export interface Extra {
   glide: boolean;
   glideYears: number;
   contribGrowthPct: number;
+  contribMode: "amount" | "pct"; // a fixed amount per month, or a percentage of the net pay
+  contribPct: number; // % of the net pay that goes in (when the mode is pct)
   contribStartYear: number; // the first year money goes in; growth counts from here
   contrib: Record<string, Contribution>;
   confidencePct: number;
@@ -264,6 +266,8 @@ export function defaultExtra(today: string): Extra {
     glide: false,
     glideYears: 3,
     contribGrowthPct: 0,
+    contribMode: "amount",
+    contribPct: 10,
     contribStartYear: year,
     contrib: {},
     confidencePct: 80,

@@ -460,10 +460,36 @@ export const STRATEGIES: Strategy[] = [
   { key: "stocks", label: "Alles aandelen", hint: "alles in aandelen of aandelenfondsen", alloc: { save: 0, bonds: 0, stocks: 1 } },
 ];
 
+// The net pay per month of the household in a year (the whole year, holiday pay included, over 12).
+const netPayCache = new WeakMap<object, WeakMap<object, PayRow[]>>();
+function netPayMonth(p: PlanInput, year: number): number {
+  let byX = netPayCache.get(p.b);
+  if (!byX) netPayCache.set(p.b, (byX = new WeakMap()));
+  let rows = byX.get(p.x);
+  if (!rows) {
+    const start = Number(p.x.startDate.slice(0, 4));
+    byX.set(p.x, (rows = payroll(p, start, start + 45)));
+  }
+  const row = rows.find((r) => r.year === year) ?? rows[Math.min(rows.length - 1, Math.max(0, year - rows[0].year))];
+  return row ? row.net / 12 : 0;
+}
+
 export function contributionFor(p: PlanInput, year: number): Contribution {
   const x = p.x;
   const explicit = x.contrib[String(year)];
   if (explicit) return explicit;
+  if (x.contribMode === "pct") {
+    const from = x.contribStartYear || Number(x.startDate.slice(0, 4));
+    if (year < from) return { save: 0, bonds: 0, invest: 0 };
+    const total = (netPayMonth(p, year) * Math.max(0, x.contribPct)) / 100;
+    // The split follows the proportion of the amounts: nothing filled in means saving only.
+    const together = x.buyingTogether && (x.partnerStartYear === 0 || year >= x.partnerStartYear);
+    const ws = p.b.monthlySave + (together ? x.partnerMonthlySave : 0);
+    const wb = x.monthlyBonds;
+    const wi = p.b.monthlyInvest + (together ? x.partnerMonthlyInvest : 0);
+    const sum = ws + wb + wi;
+    return sum > 0 ? { save: (total * ws) / sum, bonds: (total * wb) / sum, invest: (total * wi) / sum } : { save: total, bonds: 0, invest: 0 };
+  }
   // Nothing goes in before the first salary; growth counts from that year.
   const from = x.contribStartYear || Number(x.startDate.slice(0, 4));
   if (year < from) return { save: 0, bonds: 0, invest: 0 };
@@ -945,7 +971,8 @@ function buildInsights(p: PlanInput, r: PlanResult, wealthT: number): Insight[] 
   if (need <= 0) {
     add("warn", "Je gebruikelijke uitgaven zijn niet ingevuld", "Zonder je gewone uitgaven per maand kan het plan niet zien of je woonlasten betaalbaar zijn. Vul het in bij Huis en kosten.");
   }
-  const saveNow = b.monthlySave + b.monthlyInvest + x.monthlyBonds;
+  const firstContribution = contributionFor(p, Math.max(r.startYear, x.contribStartYear || r.startYear));
+  const saveNow = x.contribMode === "pct" ? firstContribution.save + firstContribution.bonds + firstContribution.invest : b.monthlySave + b.monthlyInvest + x.monthlyBonds;
   if (app.avgSaved > 0 && saveNow > app.avgSaved * 1.3) {
     add("warn", "Je plant meer in dan je de afgelopen maanden deed", `Het plan gaat uit van ${eur(saveNow)} per maand. Je hebt de laatste maanden gemiddeld ${eur(app.avgSaved)} opzij gezet.`);
   }

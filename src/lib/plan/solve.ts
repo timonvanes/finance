@@ -1,4 +1,5 @@
 import {
+  contributionFor,
   monthsBetween,
   purchaseAt,
   simulate,
@@ -136,4 +137,46 @@ export function maxPriceInYear(p: PlanInput, year: number, paths = 300): MaxPric
   }
   const q: PlanInput = { ...p, b: { ...p.b, targetPrice: lo, targetDate: date } };
   return { price: lo, nominal: purchaseAt(q, T, study).price, wealth, year };
+}
+
+export interface RequiredPct {
+  feasible: boolean;
+  pct: number; // % of the net pay that has to go in
+  firstMonthly: number; // what that is per month in the first year money goes in
+  need: number;
+}
+
+// The smallest percentage of the net pay that, put in every year, reaches the amount needed at
+// the chosen certainty. The amount grows with the pay, so the percentage is the same every year.
+export function requiredPct(p: PlanInput, paths = 300): RequiredPct {
+  const { b, x } = p;
+  const T = Math.max(1, monthsBetween(x.startDate, b.targetDate));
+  const study = studyPath(p, T + 1);
+  const need = purchaseAt(p, T, study).needTotal;
+  const withPct = (pct: number): PlanInput => ({ ...p, x: { ...x, contribMode: "pct", contribPct: pct, contrib: {} } });
+  const cache = new Map<number, number>();
+  const wealthFor = (pct: number) => {
+    const hit = cache.get(pct);
+    if (hit !== undefined) return hit;
+    const sim = simulate(withPct(pct), study, { alloc: null, months: T, target: T, paths, fast: true });
+    const w = quantile(sim, sim.checkpoints.indexOf(T), x.confidencePct);
+    cache.set(pct, w);
+    return w;
+  };
+  const firstYear = Math.max(Number(x.startDate.slice(0, 4)), x.contribStartYear || 0);
+  const monthlyAt = (pct: number) => {
+    const c = contributionFor(withPct(pct), firstYear);
+    return c.save + c.bonds + c.invest;
+  };
+  if (wealthFor(0) >= need) return { feasible: true, pct: 0, firstMonthly: 0, need };
+  if (wealthFor(100) < need) return { feasible: false, pct: 100, firstMonthly: monthlyAt(100), need };
+  let lo = 0;
+  let hi = 100;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (wealthFor(mid) >= need) hi = mid;
+    else lo = mid;
+  }
+  const pct = Math.ceil(hi * 10) / 10;
+  return { feasible: true, pct, firstMonthly: monthlyAt(pct), need };
 }
