@@ -10,7 +10,7 @@ const TABS: { href: string; label: string; paths: string[] }[] = [
   {
     href: "/plan/analyse",
     label: "Analyse",
-    paths: ["/plan/analyse", "/plan/scenarios", "/plan/hypotheek", "/plan/huis", "/plan/inkomen", "/plan/belasting", "/plan/studielening", "/plan/beleggen"],
+    paths: ["/plan/analyse", "/plan/schuiven", "/plan/scenarios", "/plan/hypotheek", "/plan/huis", "/plan/inkomen", "/plan/belasting", "/plan/studielening", "/plan/beleggen"],
   },
   { href: "/plan/update", label: "Bijwerken", paths: ["/plan/update", "/plan/bronnen"] },
 ];

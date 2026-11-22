@@ -32,6 +32,8 @@ interface Ctx {
   resetVariant: (v: "stress" | "gunstig") => void;
   setActive: (id: string) => void;
   copyScenario: (name: string) => void;
+  // Adds a ready-made scenario (from the test environment) and makes it the active one.
+  addScenario: (sc: Scenario) => void;
   renameScenario: (name: string) => void;
   deleteScenario: () => void;
   setMeta: (fieldId: string, patch: Partial<AssumptionMeta>) => void;
@@ -117,6 +119,7 @@ export function PlanProvider({
       copy.name = name.trim() || `${from.name} (kopie)`;
       return { ...d, scenarios: [...d.scenarios, copy], activeId: copy.id };
     });
+  const addScenario = (sc: Scenario) => update((d) => ({ ...d, scenarios: [...d.scenarios, sc], activeId: sc.id }));
   const renameScenario = (name: string) => updateScenario((s) => ({ ...s, name }));
   const deleteScenario = () =>
     update((d) => {
@@ -183,6 +186,7 @@ export function PlanProvider({
         resetVariant,
         setActive,
         copyScenario,
+        addScenario,
         renameScenario,
         deleteScenario,
         setMeta,

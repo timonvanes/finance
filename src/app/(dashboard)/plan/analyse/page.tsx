@@ -12,6 +12,7 @@ export default function AnalysisHub() {
   const taxRate = rate > 0 ? `${(rate * 100).toFixed(1).replace(".", ",")}%` : "–";
 
   const items: { href: string; title: string; text: string; value: string }[] = [
+    { href: "/plan/schuiven", title: "Schuifjes: test een scenario", text: "Later kopen, de prijs, het salaris of de rente verschuiven en direct zien wat het doet", value: "uitproberen" },
     { href: "/plan/scenarios", title: "Scenario's en rekenhulp", text: "Hoeveel moet ik sparen, wat kan ik in jaar X kopen, A tegenover B", value: `${Math.round(r.probEnough * 100)}% kans` },
     { href: "/plan/hypotheek", title: "Hypotheek", text: "Hoe de bank rekent, bank tegenover comfortabel, rentetest", value: euro(pu.cap.loan) },
     { href: "/plan/huis", title: "Huis en kosten", text: "Wat de aankoop en het wonen kosten", value: euro(pu.needTotal) },
