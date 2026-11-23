@@ -135,6 +135,7 @@ export default async function PotsPage() {
                 planned={(plans.get(p.id) ?? 0) + carryOf(p.id)}
                 carry={carryOf(p.id)}
                 deposited={depositedInPeriod(p, 0, startDay)}
+                tikkieDescription={p.tikkie_description}
               />
             ))}
           </ul>
@@ -197,7 +198,7 @@ export default async function PotsPage() {
                       </p>
                     )}
                   </Link>
-                  {toPutIn > 0.005 && <TikkieButton amount={toPutIn} potName={pot.name} variant="card" />}
+                  {toPutIn > 0.005 && <TikkieButton amount={toPutIn} potName={pot.name} description={pot.tikkie_description} variant="card" />}
                 </li>
               );
             })}

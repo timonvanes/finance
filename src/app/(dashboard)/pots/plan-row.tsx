@@ -17,12 +17,14 @@ export function PlanRow({
   planned,
   carry = 0,
   deposited,
+  tikkieDescription,
 }: {
   potId: string;
   name: string;
   planned: number;
   carry?: number;
   deposited: number;
+  tikkieDescription?: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export function PlanRow({
       {!done && (
         <p className="text-sm text-gray-500">Wordt vanzelf afgevinkt zodra de overboeking binnenkomt.</p>
       )}
-      {!done && <TikkieButton amount={missing} potName={name} />}
+      {!done && <TikkieButton amount={missing} potName={name} description={tikkieDescription} />}
       {!done && (
         <button
           type="button"

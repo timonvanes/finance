@@ -14,7 +14,7 @@ export async function getPots() {
   const { data, error } = await supabase
     .from("pots")
     .select(
-      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, in_house_plan, value_check_months, schedule_day, schedule_start, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
+      "id, name, kind, created_at, target_amount, target_date, monthly_amount, monthly_auto, plan_start_date, in_house_plan, value_check_months, tikkie_description, schedule_day, schedule_start, pot_period_decisions(period_start, decision), match_text, opening_balance, opening_balance_date, pot_entries(id, amount, note, entry_date, transaction_id, goal_spend, goal_spend_amount)"
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -429,6 +429,18 @@ export async function autoDetectPots() {
 export async function setPotInHousePlan(potId: string, included: boolean) {
   const supabase = await createClient();
   const { error } = await supabase.from("pots").update({ in_house_plan: included }).eq("id", potId);
+  if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
+  revalidatePath("/", "layout");
+  return {};
+}
+
+// The description of the Tikkie for this pot (max 35 characters, what Tikkie takes). Empty = the
+// default "Sparen <name of the pot>".
+export async function setPotTikkieDescription(potId: string, description: string) {
+  const text = description.replace(/\s+/g, " ").trim();
+  if (text.length > 35) return { error: "Tikkie neemt maximaal 35 tekens over." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("pots").update({ tikkie_description: text || null }).eq("id", potId);
   if (error) return { error: "Opslaan mislukt. Probeer het opnieuw." };
   revalidatePath("/", "layout");
   return {};

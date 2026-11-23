@@ -11,7 +11,7 @@ import { InfoButton } from "../../info-button";
 import { GoalSpendCard } from "../goal-spend-card";
 import { PlanToggle } from "../plan-toggle";
 import { ShareImport } from "../share-import";
-import { EntryList, MonthlyPlanForm, ScheduleDayForm, ScheduleStartForm, SettingsForms } from "../pot-detail-forms";
+import { EntryList, MonthlyPlanForm, ScheduleDayForm, ScheduleStartForm, SettingsForms, TikkieDescriptionForm } from "../pot-detail-forms";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
@@ -183,6 +183,14 @@ export default async function PotPage({ params }: { params: Promise<{ id: string
               de meldingsinstellingen.
             </p>
             <ScheduleDayForm potId={pot.id} day={pot.schedule_day ?? null} startDay={startDay} />
+          </div>
+          <div className="space-y-3 border-t border-gray-100 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900">Omschrijving van de Tikkie</h3>
+            <p className="text-sm text-gray-500">
+              Wat er in de Tikkie voor dit potje komt te staan, bijvoorbeeld met een referentiecode. Standaard is dat
+              &quot;Sparen&quot; en de naam van het potje.
+            </p>
+            <TikkieDescriptionForm potId={pot.id} potName={pot.name} value={pot.tikkie_description ?? null} />
           </div>
           <div className="space-y-3 border-t border-gray-100 pt-6">
             <h3 className="text-lg font-semibold text-gray-900">Begin van het plan</h3>

@@ -9,6 +9,7 @@ import {
   setPotMonthlyPlan,
   setPotScheduleDay,
   setPotScheduleStart,
+  setPotTikkieDescription,
   updatePotMatchText,
   updatePotOpeningBalance,
   updatePotTarget,
@@ -299,6 +300,37 @@ export function ScheduleDayForm({
         className={primary}
       >
         Stortingsdag opslaan
+      </button>
+      <Message message={save$.message} />
+    </div>
+  );
+}
+
+// The description of the Tikkie for this pot, for example with a reference code. Empty = default.
+export function TikkieDescriptionForm({ potId, potName, value }: { potId: string; potName: string; value: string | null }) {
+  const [text, setText] = useState(value ?? "");
+  const save$ = useRun();
+  const fallback = `Sparen ${potName}`;
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className={label} htmlFor="tikkie-desc">Omschrijving</label>
+        <input id="tikkie-desc" value={text} maxLength={35} onChange={(e) => setText(e.target.value)} placeholder={fallback} className={input} />
+        <p className="mt-1 text-xs text-gray-500">{text.length}/35 tekens. Leeg laten geeft &quot;{fallback}&quot;.</p>
+      </div>
+      <button
+        type="button"
+        disabled={save$.isPending}
+        onClick={() =>
+          save$.run(async () => {
+            const res = await setPotTikkieDescription(potId, text);
+            if (res.error) throw new Error(res.error);
+            return "Opgeslagen.";
+          })
+        }
+        className={primary}
+      >
+        {save$.isPending ? "Opslaan…" : "Opslaan"}
       </button>
       <Message message={save$.message} />
     </div>

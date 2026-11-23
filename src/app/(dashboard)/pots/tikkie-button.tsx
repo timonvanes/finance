@@ -10,14 +10,16 @@ const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", curre
 export function TikkieButton({
   amount,
   potName,
+  description,
   variant = "round",
 }: {
   amount: number;
   potName: string;
+  description?: string | null; // the pot's own Tikkie description; default "Sparen <name>"
   variant?: "round" | "card";
 }) {
   function open() {
-    window.location.assign(tikkieUrl(amount, `Sparen ${potName}`));
+    window.location.assign(tikkieUrl(amount, description?.trim() || `Sparen ${potName}`));
   }
   const size = variant === "card" ? 28 : 20;
   const label = `Tikkie voor ${potName}: ${euro(amount)}`;
