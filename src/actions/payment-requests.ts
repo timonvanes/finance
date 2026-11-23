@@ -35,7 +35,11 @@ function sharedCodeOf(codes: (string | null)[]): string | null {
   const count = new Map<string, number>();
   for (const c of codes) if (c) count.set(c, (count.get(c) ?? 0) + 1);
   let best: string | null = null;
-  for (const [c, n] of count) if (best === null || n > (count.get(best) ?? 0)) best = c;
+  // On a tie the lowest code wins, so everyone combined in one go ends up with the same code.
+  for (const [c, n] of count) {
+    const bn = best === null ? 0 : (count.get(best) ?? 0);
+    if (best === null || n > bn || (n === bn && c < best)) best = c;
+  }
   return best;
 }
 
