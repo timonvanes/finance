@@ -29,6 +29,16 @@ export async function updatePaymentRequestNote(paymentRequestId: string, note: s
   if (error) throw error;
 }
 
+// The code the person was already given stays the code when reclaims are combined: if the
+// reclaims share one (the most common one when they differ), the combination keeps it.
+function sharedCodeOf(codes: (string | null)[]): string | null {
+  const count = new Map<string, number>();
+  for (const c of codes) if (c) count.set(c, (count.get(c) ?? 0) + 1);
+  let best: string | null = null;
+  for (const [c, n] of count) if (best === null || n > (count.get(best) ?? 0)) best = c;
+  return best;
+}
+
 // Bundles several open, not-yet-combined reclaims for the SAME person into
 // one betaalverzoek with a single reference code and combined total.
 export async function combineReclaims(reclaimIds: string[]) {
@@ -37,7 +47,7 @@ export async function combineReclaims(reclaimIds: string[]) {
   const supabase = await createClient();
   const { data: reclaims, error: fetchError } = await supabase
     .from("reclaims")
-    .select("id, person_id, status, settlement_method, payment_request_id")
+    .select("id, person_id, status, settlement_method, payment_request_id, reference_code")
     .in("id", reclaimIds);
   if (fetchError) throw fetchError;
   if (!reclaims || reclaims.length !== reclaimIds.length) {
@@ -58,7 +68,7 @@ export async function combineReclaims(reclaimIds: string[]) {
   const [personId] = personIds;
   const { data: paymentRequest, error: insertError } = await supabase
     .from("payment_requests")
-    .insert({ person_id: personId, reference_code: generateReferenceCode() })
+    .insert({ person_id: personId, reference_code: sharedCodeOf(reclaims.map((r) => r.reference_code)) ?? generateReferenceCode() })
     .select("id")
     .single();
   if (insertError) throw insertError;
