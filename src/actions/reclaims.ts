@@ -48,6 +48,16 @@ export async function getQueuedTransactions() {
   return data;
 }
 
+// How much of each transaction is already divided over reclaims (open, paid or written off).
+export async function getCoveredAmounts(transactionIds: string[]): Promise<Record<string, number>> {
+  if (transactionIds.length === 0) return {};
+  const supabase = await createClient();
+  const { data } = await supabase.from("reclaims").select("transaction_id, computed_amount").in("transaction_id", transactionIds);
+  const out: Record<string, number> = {};
+  for (const r of data ?? []) out[r.transaction_id] = (out[r.transaction_id] ?? 0) + Number(r.computed_amount ?? 0);
+  return out;
+}
+
 export async function flagTransactionForReclaim(formData: FormData) {
   const transactionId = formData.get("transactionId") as string;
   const supabase = await createClient();
@@ -423,6 +433,13 @@ export async function deleteReclaim(reclaimId: string): Promise<{ error?: string
     await supabase
       .from("transactions")
       .update({ flagged_for_reclaim: false, reviewed: false })
+      .eq("id", reclaim.transaction_id);
+  } else {
+    // Others on it are (partly) paid already: the transaction comes back under "Te verdelen",
+    // where only the part that is still open can be divided again.
+    await supabase
+      .from("transactions")
+      .update({ flagged_for_reclaim: true, reviewed: true })
       .eq("id", reclaim.transaction_id);
   }
   revalidatePath("/", "layout");

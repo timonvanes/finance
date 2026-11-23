@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { TxDetails } from "../tx-details";
-import { getQueuedTransactions, unflagTransactionForReclaim } from "@/actions/reclaims";
+import { getCoveredAmounts, getQueuedTransactions,unflagTransactionForReclaim } from "@/actions/reclaims";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 
 export default async function TeVerdelenPage() {
   const queued = await getQueuedTransactions();
+  const covered = await getCoveredAmounts(queued.map((t) => t.id));
 
   return (
     <div className="space-y-5">
@@ -37,9 +38,14 @@ export default async function TeVerdelenPage() {
                     {new Date(tx.booking_date).toLocaleDateString("nl-NL")}
                   </p>
                 </div>
-                <p className="shrink-0 text-lg font-semibold text-gray-900">
-                  {euro(Math.abs(tx.amount))}
-                </p>
+                <div className="shrink-0 text-right">
+                  <p className="text-lg font-semibold text-gray-900">
+                    {euro(Math.max(0, Math.abs(tx.amount) - (covered[tx.id] ?? 0)))}
+                  </p>
+                  {(covered[tx.id] ?? 0) > 0.005 && (
+                    <p className="text-xs text-gray-500">open van {euro(Math.abs(tx.amount))}</p>
+                  )}
+                </div>
               </div>
               <TxDetails
                 tx={{

@@ -16,6 +16,7 @@ interface Tx {
   counterparty_name: string | null;
   raw_description: string | null;
   counterparty_iban: string | null;
+  covered?: number; // already divided over reclaims (paid or not); only the rest is left to divide
 }
 interface Person {
   id: string;
@@ -25,6 +26,7 @@ interface Person {
 }
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+const openOf = (t: Tx) => Math.max(0, Math.round((Math.abs(t.amount) - (t.covered ?? 0)) * 100) / 100);
 
 export function Wizard({
   transactions,
@@ -69,7 +71,7 @@ export function Wizard({
 
   const total = transactions
     .filter((t) => selectedTx[t.id])
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    .reduce((sum, t) => sum + openOf(t), 0);
   const txCount = Object.values(selectedTx).filter(Boolean).length;
 
   // With WieBetaaltWat the people are the members of the chosen list; a member
@@ -335,7 +337,12 @@ export function Wizard({
                       {new Date(t.booking_date).toLocaleDateString("nl-NL")}
                     </span>
                   </span>
-                  <span className="text-base font-semibold">{euro(Math.abs(t.amount))}</span>
+                  <span className="text-right">
+                    <span className="block text-base font-semibold">{euro(openOf(t))}</span>
+                    {(t.covered ?? 0) > 0.005 && (
+                      <span className={`block text-xs ${selectedTx[t.id] ? "text-gray-300" : "text-gray-500"}`}>open van {euro(Math.abs(t.amount))}</span>
+                    )}
+                  </span>
                 </button>
                 <TxDetails
                   label="Details"
@@ -377,7 +384,10 @@ export function Wizard({
                       {new Date(t.booking_date).toLocaleDateString("nl-NL")}
                     </p>
                   </div>
-                  <p className="shrink-0 text-base font-semibold text-gray-900">{euro(Math.abs(t.amount))}</p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-base font-semibold text-gray-900">{euro(openOf(t))}</p>
+                    {(t.covered ?? 0) > 0.005 && <p className="text-xs text-gray-500">open van {euro(Math.abs(t.amount))}, {euro(t.covered ?? 0)} al verdeeld</p>}
+                  </div>
                 </div>
                 <TxDetails
                   tx={{

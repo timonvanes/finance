@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getQueuedTransactions, getRecentExpenseTransactions, getTransactionForReclaim } from "@/actions/reclaims";
+import { getCoveredAmounts, getQueuedTransactions, getRecentExpenseTransactions, getTransactionForReclaim } from "@/actions/reclaims";
 import { getActiveGuests, getPeopleWithGroups } from "@/actions/people";
 import { getWbwListChoices } from "@/actions/wbw-push";
 import { Wizard } from "./wizard";
@@ -23,7 +23,10 @@ export default async function NieuwPage({
   // is found (and has its amount) instead of showing 0 euro.
   const requested =
     transactionId && !listed.some((t) => t.id === transactionId) ? await getTransactionForReclaim(transactionId) : null;
-  const transactions = [...(requested ? [requested] : []), ...listed].map((t) => ({
+  const all = [...(requested ? [requested] : []), ...listed];
+  const covered = await getCoveredAmounts(all.map((t) => t.id));
+  const transactions = all.map((t) => ({
+    covered: covered[t.id] ?? 0,
     id: t.id,
     booking_date: t.booking_date,
     amount: t.amount,
